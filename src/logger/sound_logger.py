@@ -10,12 +10,14 @@ SOUND_DETECTOR_PIN = 14
 BUZZER_PIN = 21
 
 # --- File Paths ---
-DATA_FILE = "sound_data_D0.txt"
-DATA_BACKUP_FILE = "sound_data_D0_backup.txt"
+# CHANGE 1: Define a directory for data files
+DATA_DIR = "data"
+DATA_FILE = os.path.join(DATA_DIR, "sound_data_D0.txt")
+DATA_BACKUP_FILE = os.path.join(DATA_DIR, "sound_data_D0_backup.txt")
 
 # --- Configuration ---
 # Define your desired buzzer frequency (e.g., 440 Hz for an A note)
-BUZZER_FREQUENCY_HZ = 900
+BUZZER_FREQUENCY_HZ = 440
 
 # --- Global gpiozero objects ---
 buzzer = None
@@ -24,6 +26,15 @@ sound_sensor = None
 def log_sound_data():
     """Initializes hardware, performs sound tests, and logs data robustly."""
     global buzzer, sound_sensor
+
+    # CHANGE 2: Ensure the data directory exists before doing anything else
+    try:
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR)
+            print(f"Created data directory: {DATA_DIR}")
+    except Exception as e:
+        print(f"FATAL: Could not create data directory: {e}", file=sys.stderr)
+        return False
 
     # --- Critical file existence and creation check ---
     if not os.path.exists(DATA_FILE):
@@ -63,7 +74,6 @@ def log_sound_data():
     buzzer.on()  # Turn the buzzer on
 
     for _ in range(5):
-        # BUG FIX: Get a fresh timestamp for each reading
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         system_uptime = time.monotonic()
         sound_detected = 1 if sound_sensor.is_pressed else 0
@@ -81,7 +91,6 @@ def log_sound_data():
     # --- Test 2: Ambient Sound (Buzzer OFF - 5 seconds of logging) ---
     print("Starting Test 2: Ambient Sound")
     for _ in range(5):
-        # BUG FIX: Get a fresh timestamp for each reading
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         system_uptime = time.monotonic()
         sound_detected = 1 if sound_sensor.is_pressed else 0
@@ -104,7 +113,6 @@ if __name__ == "__main__":
             sys.exit(1)
 
         while True:
-            # BUG FIX: Changed sleep time to match the printed message
             print(f"Cycle finished. Waiting 20 minutes (1200 seconds)...")
             time.sleep(1200)
             
@@ -114,7 +122,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nApplication stopped by user (KeyboardInterrupt).")
     except Exception as e:
-        # Log any unexpected exceptions before exiting
         print(f"\nFATAL UNHANDLED EXCEPTION: {e}", file=sys.stderr)
     finally:
         # Clean up GPIO pins to prevent issues on next boot
@@ -124,4 +131,5 @@ if __name__ == "__main__":
         if sound_sensor:
             sound_sensor.close()
         print("Application terminated.")
+
 
