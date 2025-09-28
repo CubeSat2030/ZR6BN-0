@@ -1,7 +1,6 @@
 import os
 import time
 import shutil
-import matplotlib.pyplot as plt
 from datetime import datetime
 
 # Import the correct library: gpiozero
@@ -17,8 +16,7 @@ BUZZER_PIN = 21
 # --- File Paths ---
 DATA_FILE = "sound_data_D0.txt"
 DATA_BACKUP_FILE = "sound_data_D0_backup.txt"
-CHART_FILE = "sound_chart_D0.svg"
-CHART_BACKUP_FILE = "sound_chart_D0_backup.svg"
+# Chart file paths removed as charting is no longer supported without NumPy/Matplotlib.
 
 # --- Device Initialization ---
 # Initialize the GPIO devices ONCE outside the loop.
@@ -52,7 +50,7 @@ def log_sound_data():
     # We must check if the devices were initialized successfully before using them.
     if sound_detector is None or buzzer is None:
         print("Skipping sound logging: GPIO devices not initialized.")
-        return True # Return True to allow chart generation later
+        return True # Return True if the process completed its steps
 
     # Backup data file
     if os.path.exists(DATA_FILE):
@@ -97,59 +95,8 @@ def log_sound_data():
 
     return True
 
-def generate_chart():
-    """Reads data from the file and generates an SVG chart."""
-    dates, sound_detected_values, buzzer_states = [], [], []
-    
-    # NOTE: This function requires Matplotlib/NumPy. If you see the "libopenblas.so.0" error,
-    # it means the system library dependency is missing.
-
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            next(f) # Skip header
-            for line in f:
-                try:
-                    timestamp_str, sound_str, buzzer_str = line.strip().split(',')
-                    dates.append(datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S"))
-                    sound_detected_values.append(int(sound_str))
-                    buzzer_states.append(int(buzzer_str))
-                except (ValueError, IndexError):
-                    print(f"Skipping malformed line: {line.strip()}")
-                    continue
-
-    if not dates:
-        print("No valid data to generate chart.")
-        return
-
-    # Backup the existing chart file
-    if os.path.exists(CHART_FILE):
-        try:
-            os.rename(CHART_FILE, CHART_BACKUP_FILE)
-        except Exception as e:
-            print(f"Warning: Could not backup chart file: {e}")
-
-
-    plt.style.use('seaborn-v0_8-whitegrid')
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Sound Detected (1=Yes, 0=No)')
-    ax.set_title('Sound Detection Test (D0 Pin)')
-    # Use step plot for digital/binary data
-    ax.step(dates, sound_detected_values, where='mid', label='Sound Detected')
-
-    # Plot buzzer activity slightly above 1 for visual clarity
-    buzzer_on_dates = [dates[i] for i, state in enumerate(buzzer_states) if state == 1]
-    buzzer_on_values = [1.05] * len(buzzer_on_dates)
-    ax.plot(buzzer_on_dates, buzzer_on_values, 'ro', label='Buzzer ON', markersize=4)
-
-    ax.set_yticks([0, 1])
-    plt.gcf().autofmt_xdate()
-    ax.legend()
-    plt.savefig(CHART_FILE)
-    plt.close(fig)
-    print(f"Chart saved to {CHART_FILE}")
-
+# The generate_chart function has been removed because it relies on Matplotlib, which in turn
+# relies heavily on NumPy.
 
 if __name__ == "__main__":
     if not initialize_data_file():
@@ -157,8 +104,10 @@ if __name__ == "__main__":
 
     try:
         while True:
+            # We now only call log_sound_data()
             if log_sound_data():
-                generate_chart()
+                # Data is logged successfully, but chart generation is skipped.
+                pass
             print(f"Waiting for 1200 seconds before next cycle...")
             time.sleep(1200)
 
