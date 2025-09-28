@@ -13,7 +13,7 @@ import random
 
 # --- Configuration Settings ---
 FLIGHT_MODE = True 
-DATA_DIR = "data"
+DATA_DIR = / "src" / "logger" / "data"
 LOG_FILE = os.path.join(DATA_DIR, "MPU6050.txt")
 
 # Central file for real-time monitoring dashboard
