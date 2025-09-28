@@ -3,7 +3,7 @@ import time
 import gpiozero
 from datetime import datetime
 import shutil
-import sys 
+import sys
 import time
 
 # --- Hardware Pins (BCM Numbering) ---
@@ -21,7 +21,7 @@ sound_sensor = None
 
 # --- NEW CONFIGURATION ---
 # Define your desired buzzer frequency (e.g., 440 Hz for an A note)
-BUZZER_FREQUENCY_HZ = 880 # Example: A higher frequency tone
+BUZZER_FREQUENCY_HZ = 440 # Example: A higher frequency tone
 
 # --- NEW FUNCTION FOR TONE ---
 def play_tone(duration_s, frequency_hz):
