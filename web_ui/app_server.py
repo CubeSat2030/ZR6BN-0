@@ -4,7 +4,7 @@ import pathlib
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
 CHARTS = BASE / "src" / "charts"
-BLACKBOX = BASE / "blackbox.sh"
+BLACKBOX = BASE / "web_ui" / "blackbox.sh"
 
 app = Flask(__name__, template_folder="templates")
 
