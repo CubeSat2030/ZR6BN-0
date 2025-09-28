@@ -18,7 +18,7 @@ DHT_SENSOR = Adafruit_DHT.DHT11
 DHT_PIN = 4 
 
 # Directory for data files (Relative to src/logger/)
-DATA_DIR = "data"
+DATA_DIR = / "src" / "logger" / "data"
 DATA_FILE = os.path.join(DATA_DIR, "DHT11.txt")
 
 # Central file for real-time monitoring dashboard
