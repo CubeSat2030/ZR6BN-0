@@ -29,8 +29,8 @@ PROCESSES = [
     ("Sound Logger", "src/logger/sound_logger.py"),
     
     # 4. Web UI Server (Starts Flask server, reads from logger JSON files)
-    ("Web Server", "web_ui/app_server.py"),
-]
+#    ("Web Server", "web_ui/app_server.py"),
+# ]
 
 def launch_processes():
     """Launches all configured processes concurrently using subprocess.Popen."""
