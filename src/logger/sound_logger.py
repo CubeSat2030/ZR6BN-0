@@ -11,7 +11,7 @@ BUZZER_PIN = 21
 
 # --- File Paths ---
 # CHANGE 1: Define a directory for data files
-DATA_DIR = "data"
+DATA_DIR = / "src" / "logger" / "data"
 DATA_FILE = os.path.join(DATA_DIR, "sound_data_D0.txt")
 DATA_BACKUP_FILE = os.path.join(DATA_DIR, "sound_data_D0_backup.txt")
 
