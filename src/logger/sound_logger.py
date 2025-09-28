@@ -15,7 +15,7 @@ DATA_BACKUP_FILE = "sound_data_D0_backup.txt"
 
 # --- Configuration ---
 # Define your desired buzzer frequency (e.g., 440 Hz for an A note)
-BUZZER_FREQUENCY_HZ = 440
+BUZZER_FREQUENCY_HZ = 900
 
 # --- Global gpiozero objects ---
 buzzer = None
