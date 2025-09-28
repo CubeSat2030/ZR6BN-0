@@ -1,39 +1,38 @@
 import os
 import time
-import shutil
+import zerogpio
+import matplotlib.pyplot as plt
 from datetime import datetime
-
-# Import the correct library: gpiozero
-from gpiozero import Button, LED
-from signal import pause # Not used, but harmless
+import shutil
 
 # --- Hardware Pins ---
-# Keyes KY-038 D0 pin connected to GPIO14. We use Button for digital input.
+# Keyes KY-038 D0 pin connected to GPIO14
 SOUND_DETECTOR_PIN = 14
-# Piezo Buzzer connected to GPIO4. We use LED (a simple output device) for the buzzer.
-BUZZER_PIN = 21
+# Piezo Buzzer connected to GPIO4
+BUZZER_PIN = 4
 
 # --- File Paths ---
 DATA_FILE = "sound_data_D0.txt"
 DATA_BACKUP_FILE = "sound_data_D0_backup.txt"
-# Chart file paths removed as charting is no longer supported without NumPy/Matplotlib.
+CHART_FILE = "sound_chart_D0.svg"
+CHART_BACKUP_FILE = "sound_chart_D0_backup.svg"
 
-# --- Device Initialization ---
-# Initialize the GPIO devices ONCE outside the loop.
-# gpiozero handles setup and automatic cleanup upon script exit.
-sound_detector = None
-buzzer = None
-try:
-    # Button is used for digital input (D0 pin). pull_up=False often matches active-low sensors.
-    sound_detector = Button(SOUND_DETECTOR_PIN, pull_up=False)
-    buzzer = LED(BUZZER_PIN) # LED acts as a simple digital output for the buzzer
-    print("GPIO devices initialized successfully.")
-except Exception as e:
-    # This block handles potential errors if the script is run off-platform or pins are busy.
-    print(f"Error initializing GPIO devices. The script may run but skip GPIO operations: {e}")
+# --- ADC/A0 Code (Commented Out) ---
+# import board
+# import busio
+# import adafruit_ads1x15.ads1115 as ADS
+# from adafruit_ads1x15.analog_in import AnalogIn
 
-def initialize_data_file():
-    """Checks for and initializes the data file."""
+# I2C_SDA_PIN = board.D14
+# I2C_SCL_PIN = board.D15
+# i2c = busio.I2C(I2C_SCL_PIN, I2C_SDA_PIN)
+# ads = ADS.ADS1115(i2c)
+# chan = AnalogIn(ads, ADS.P0)
+# A0_DATA_FILE = "sound_data_A0.txt"
+
+
+def log_sound_data():
+    # --- Critical file existence and creation check ---
     if not os.path.exists(DATA_FILE):
         print(f"Data file not found. Creating {DATA_FILE}...")
         try:
@@ -42,84 +41,83 @@ def initialize_data_file():
         except Exception as e:
             print(f"Error creating file: {e}")
             return False
-    return True
-
-def log_sound_data():
-    """Runs the logging sequence, controlling the buzzer and reading the sound sensor."""
-
-    # We must check if the devices were initialized successfully before using them.
-    if sound_detector is None or buzzer is None:
-        print("Skipping sound logging: GPIO devices not initialized.")
-        return True # Return True if the process completed its steps
 
     # Backup data file
     if os.path.exists(DATA_FILE):
-        try:
-            shutil.copyfile(DATA_FILE, DATA_BACKUP_FILE)
-        except Exception as e:
-            print(f"Warning: Could not create data file backup: {e}")
+        shutil.copyfile(DATA_FILE, DATA_BACKUP_FILE)
+
+    # --- GPIO Setup ---
+    zerogpio.setup(BUZZER_PIN, zerogpio.OUT)
+    zerogpio.setup(SOUND_DETECTOR_PIN, zerogpio.IN)
 
     # --- Test 1: Buzzer ON ---
-    buzzer.on()
+    zerogpio.output(BUZZER_PIN, zerogpio.HIGH)
     print("Buzzer ON. Logging sound detection...")
 
-    for i in range(5):
-        try:
-            # .is_pressed returns True (1) or False (0). Convert to int.
-            sound_detected = int(sound_detector.is_pressed)
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open(DATA_FILE, "a") as f:
-                f.write(f"{timestamp},{sound_detected},1\n")
-            time.sleep(1)
-        except Exception as e:
-            print(f"Error during Test 1 logging at iteration {i}: {e}")
-            break
+    for _ in range(5):
+        sound_detected = zerogpio.input(SOUND_DETECTOR_PIN)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(DATA_FILE, "a") as f:
+            f.write(f"{timestamp},{sound_detected},1\n")
+        time.sleep(1)
 
-    buzzer.off()
+    zerogpio.output(BUZZER_PIN, zerogpio.LOW)
     print("Buzzer OFF.")
 
     # --- Test 2: Ambient Sound (Buzzer OFF) ---
     print("Logging ambient sound detection...")
 
-    for i in range(5):
-        try:
-            # .is_pressed returns True (1) or False (0). Convert to int.
-            sound_detected = int(sound_detector.is_pressed)
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open(DATA_FILE, "a") as f:
-                f.write(f"{timestamp},{sound_detected},0\n")
-            time.sleep(1)
-        except Exception as e:
-            print(f"Error during Test 2 logging at iteration {i}: {e}")
-            break
+    for _ in range(5):
+        sound_detected = zerogpio.input(SOUND_DETECTOR_PIN)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(DATA_FILE, "a") as f:
+            f.write(f"{timestamp},{sound_detected},0\n")
+        time.sleep(1)
 
     return True
 
-# The generate_chart function has been removed because it relies on Matplotlib, which in turn
-# relies heavily on NumPy.
+
+def generate_chart():
+    dates, sound_detected_values, buzzer_states = [], [], []
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            next(f)
+            for line in f:
+                try:
+                    timestamp_str, sound_str, buzzer_str = line.strip().split(',')
+                    dates.append(datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S"))
+                    sound_detected_values.append(int(sound_str))
+                    buzzer_states.append(int(buzzer_str))
+                except (ValueError, IndexError):
+                    continue
+
+    if not dates:
+        return
+
+    if os.path.exists(CHART_FILE):
+        os.rename(CHART_FILE, CHART_BACKUP_FILE)
+
+    plt.style.use('seaborn-v0_8-whitegrid')
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Sound Detected (1=Yes, 0=No)')
+    ax.set_title('Sound Detection Test (D0 Pin)')
+    ax.step(dates, sound_detected_values, where='mid', label='Sound Detected')
+
+    buzzer_on_dates = [dates[i] for i, state in enumerate(buzzer_states) if state == 1]
+    buzzer_on_values = [1.05] * len(buzzer_on_dates)
+    ax.plot(buzzer_on_dates, buzzer_on_values, 'ro', label='Buzzer ON')
+
+    ax.set_yticks([0, 1])
+    plt.gcf().autofmt_xdate()
+    ax.legend()
+    plt.savefig(CHART_FILE)
+    plt.close(fig)
+
 
 if __name__ == "__main__":
-    if not initialize_data_file():
-        exit()
-
-    try:
-        while True:
-            # We now only call log_sound_data()
-            if log_sound_data():
-                # Data is logged successfully, but chart generation is skipped.
-                pass
-            print(f"Waiting for 1200 seconds before next cycle...")
-            time.sleep(1200)
-
-    except KeyboardInterrupt:
-        print("\nProgram stopped by user.")
-
-    except Exception as e:
-        print(f"\nAn unhandled error occurred: {e}")
-    
-    # Cleanup ensures the buzzer is off before the script finally exits.
-    finally:
-        if buzzer:
-            buzzer.off()
-            print("Buzzer turned off and resources released.")
-
+    while True:
+        if log_sound_data():
+            generate_chart()
+        time.sleep(1200)
