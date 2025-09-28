@@ -110,3 +110,4 @@ def monitor_processes(processes):
 
 if __name__ == "__main__":
     launch_processes()
+
