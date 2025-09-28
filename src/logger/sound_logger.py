@@ -100,7 +100,7 @@ if __name__ == "__main__":
                 pass # The data is logged successfully
                 
             print(f"Cycle finished. Waiting 20 minutes (1200 seconds)...")
-            time.sleep(1200) 
+            time.sleep(5) 
             
     except KeyboardInterrupt:
         print("\nApplication stopped by user (KeyboardInterrupt).")
