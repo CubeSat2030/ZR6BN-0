@@ -24,7 +24,7 @@ except Exception:
 # Paths (relative to project root)
 DATA_DIR = "src/logger/data"
 DATA_FILE = os.path.join(DATA_DIR, "MPU6050.txt")
-CHARTS_DIR = "src/charts"
+CHARTS_DIR = "src/plotter/charts"
 CHART_FILE = os.path.join(CHARTS_DIR, "mpu_chart.svg")  # aligns with WebUI
 CHART_BACKUP_FILE = os.path.join(CHARTS_DIR, "mpu_chart_backup.svg")
 
