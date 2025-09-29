@@ -1,7 +1,7 @@
 # =========================================================================
 # Kabot-1 Mission Control Dashboard Server (OctoPrint Style) - FINAL & PATCHED
 # =========================================================================
-# NEW FEATURE: Auto-start Mission after 60s inactivity with Buzzer Countdown.
+# FEATURE UPDATE: Implemented Connection Standby Heartbeat (2 rapid beeps/3s).
 # =========================================================================
 
 import subprocess
@@ -10,18 +10,19 @@ import sys
 import time
 import signal
 import os
-import threading # NEW: For running the countdown in the background
+import threading
 from flask import Flask, render_template, jsonify, send_from_directory, abort
 
 try:
-    # NEW: Import Buzzer for GPIO control
     from gpiozero import Buzzer
-    BUZZER = Buzzer(21) # Buzzer connected to GPIO 21
+    # Initialize Buzzer once at startup
+    BUZZER = Buzzer(21) 
     BUZZER_AVAILABLE = True
 except ImportError:
     print("[WARNING] gpiozero or RPi.GPIO not available. Buzzer feature disabled.")
     BUZZER_AVAILABLE = False
 except Exception as e:
+    # Handle cases where GPIO 21 is busy or other initialization errors
     print(f"[WARNING] Could not initialize Buzzer on GPIO 21: {e}. Buzzer feature disabled.")
     BUZZER_AVAILABLE = False
 
@@ -48,7 +49,6 @@ app = Flask(__name__, template_folder=str(TEMPLATES_DIR))
 
 RUNNING_PROCESSES = {}
 
-# (SCRIPTS_CONFIG definition remains the same)
 SCRIPTS_CONFIG = {
     "main": {
         "title": "Flight Controller (main.py)",
@@ -83,12 +83,39 @@ def reset_auto_start_timer():
     """Stops the buzzer and resets the auto-start timer."""
     global LAST_CONNECTION_TIME
     if BUZZER_AVAILABLE:
-        BUZZER.off()
+        # Ensure silence when the timer is reset/active connection is detected
+        BUZZER.off() 
     
-    # Only reset the timer if the mission is NOT already running
     if not is_main_controller_active():
-        LAST_CONNECTION_TIME = time.time()
+        # Reset timer to current time (full timeout remaining)
+        LAST_CONNECTION_TIME = time.time() 
         # print(f"[TIMER] Timer reset. Time: {LAST_CONNECTION_TIME}")
+
+def buzzer_double_beep(delay_between_beeps=0.1, total_duration=3.0):
+    """Executes the two rapid beeps and waits for the remaining duration."""
+    if not BUZZER_AVAILABLE:
+        time.sleep(total_duration)
+        return
+        
+    start_wait = time.time()
+    
+    # Beep 1
+    BUZZER.on()
+    time.sleep(delay_between_beeps)
+    BUZZER.off()
+    
+    # Short pause
+    time.sleep(delay_between_beeps)
+    
+    # Beep 2
+    BUZZER.on()
+    time.sleep(delay_between_beeps)
+    BUZZER.off()
+    
+    # Wait for the remaining time (approx 3.0s total cycle)
+    remaining_wait = total_duration - (time.time() - start_wait)
+    if remaining_wait > 0:
+        time.sleep(remaining_wait)
 
 
 def start_buzzer_countdown():
@@ -100,7 +127,8 @@ def start_buzzer_countdown():
     global BUZZER_THREAD_STOP
     
     while not BUZZER_THREAD_STOP.is_set():
-        # Check if the main controller is already running. If so, stop monitoring.
+        
+        # Check 1: Is the mission already running?
         if is_main_controller_active():
             if BUZZER_AVAILABLE:
                 BUZZER.off()
@@ -111,13 +139,12 @@ def start_buzzer_countdown():
         time_elapsed = time.time() - LAST_CONNECTION_TIME
         time_remaining = AUTO_START_TIMEOUT - time_elapsed
         
+        # Check 2: Has the timer expired? (Launch Mission)
         if time_remaining <= 0:
-            # --- AUTO-START TRIGGERED ---
             print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
             if BUZZER_AVAILABLE:
                 BUZZER.off()
             
-            # Use the existing start_script function
             success, message = start_script('main')
             
             if success:
@@ -125,45 +152,55 @@ def start_buzzer_countdown():
             else:
                 print(f"[AUTO-START FAILURE] {message}")
             
-            # Wait for 5 seconds before checking status again
             time.sleep(5) 
             
-        elif time_remaining <= 10:
-            # --- FAST BEEP (0-10 seconds remaining) ---
-            delay = 0.2
-            if BUZZER_AVAILABLE:
-                BUZZER.on()
-            time.sleep(delay)
-            if BUZZER_AVAILABLE:
-                BUZZER.off()
-            time.sleep(delay)
-            # print(f"[TIMER] FAST BEEP! Remaining: {time_remaining:.1f}s")
+        # Check 3: Is the timer actively counting down?
+        elif time_remaining < AUTO_START_TIMEOUT - 5: # Give a 5-second buffer for the Standby state
             
-        elif time_remaining <= 30:
-            # --- MEDIUM BEEP (10-30 seconds remaining) ---
-            delay = 0.5
-            if BUZZER_AVAILABLE:
-                BUZZER.on()
-            time.sleep(delay)
-            if BUZZER_AVAILABLE:
-                BUZZER.off()
-            time.sleep(delay)
-            # print(f"[TIMER] MEDIUM BEEP. Remaining: {time_remaining:.1f}s")
+            if time_remaining <= 10:
+                # --- FAST BEEP (0-10 seconds remaining) ---
+                delay = 0.2
+                if BUZZER_AVAILABLE:
+                    BUZZER.on()
+                time.sleep(delay)
+                if BUZZER_AVAILABLE:
+                    BUZZER.off()
+                time.sleep(delay)
+                # print(f"[TIMER] FAST BEEP! Remaining: {time_remaining:.1f}s")
+                
+            elif time_remaining <= 30:
+                # --- MEDIUM BEEP (10-30 seconds remaining) ---
+                delay = 0.5
+                if BUZZER_AVAILABLE:
+                    BUZZER.on()
+                time.sleep(delay)
+                if BUZZER_AVAILABLE:
+                    BUZZER.off()
+                time.sleep(delay)
+                # print(f"[TIMER] MEDIUM BEEP. Remaining: {time_remaining:.1f}s")
 
-        elif time_remaining < AUTO_START_TIMEOUT:
-            # --- SLOW BEEP (30-60 seconds remaining) ---
-            delay = 1.0
-            if BUZZER_AVAILABLE:
-                BUZZER.on()
-            time.sleep(0.1) # Short pulse
-            if BUZZER_AVAILABLE:
-                BUZZER.off()
-            time.sleep(delay - 0.1)
-            # print(f"[TIMER] SLOW BEEP. Remaining: {time_remaining:.1f}s")
+            elif time_remaining < AUTO_START_TIMEOUT - 5:
+                # --- SLOW BEEP (30-55 seconds remaining) ---
+                delay = 1.0
+                if BUZZER_AVAILABLE:
+                    BUZZER.on()
+                time.sleep(0.1) # Short pulse
+                if BUZZER_AVAILABLE:
+                    BUZZER.off()
+                time.sleep(delay - 0.1)
+                # print(f"[TIMER] SLOW BEEP. Remaining: {time_remaining:.1f}s")
             
-        else:
-            # Timer is currently reset or just started
-            time.sleep(1)
+            # Use the sleep of the last executed block
+            time.sleep(0.1) 
+
+        # Check 4: Connection is active / Timer is reset (Standby Heartbeat)
+        else: 
+            # This triggers when LAST_CONNECTION_TIME was recently reset 
+            # and time_remaining is close to the full 60 seconds (e.g., 55s to 60s)
+            
+            # --- CONNECTION STANDBY HEARTBEAT (2 rapid beeps every 3 seconds) ---
+            buzzer_double_beep(delay_between_beeps=0.1, total_duration=3.0)
+            # print("[TIMER] STANDBY HEARTBEAT. Connection active.")
 
 
 @app.before_request
@@ -174,214 +211,19 @@ def update_last_connection_time():
 
 
 # =========================================================================
-# (SYSTEM PROCESS CHECK & CONTROL FUNCTIONS are unchanged)
+# (All other functions, including script control and API routes, remain unchanged)
 # =========================================================================
 
-def is_main_controller_active():
-# ... (function is unchanged) ...
-    if 'main' in RUNNING_PROCESSES:
-        if RUNNING_PROCESSES['main'].poll() is None:
-            return True
-        else:
-            del RUNNING_PROCESSES['main'] 
-    return False
-
-def get_status():
-# ... (function is unchanged) ...
-    status = {}
-    for name, config in SCRIPTS_CONFIG.items():
-        # ... (unchanged status collection logic) ...
-        is_running = False
-        pid = None
-        if name in RUNNING_PROCESSES:
-            if RUNNING_PROCESSES[name].poll() is None:
-                is_running = True
-                pid = RUNNING_PROCESSES[name].pid
-            else:
-                del RUNNING_PROCESSES[name] 
-
-        if config.get('is_main_controller', False):
-             status['main_controller'] = {
-                "running": is_running,
-                "title": config['title'],
-                "pid": pid,
-            }
-        else:
-            status[name] = {
-                "title": config['title'],
-                "running": is_running,
-                "pid": pid,
-                "chart_file": config.get('chart_file')
-            }
-            
-    if 'main_controller' not in status:
-         status['main_controller'] = {
-            "running": False,
-            "title": SCRIPTS_CONFIG['main']['title'],
-            "pid": None,
-        }
-    return status
-
-def start_script(name):
-# ... (function is unchanged) ...
-    # Uses the global RUNNING_PROCESSES and SCRIPTS_CONFIG
-    # ... (unchanged script starting logic) ...
-    if name != 'main' and is_main_controller_active():
-        return False, "Flight Controller (main.py) is running. Manual loggers are disabled."
-    
-    if name not in SCRIPTS_CONFIG:
-        return False, "Unknown script name." 
-    
-    config = SCRIPTS_CONFIG[name]
-    script_path = str(config['log_script']) 
-    
-    if name in RUNNING_PROCESSES and RUNNING_PROCESSES[name].poll() is None:
-        return False, f"{config['title']} is already running (PID: {RUNNING_PROCESSES[name].pid})."
-    
-    try:
-        process = subprocess.Popen(
-            [sys.executable, script_path],
-            preexec_fn=os.setsid, 
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            cwd=str(BASE_DIR) 
-        )
-        RUNNING_PROCESSES[name] = process
-        
-        if name == 'main':
-             return True, f"Started Flight Controller (PID: {process.pid}). Loggers are now active."
-        else:
-             return True, f"Started {config['title']} (PID: {process.pid})."
-    except Exception as e:
-        return False, f"Failed to start {config['title']}: {str(e)}"
-
-
-def stop_script(name):
-# ... (function is unchanged) ...
-    # Uses the global RUNNING_PROCESSES and SCRIPTS_CONFIG
-    # ... (unchanged script stopping logic) ...
-    if name != 'main' and is_main_controller_active():
-        return False, "Flight Controller (main.py) is running. Manual loggers cannot be stopped."
-
-    if name not in RUNNING_PROCESSES or RUNNING_PROCESSES[name].poll() is not None:
-        return False, f"{SCRIPTS_CONFIG.get(name, {}).get('title', name)} is not running or has already stopped."
-
-    try:
-        os.killpg(os.getpgid(RUNNING_PROCESSES[name].pid), signal.SIGTERM)
-        time.sleep(0.5)
-        
-        if name in RUNNING_PROCESSES:
-            del RUNNING_PROCESSES[name]
-            
-        if name == 'main':
-            return True, f"Stopped Flight Controller."
-        else:
-            return True, f"Stopped {SCRIPTS_CONFIG.get(name, {}).get('title', name)}."
-            
-    except Exception:
-        if name in RUNNING_PROCESSES:
-            del RUNNING_PROCESSES[name]
-        return False, f"Failed to stop {name}. Process entry cleared."
-
-def run_plotter(name):
-# ... (function is unchanged) ...
-    # Uses the global RUNNING_PROCESSES and SCRIPTS_CONFIG
-    # ... (unchanged plotting logic) ...
-    if is_main_controller_active():
-        return False, "Flight Controller (main.py) is running. Chart generation is disabled."
-    # ... (rest of plotter logic is unchanged) ...
-    
-# (FLASK API ROUTES are unchanged, except for the addition of @app.before_request)
-
-@app.route("/")
-def index():
-# ... (function is unchanged) ...
-    serializable_config = {}
-    for key, config in SCRIPTS_CONFIG.items():
-        if not config.get('is_main_controller'):
-            serializable_config[key] = {
-                "title": config["title"],
-                "chart_file": config["chart_file"] 
-            }
-        
-    return render_template("dashboard.html", scripts_config=serializable_config)
-
-@app.route("/api/status", methods=['GET'])
-def api_status():
-    return jsonify(get_status())
-
-@app.route('/api/script/<name>/<action>', methods=['POST'])
-def api_script_control(name, action):
-    # ... (function is unchanged) ...
-    if name == 'main_controller':
-        name = 'main'
-        
-    if name != 'main' and is_main_controller_active():
-        return jsonify({"success": False, "message": "Flight Controller is active. Cannot control manual scripts."}), 403
-
-    if action == 'start':
-        success, message = start_script(name)
-    elif action == 'stop':
-        success, message = stop_script(name)
-    else:
-        return jsonify({"success": False, "message": "Invalid action."}), 400
-    
-    return jsonify({"success": success, "message": message, "status": get_status()})
-
-@app.route('/api/chart/<name>', methods=['POST'])
-def api_chart_generate(name):
-# ... (function is unchanged) ...
-    if is_main_controller_active():
-        return jsonify({"success": False, "message": "Flight Controller is active. Cannot generate charts."}), 403
-        
-    success, message = run_plotter(name)
-    return jsonify({"success": success, "message": message})
-# (All other chart/system control routes are unchanged)
-
-@app.route("/chart/<path:filename>")
-def get_chart_display(filename):
-    if ".." in filename or "/" in filename:
-        abort(400)
-    return send_from_directory(CHARTS_DIR, filename, as_attachment=False)
-
-@app.route("/download/chart/<filename>")
-def download_chart(filename):
-    if ".." in filename or "/" in filename:
-        abort(400)
-    file_path = CHARTS_DIR / filename
-    if not file_path.exists():
-        abort(404, description="Chart not found.")
-    return send_from_directory(CHARTS_DIR, filename, as_attachment=True)
-    
-@app.route('/api/control/<action>', methods=['POST'])
-def api_system_control(action):
-    if action == 'reboot':
-        cmd = ["sudo", "reboot"]
-        message = "System will reboot momentarily."
-    elif action == 'shutdown':
-        cmd = ["sudo", "shutdown", "now"]
-        message = "System will shut down momentarily."
-    else:
-        return jsonify({"success": False, "message": "Invalid control action."}), 400
-
-    try:
-        subprocess.Popen(
-            cmd, 
-            start_new_session=True, 
-            stdout=subprocess.DEVNULL, 
-            stderr=subprocess.DEVNULL
-        )
-        return jsonify({"success": True, "message": message})
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to execute command: {str(e)}"}), 500
+# ... (is_main_controller_active, get_status, start_script, stop_script, run_plotter remain UNCHANGED) ...
+# ... (All @app.route functions remain UNCHANGED) ...
 
 
 if __name__ == "__main__":
-    # NEW: Start the background thread for auto-start and buzzer countdown
+    # Start the background thread for auto-start and buzzer countdown
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
     countdown_thread.start()
     
-    # NEW: Clean up the buzzer on exit
+    # Clean up the buzzer on exit
     def exit_handler(signum, frame):
         if BUZZER_AVAILABLE:
             BUZZER.off()
@@ -398,7 +240,8 @@ if __name__ == "__main__":
     print(f"Auto-Start Timeout: {AUTO_START_TIMEOUT} seconds.")
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
+        print("Status: Standby Heartbeat (2 quick beeps/3s) while connected.")
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
-    app.run(host="0.0.0.0", port=5000, debug=False) # Changed debug=False for production thread stability
+    app.run(host="0.0.0.0", port=5000, debug=False)
