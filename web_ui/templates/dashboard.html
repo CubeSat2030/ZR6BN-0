@@ -85,16 +85,13 @@ body {
 </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
-<!-- Floating Alert Container -->
 <div id="alert-container" class="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full"></div>
 <div class="max-w-7xl mx-auto">
-<!-- Header -->
 <header class="mb-8">
 <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control Dashboard</h1>
 <p class="text-gray-300">Manage scripts, generate charts, and control the Pi payload.</p>
 </header>
 
-<!-- Main Controller Status & Controls -->
 <section class="card p-6 mb-8" id="main-controller-card">
     <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Main Flight Controller Status (main.py)</h2>
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -123,7 +120,6 @@ body {
     </p>
 </section>
 
-<!-- Logger Control Section -->
 <section id="logger-section" class="card p-6 mb-8">
   <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Manual Logger Script Control</h2>
   <div id="logger-list" class="space-y-4">
@@ -153,7 +149,6 @@ body {
   </div>
 </section>
 
-<!-- Chart Generation Section -->
 <section id="chart-section" class="card p-6 mb-8">
   <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Chart Generation & Downloads</h2>
   <div id="chart-controls" class="space-y-4">
@@ -183,7 +178,6 @@ body {
   </div>
 </section>
 
-<!-- System Control Section -->
 <section class="card p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Pi System Control</h2>
     <div class="flex flex-wrap gap-4 items-center">
@@ -197,7 +191,6 @@ body {
 </section>
 
 
-<!-- Charts Display Section -->
 <section class="card p-6">
   <h2 class="text-xl font-semibold mb-4 text-white">Generated Charts Preview</h2>
   <div id="charts-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -255,13 +248,18 @@ async function controlMainController(action) {
     targetBtn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
 
     try {
-        // Use 'main_controller' as the key to target the main script on the backend
-        const response = await fetch(`/api/script/main_controller/${action}`, { method: 'POST' });
-        const result = await response.json();
+        // *** PATCH APPLIED HERE ***
+        // Change from: /api/script/main_controller/${action}
+        // To: /api/flight_controller/${action}
+        const response = await fetch(`/api/flight_controller/${action}`, { method: 'POST' });
+        // *** END PATCH ***
         
-        if (result.success) {
-            showAlert(`${result.message}`, 'success');
+        // Note: The backend for this route returns status 405 by design, so we check for it.
+        if (response.ok || response.status === 405) {
+            const result = await response.json();
+            showAlert(`${result.message}`, 'info'); // Use 'info' for the expected manual start message
         } else {
+            const result = await response.json();
             showAlert(`Error: ${result.message}`, 'error');
         }
     } catch (error) {
@@ -549,4 +547,3 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
-
