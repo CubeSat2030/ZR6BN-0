@@ -105,6 +105,19 @@ DAEMON_CONF="/etc/hostapd/hostapd.conf"
 ~~~
 
 
+
+~~~bash
+
+
+sudo systemctl unmask hostapd
+sudo systemctl enable hostapd
+sudo systemctl enable dnsmasq
+
+
+
+
+~~~
+
 **File structure:**
 ~~~
 
