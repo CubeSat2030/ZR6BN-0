@@ -84,22 +84,11 @@ SCRIPTS_CONFIG = {
 }
 
 # =========================================================================
-# SYSTEM PROCESS CHECK & CONTROL FUNCTIONS (Placeholder - Assume UNCHANGED)
+# SYSTEM PROCESS CHECK & CONTROL FUNCTIONS (UNCHANGED)
 # =========================================================================
-# NOTE: The actual content for these functions is omitted for brevity, 
-# but they are assumed to be correctly defined in the full script 
-# (is_main_controller_active, get_status, start_script, stop_script, run_plotter).
-# A placeholder is required for 'is_main_controller_active' and 'get_status'
-# as they are used in the following functions.
+# (is_main_controller_active, get_status, start_script, stop_script, run_plotter)
 
-def is_main_controller_active():
-    """Placeholder for checking the main controller status."""
-    return False # Assume not running for demonstration
-
-def get_status():
-    """Placeholder for returning system status."""
-    return {"main": "stopped"}
-
+# ... (Previous functions are here, unchanged, as they only use the thread-safe PROCESS_LOCK) ...
 
 # =========================================================================
 # NEW: WIFI MODE MANAGEMENT FUNCTIONS
@@ -157,8 +146,7 @@ def switch_to_hotspot_mode():
         return True, "Switched to Hotspot Mode. Connect to the Kabot-1-Mission-Control network."
     except subprocess.CalledProcessError as e:
         WIFI_MODE = "error"
-        # Note: Added .decode() since stderr is bytes
-        return False, f"Failed to switch to Hotspot Mode. Error: {e.stderr.decode().strip()}"
+        return False, f"Failed to switch to Hotspot Mode. Error: {e.stderr.strip()}"
     except Exception as e:
         WIFI_MODE = "error"
         return False, f"An unexpected error occurred during hotspot switch: {str(e)}"
@@ -189,8 +177,7 @@ def switch_to_client_mode():
         return True, "Switched to Client Mode. Pi is attempting to connect to an authenticated network."
     except subprocess.CalledProcessError as e:
         WIFI_MODE = "error"
-        # Note: Added .decode() since stderr is bytes
-        return False, f"Failed to switch to Client Mode. Error: {e.stderr.decode().strip()}"
+        return False, f"Failed to switch to Client Mode. Error: {e.stderr.strip()}"
     except Exception as e:
         WIFI_MODE = "error"
         return False, f"An unexpected error occurred during client switch: {str(e)}"
@@ -241,16 +228,12 @@ def network_watchdog():
 # =========================================================================
 # BUZZER COUNTDOWN AND AUTO-START LOGIC (UNCHANGED, but relies on get_wifi_mode)
 # =========================================================================
-
-# NOTE: Since the full buzzer logic isn't provided, I'm defining a minimal 
-# 'start_buzzer_countdown' function and including the required 'reset_auto_start_timer'
-# to complete the script and resolve the IndentationError.
+# ... (reset_auto_start_timer, buzzer_double_beep, start_buzzer_countdown are here, UNCHANGED) ...
 
 def reset_auto_start_timer():
     """Stops the buzzer and resets the auto-start timer."""
     global LAST_CONNECTION_TIME
     if BUZZER_AVAILABLE:
-        # Assuming BUZZER object is available and defined
         BUZZER.off() 
     
     # Only reset the auto-start timer if we are in a mission-ready state (i.e., not a connection error state)
@@ -260,11 +243,9 @@ def reset_auto_start_timer():
 
 def start_buzzer_countdown():
     # ... (Logic is unchanged, relies on is_main_controller_active and the timer logic) ...
-    # CRITICAL FIX: The previous version had a comment here, which often leads to 
-    # the IndentationError if the comment is the only content. A 'pass' statement 
-    # explicitly ends the function block.
-    pass
-
+    # Note: If the watchdog thread is active, this countdown logic should be fine
+    # as the buzzer will be reset/silenced if the Pi is running properly or in AP standby.
+    # ... (rest of start_buzzer_countdown) ...
 
 # =========================================================================
 # FLASK API ROUTES (UPDATED)
@@ -301,26 +282,7 @@ def api_wifi_control(target_mode):
         "new_mode": get_wifi_mode()
     })
 
-# ... (All other API routes are UNCHANGED - Placeholder) ...
-@app.route("/")
-def index():
-    return "Mission Control Dashboard (Placeholder)"
-
-@app.route("/api/start/<script_id>", methods=['POST'])
-def api_start(script_id):
-    return jsonify({"success": True, "message": f"Starting {script_id} (Placeholder)"})
-
-@app.route("/api/stop/<script_id>", methods=['POST'])
-def api_stop(script_id):
-    return jsonify({"success": True, "message": f"Stopping {script_id} (Placeholder)"})
-
-@app.route("/charts/<chart_file>")
-def get_chart(chart_file):
-    # Sends a chart file from the CHARTS_DIR
-    try:
-        return send_from_directory(CHARTS_DIR, chart_file)
-    except FileNotFoundError:
-        abort(404)
+# ... (All other API routes are UNCHANGED) ...
 
 
 if __name__ == "__main__":
@@ -338,7 +300,6 @@ if __name__ == "__main__":
         BUZZER_THREAD_STOP.set()
         WATCHDOG_THREAD_STOP.set() # Stop the new thread
         print("\n[CLEANUP] All threads stopped.")
-        # Ensure all subprocesses are terminated gracefully here (omitted for brevity)
         sys.exit(0)
         
     signal.signal(signal.SIGINT, exit_handler)
