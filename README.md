@@ -91,6 +91,13 @@ rsn_pairwise=CCMP
 
 
 
+~~~bash
+
+sudo nano /etc/default/hostapd
+
+~~~
+
+
 
 
 **File structure:**
