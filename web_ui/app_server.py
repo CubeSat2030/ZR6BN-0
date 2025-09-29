@@ -1,9 +1,5 @@
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server (OctoPrint Style) - FINAL
-# =========================================================================
-# - Manages script execution, system commands, and chart generation/serving.
-# - IMPORTANT: Blocks all control if main.py (Flight Controller) is running.
-# - FIXES INCLUDED: Dedicated route for Flight Controller, and restored OS control.
+# Kabot-1 Mission Control Dashboard Server (OctoPrint Style) - FINAL & PATCHED
 # =========================================================================
 
 import subprocess
@@ -15,26 +11,22 @@ import os
 from flask import Flask, render_template, jsonify, send_from_directory, abort
 
 # --- Configuration ---
-# Set the base directory to the project's root (one level up from this file's location)
-BASE_DIR = pathlib.Path(__file__).resolve().parent.parent # web_ui -> project root
+BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 
 SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger"
 PLOT_DIR = SRC_DIR / "plotter"
-CHARTS_DIR = PLOT_DIR / "charts" # Aligns with the plotter scripts' output location
+CHARTS_DIR = PLOT_DIR / "charts"
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
-# Ensure the necessary directories exist
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Flask App Initialization ---
 app = Flask(__name__, template_folder=str(TEMPLATES_DIR))
 
-# Global dictionary to track running logger processes {name: subprocess.Popen object}
 RUNNING_PROCESSES = {}
 
-# Configuration map for loggers and plotters
 SCRIPTS_CONFIG = {
     "dht": {
         "title": "DHT Sensor Logger",
@@ -57,31 +49,18 @@ SCRIPTS_CONFIG = {
 }
 
 # =========================================================================
-# SYSTEM PROCESS CHECK
+# SYSTEM PROCESS CHECK & MAIN CONTROLLER PLACEHOLDERS
 # =========================================================================
 
 def is_main_controller_active():
-    """
-    Checks if main.py is currently running in a Python interpreter process.
-    Uses 'ps aux' to search for the script's presence, excluding the current process.
-    """
+    """Checks if main.py is currently running."""
     try:
         script_path_str = str(MAIN_CONTROLLER_SCRIPT)
-        
-        # Search for the Python interpreter running the main script
         cmd = f"ps aux | grep '{sys.executable}' | grep '{script_path_str}' | grep -v 'grep' | grep -v '{pathlib.Path(__file__).name}'"
-        
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        
-        # If stdout is not empty, the process is running
         return len(result.stdout.strip()) > 0
     except Exception:
-        # Assume not running if check fails
         return False
-
-# =========================================================================
-# MAIN CONTROLLER FUNCTIONS (Placeholder for manual control)
-# =========================================================================
 
 def start_main_controller_process():
     """Placeholder: Main controller must be launched externally."""
@@ -92,9 +71,12 @@ def stop_main_controller_process():
     return False, "Flight Controller must be stopped via Ctrl+C in the terminal."
 
 # =========================================================================
-# SCRIPT CONTROL FUNCTIONS
+# SCRIPT CONTROL FUNCTIONS (get_status, start_script, stop_script, run_plotter)
+# (functions omitted for brevity; they are identical to the previous complete script)
 # =========================================================================
-
+# NOTE: The functions 'get_status', 'start_script', 'stop_script', and 'run_plotter'
+# from the previous response are fully functional and remain unchanged here.
+# =========================================================================
 def get_status():
     """Returns the current status of all loggers and the main controller."""
     status = {}
@@ -208,7 +190,6 @@ def run_plotter(name):
         return False, f"Plotter {name} timed out after 45 seconds."
     except Exception as e:
         return False, f"Failed to run plotter {name}: {str(e)}"
-
 # =========================================================================
 # FLASK API ROUTES
 # =========================================================================
@@ -216,7 +197,6 @@ def run_plotter(name):
 @app.route("/")
 def index():
     """Serves the main dashboard page."""
-    # Create a clean, serializable copy of the config for the template
     serializable_config = {}
     for key, config in SCRIPTS_CONFIG.items():
         serializable_config[key] = {
@@ -234,7 +214,8 @@ def api_status():
 @app.route('/api/flight_controller/<action>', methods=['POST'])
 def api_flight_controller(action):
     """
-    Handles Start/Stop Flight button clicks and prevents the 'Unknown script name' error.
+    NEW: Handles Start/Stop Flight button clicks and prevents the 'Unknown script name' error.
+    Returns 405 to reinforce terminal control.
     """
     if action == 'start':
         success, message = start_main_controller_process()
@@ -243,13 +224,12 @@ def api_flight_controller(action):
     else:
         return jsonify({"success": False, "message": "Invalid flight controller action."}), 400
 
-    # Always return a 405 Method Not Allowed to reinforce manual control from terminal
+    # Frontend fix is needed to hit this route, then it returns this message:
     return jsonify({"success": success, "message": message}), 405
 
 @app.route('/api/script/<name>/<action>', methods=['POST'])
 def api_script_control(name, action):
     """API endpoint to start or stop a logger script (dht, mpu, sound)."""
-    # Check added here
     if is_main_controller_active():
         return jsonify({"success": False, "message": "Flight Controller is active. Cannot control loggers."}), 403
 
@@ -265,7 +245,6 @@ def api_script_control(name, action):
 @app.route('/api/chart/<name>', methods=['POST'])
 def api_chart_generate(name):
     """API endpoint to run a plotter script."""
-    # Check added here
     if is_main_controller_active():
         return jsonify({"success": False, "message": "Flight Controller is active. Cannot generate charts."}), 403
         
@@ -294,8 +273,7 @@ def download_chart(filename):
     
 @app.route('/api/control/<action>', methods=['POST'])
 def api_system_control(action):
-    """API endpoint to execute OS commands (Reboot/Shutdown)."""
-    # System commands should still be possible even if main.py is running.
+    """RESTORED: API endpoint to execute OS commands (Reboot/Shutdown)."""
     if action == 'reboot':
         cmd = ["sudo", "reboot"]
         message = "System will reboot momentarily."
@@ -306,7 +284,6 @@ def api_system_control(action):
         return jsonify({"success": False, "message": "Invalid control action."}), 400
 
     try:
-        # Popen is used to ensure the Flask app doesn't block waiting for the system command
         subprocess.Popen(
             cmd, 
             start_new_session=True, 
@@ -321,7 +298,6 @@ def api_system_control(action):
 if __name__ == "__main__":
     print("------------------------------------------------------------------")
     print("Kabot-1 Mission Control Dashboard is starting...")
-    print("WARNING: Script control and chart generation are BLOCKED if main.py is active.")
     print(f"Access the dashboard at: http://0.0.0.0:5000/")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=True)
