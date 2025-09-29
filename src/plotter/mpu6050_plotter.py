@@ -5,6 +5,7 @@
 # - Handles missing SciPy by skipping smoothing.
 # - Normalizes header names (ax/ay/az/gx/gy/gz) to internal keys.
 # - Aligns output filename with WebUI: src/charts/mpu_chart.svg
+# - PATCHED: Added robust timestamp parsing to handle time-only log entries.
 # =========================================================================
 
 import os
@@ -88,15 +89,32 @@ def generate_mpu_chart():
         parts = [p.strip() for p in line.strip().split(",")]
         if len(parts) < 7:
             continue
+            
+        # --- PATCH START: Robust Timestamp Parsing ---
         try:
-            dates.append(datetime.strptime(parts[0], "%Y-%m-%d %H:%M:%S"))
+            timestamp_str = parts[0]
+            dt_obj = None
+            
+            # Attempt 1: Full timestamp format (e.g., "2025-01-01 15:30:00")
+            try:
+                dt_obj = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                # Attempt 2: Time-only format (e.g., "15:30:00")
+                time_obj = datetime.strptime(timestamp_str, "%H:%M:%S")
+                # Combine the time with today's date for plotting context
+                dt_obj = datetime.combine(datetime.now().date(), time_obj.time())
+            
+            dates.append(dt_obj)
         except Exception:
+            # If parsing fails entirely, skip the line
             continue
+        # --- PATCH END ---
 
         for i, (raw_k, internal_k) in enumerate(internal_keys):
             if internal_k is None:
                 continue
             try:
+                # Use i+1 because parts[0] is the timestamp
                 val = float(parts[i+1])
             except Exception:
                 val = np.nan
@@ -190,3 +208,4 @@ def generate_mpu_chart():
 
 if __name__ == "__main__":
     generate_mpu_chart()
+
