@@ -38,7 +38,21 @@ sudo nano /etc/dnsmasq.conf
 
 ~~~
 
+~~~bash
 
+# --- Kabot-1 Hotspot DHCP Configuration ---
+interface=wlan0        # Listen only on the Wi-Fi interface
+dhcp-range=192.168.4.10,192.168.4.250,255.255.255.0,24h
+                       # IP range for connected devices (from .10 to .250) for 24 hours
+server=8.8.8.8         # Forward DNS requests (though devices won't access internet)
+domain-suffix=kabot-1.local
+                       # Optional: defines the local domain
+address=/kabot-1.local/192.168.4.1
+                       # Ensures that http://kabot-1.local always resolves to the Pi's IP
+
+
+
+~~~
 
 
 **File structure:**
