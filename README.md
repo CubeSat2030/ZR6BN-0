@@ -97,7 +97,12 @@ sudo nano /etc/default/hostapd
 
 ~~~
 
+~~~bash
 
+
+DAEMON_CONF="/etc/hostapd/hostapd.conf"
+
+~~~
 
 
 **File structure:**
