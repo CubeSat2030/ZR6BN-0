@@ -123,7 +123,8 @@ def start_script(name):
         return False, "Unknown script name."
     
     config = SCRIPTS_CONFIG[name]
-    script_path = str(config['log_script'])
+    # NOTE: We use str() here to ensure the path is passed as a command-line argument string
+    script_path = str(config['log_script']) 
     
     if name in RUNNING_PROCESSES and RUNNING_PROCESSES[name].poll() is None:
         return False, f"{name} is already running (PID: {RUNNING_PROCESSES[name].pid})."
@@ -150,10 +151,14 @@ def stop_script(name):
         return False, f"{name} is not running or has already stopped."
 
     try:
+        # Use os.killpg for reliable termination of the entire process group
         os.killpg(os.getpgid(RUNNING_PROCESSES[name].pid), signal.SIGTERM)
         time.sleep(0.5)
         
-        del RUNNING_PROCESSES[name]
+        # Clean up the process dictionary
+        if name in RUNNING_PROCESSES:
+            del RUNNING_PROCESSES[name]
+            
         return True, f"Stopped {name}."
     except Exception:
         if name in RUNNING_PROCESSES:
@@ -169,7 +174,8 @@ def run_plotter(name):
         return False, "Unknown plotter name."
     
     config = SCRIPTS_CONFIG[name]
-    script_path = str(config['plot_script'])
+    # NOTE: We use str() here to ensure the path is passed as a command-line argument string
+    script_path = str(config['plot_script']) 
     chart_file = config['chart_file']
     
     try:
@@ -199,8 +205,24 @@ def run_plotter(name):
 
 @app.route("/")
 def index():
-    """Serves the main dashboard page, passing script configuration."""
-    return render_template("dashboard.html", scripts_config=SCRIPTS_CONFIG)
+    """
+    Serves the main dashboard page.
+    
+    FIX: The path objects in SCRIPTS_CONFIG must be converted to strings
+    before being passed to Jinja's tojson filter to avoid 'TypeError: 
+    Object of type PosixPath is not JSON serializable'.
+    """
+    # Create a clean, serializable copy of the config
+    serializable_config = {}
+    for key, config in SCRIPTS_CONFIG.items():
+        serializable_config[key] = {
+            "title": config["title"],
+            # ONLY include values that are pure strings, numbers, or booleans
+            "chart_file": config["chart_file"] 
+            # Note: log_script and plot_script are omitted as they are internal paths
+        }
+        
+    return render_template("dashboard.html", scripts_config=serializable_config)
 
 @app.route("/api/status", methods=['GET'])
 def api_status():
@@ -233,6 +255,28 @@ def api_chart_generate(name):
     success, message = run_plotter(name)
     return jsonify({"success": success, "message": message})
 
+@app.route("/chart/<path:filename>")
+def get_chart_display(filename):
+    """Serves a specific chart image for display in the browser."""
+    # Ensure no path traversal attempts
+    if ".." in filename or "/" in filename:
+        abort(400)
+        
+    return send_from_directory(CHARTS_DIR, filename, as_attachment=False)
+
+@app.route("/download/chart/<filename>")
+def download_chart(filename):
+    """Serves a specific chart image for download (as attachment)."""
+    # Ensure no path traversal attempts
+    if ".." in filename or "/" in filename:
+        abort(400)
+        
+    file_path = CHARTS_DIR / filename
+    if not file_path.exists():
+        abort(404, description="Chart not found.")
+        
+    return send_from_directory(CHARTS_DIR, filename, as_attachment=True)
+
 @app.route('/api/control/<action>', methods=['POST'])
 def api_system_control(action):
     """API endpoint to execute OS commands (Reboot/Shutdown)."""
@@ -247,31 +291,18 @@ def api_system_control(action):
         return jsonify({"success": False, "message": "Invalid control action."}), 400
 
     try:
+        # Popen is used to ensure the Flask app doesn't block waiting for the system command
         subprocess.Popen(cmd.split(), start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return jsonify({"success": True, "message": message})
     except Exception as e:
         return jsonify({"success": False, "message": f"Failed to execute command: {str(e)}"}), 500
-
-@app.route("/chart/<path:filename>")
-def get_chart_display(filename):
-    """Serves a specific chart image for display in the browser."""
-    return send_from_directory(CHARTS_DIR, filename, as_attachment=False)
-
-@app.route("/download/chart/<filename>")
-def download_chart(filename):
-    """Serves a specific chart image for download (as attachment)."""
-    file_path = CHARTS_DIR / filename
-    if not file_path.exists():
-        abort(404, description="Chart not found.")
-        
-    return send_from_directory(CHARTS_DIR, filename, as_attachment=True)
 
 
 if __name__ == "__main__":
     print("------------------------------------------------------------------")
     print("Kabot-1 Mission Control Dashboard is starting...")
     print("WARNING: Script control and chart generation are BLOCKED if main.py is active.")
-    print(f"Access the dashboard at: http://<Your-Pi-IP-Address>:5000/")
+    print(f"Access the dashboard at: http://0.0.0.0:5000/")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=True)
 
