@@ -30,6 +30,17 @@ interface wlan0
 ~~~
 
 
+
+~~~bash
+
+sudo mv /etc/dnsmasq.conf /etc/dnsmasq.conf.orig
+sudo nano /etc/dnsmasq.conf
+
+~~~
+
+
+
+
 **File structure:**
 ~~~
 
