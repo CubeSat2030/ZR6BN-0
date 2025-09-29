@@ -32,10 +32,26 @@ def generate_chart():
             for line in lines:
                 try:
                     timestamp_str, temp_str, hum_str = line.strip().split(',')
-                    dates.append(datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S"))
+                    
+                    # --- PATCH START: Robust Timestamp Parsing ---
+                    dt_obj = None
+                    # Attempt 1: Full timestamp format (e.g., "2025-01-01 15:30:00")
+                    try:
+                        dt_obj = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        # Attempt 2: Time-only format (e.g., "15:30:00")
+                        # This assumes the data was recorded on the current day if the date is missing.
+                        time_obj = datetime.strptime(timestamp_str, "%H:%M:%S")
+                        # Combine the time with today's date for plotting context
+                        dt_obj = datetime.combine(datetime.now().date(), time_obj.time())
+
+                    dates.append(dt_obj)
+                    # --- PATCH END ---
+
                     temps.append(float(temp_str))
                     hums.append(float(hum_str))
                 except (ValueError, IndexError):
+                    # Skip lines that are corrupted or don't match expected CSV format
                     continue
     except Exception as e:
         print(f"Error reading data file: {e}", file=sys.stderr)
@@ -96,3 +112,4 @@ def generate_chart():
 
 if __name__ == "__main__":
     generate_chart()
+
