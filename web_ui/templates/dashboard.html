@@ -51,6 +51,8 @@ body {
   border-radius: 6px;
   border: 1px solid var(--border);
   background-color: var(--bg-dark);
+  height: auto; /* Ensure responsiveness */
+  width: 100%; /* Ensure responsiveness */
 }
 
 /* Pulsing indicators */
@@ -91,9 +93,6 @@ body {
 <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control Dashboard</h1>
 <p class="text-gray-300">Manage scripts, generate charts, and control the Pi payload.</p>
 </header>
-
-<!-- NOTE: Static placeholder sections from the last user input (Subsystem Status and Event Log) are removed
-     to prioritize the functional Mission Control elements below. -->
 
 <!-- Main Controller Status & Controls -->
 <section class="card p-6 mb-8" id="main-controller-card">
@@ -217,59 +216,59 @@ body {
 </div>
 <script>
 const statusOutput = document.getElementById('status_output');
-// NOTE: This variable is populated by Flask's Jinja templating engine.
+// CORRECTED: The scripts_config variable is now properly initialized from Jinja
 const SCRIPTS_CONFIG = {{ scripts_config | tojson }};
 
 // --- Utility Functions ---
 
-function showAlert(message, type = &#39;success&#39;) {
+function showAlert(message, type = 'success') {
     const colors = {
-        success: &#39;bg-green-600/90 border-green-700 text-white&#39;,
-        error: &#39;bg-red-600/90 border-red-700 text-white&#39;,
-        info: &#39;bg-blue-600/90 border-blue-700 text-white&#39;,
+        success: 'bg-green-600/90 border-green-700 text-white',
+        error: 'bg-red-600/90 border-red-700 text-white',
+        info: 'bg-blue-600/90 border-blue-700 text-white',
     };
-    const alertDiv = document.createElement(&#39;div&#39;);
+    const alertDiv = document.createElement('div');
     alertDiv.className = `p-3 border-l-4 rounded-lg shadow-lg ${colors[type]} transition-opacity duration-300`;
-    alertDiv.innerHTML = `&lt;p class=&quot;font-medium&quot;&gt;${message}&lt;/p&gt;`;
+    alertDiv.innerHTML = `<p class="font-medium">${message}</p>`;
     
-    const container = document.getElementById(&#39;alert-container&#39;);
+    const container = document.getElementById('alert-container');
     container.appendChild(alertDiv);
 
-    setTimeout(() =&gt; {
-        alertDiv.classList.add(&#39;opacity-0&#39;);
-        alertDiv.addEventListener(&#39;transitionend&#39;, () =&gt; alertDiv.remove());
+    setTimeout(() => {
+        alertDiv.classList.add('opacity-0');
+        alertDiv.addEventListener('transitionend', () => alertDiv.remove());
     }, 5000);
 }
 
 // --- Main Controller Control ---
 
 async function controlMainController(action) {
-    const startBtn = document.getElementById(&#39;main_start_btn&#39;);
-    const stopBtn = document.getElementById(&#39;main_stop_btn&#39;);
+    const startBtn = document.getElementById('main_start_btn');
+    const stopBtn = document.getElementById('main_stop_btn');
     const originalStartText = startBtn.innerHTML;
 
     // Disable all control buttons in the main card during the operation
     startBtn.disabled = true;
     stopBtn.disabled = true;
 
-    const targetBtn = (action === &#39;start&#39;) ? startBtn : stopBtn;
-    targetBtn.innerHTML = `&lt;div class=&quot;loading-ring mx-auto&quot;&gt;&lt;/div&gt;`;
+    const targetBtn = (action === 'start') ? startBtn : stopBtn;
+    targetBtn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
 
     try {
-        // Use &#39;main_controller&#39; as the key to target the main script on the backend
-        const response = await fetch(`/api/script/main_controller/${action}`, { method: &#39;POST&#39; });
+        // Use 'main_controller' as the key to target the main script on the backend
+        const response = await fetch(`/api/script/main_controller/${action}`, { method: 'POST' });
         const result = await response.json();
         
         if (result.success) {
-            showAlert(`${result.message}`, &#39;success&#39;);
+            showAlert(`${result.message}`, 'success');
         } else {
-            showAlert(`Error: ${result.message}`, &#39;error&#39;);
+            showAlert(`Error: ${result.message}`, 'error');
         }
     } catch (error) {
-        showAlert(`Network error: Could not contact server for ${action}.`, &#39;error&#39;);
+        showAlert(`Network error: Could not contact server for ${action}.`, 'error');
     } finally {
         startBtn.innerHTML = originalStartText;
-        stopBtn.innerHTML = &#39;Stop Flight&#39;;
+        stopBtn.innerHTML = 'Stop Flight';
         fetchStatus(); // Refresh status to update button states
     }
 }
@@ -278,25 +277,27 @@ async function controlMainController(action) {
 // --- Status Update Logic ---
 
 function updateScriptStatus(status) {
+    // Note: status.main_controller.pid is not provided by the backend, but we can check if it's running
     const mainActive = status.main_controller.running;
-    const mainCard = document.getElementById(&#39;main-controller-card&#39;);
-    const loggerSection = document.getElementById(&#39;logger-section&#39;);
-    const chartSection = document.getElementById(&#39;chart-section&#39;);
-    const warning = document.getElementById(&#39;controller_warning&#39;);
+    const mainCard = document.getElementById('main-controller-card');
+    const loggerSection = document.getElementById('logger-section');
+    const chartSection = document.getElementById('chart-section');
+    const warning = document.getElementById('controller_warning');
 
-    const mainCircle = document.getElementById(&#39;main_controller_status_circle&#39;);
-    const mainText = document.getElementById(&#39;main_controller_status_text&#39;);
-    const mainStartBtn = document.getElementById(&#39;main_start_btn&#39;);
-    const mainStopBtn = document.getElementById(&#39;main_stop_btn&#39;);
+    const mainCircle = document.getElementById('main_controller_status_circle');
+    const mainText = document.getElementById('main_controller_status_text');
+    const mainStartBtn = document.getElementById('main_start_btn');
+    const mainStopBtn = document.getElementById('main_stop_btn');
     
     // 1. Update Main Controller Status and Controls
     if (mainActive) {
-        mainCircle.className = &#39;status-circle w-4 h-4 rounded-full mr-3 bg-red-600 pulse-active-red&#39;;
-        mainText.textContent = `ACTIVE (PID: ${status.main_controller.pid})`;
-        mainText.classList.add(&#39;text-red-400&#39;);
-        mainText.classList.remove(&#39;text-green-400&#39;, &#39;text-yellow-500&#39;);
-        warning.classList.remove(&#39;hidden&#39;);
-        mainCard.classList.add(&#39;pulse-active-red&#39;);
+        mainCircle.className = 'status-circle w-4 h-4 rounded-full mr-3 bg-red-600 pulse-active-red';
+        // Note: The backend only returns "running": true/false for the main controller, not PID.
+        mainText.textContent = `ACTIVE (Mission Running)`; 
+        mainText.classList.add('text-red-400');
+        mainText.classList.remove('text-green-400', 'text-yellow-500');
+        warning.classList.remove('hidden');
+        mainCard.classList.add('pulse-active-red');
         
         // Main control logic
         mainStartBtn.disabled = true;
@@ -305,16 +306,16 @@ function updateScriptStatus(status) {
         // Disable ALL other sections
         loggerSection.style.opacity = 0.5;
         chartSection.style.opacity = 0.5;
-        loggerSection.querySelectorAll(&#39;button&#39;).forEach(b =&gt; b.disabled = true);
-        chartSection.querySelectorAll(&#39;button&#39;).forEach(b =&gt; b.disabled = true);
+        loggerSection.querySelectorAll('button').forEach(b => b.disabled = true);
+        chartSection.querySelectorAll('button').forEach(b => b.disabled = true);
 
     } else {
-        mainCircle.className = &#39;status-circle w-4 h-4 rounded-full mr-3 bg-green-600&#39;;
-        mainText.textContent = &#39;INACTIVE (Ready for Launch)&#39;;
-        mainText.classList.remove(&#39;text-red-400&#39;, &#39;text-yellow-500&#39;);
-        mainText.classList.add(&#39;text-green-400&#39;);
-        warning.classList.add(&#39;hidden&#39;);
-        mainCard.classList.remove(&#39;pulse-active-red&#39;);
+        mainCircle.className = 'status-circle w-4 h-4 rounded-full mr-3 bg-green-600';
+        mainText.textContent = 'INACTIVE (Ready for Launch)';
+        mainText.classList.remove('text-red-400', 'text-yellow-500');
+        mainText.classList.add('text-green-400');
+        warning.classList.add('hidden');
+        mainCard.classList.remove('pulse-active-red');
         
         // Main control logic
         mainStartBtn.disabled = false;
@@ -328,28 +329,29 @@ function updateScriptStatus(status) {
     // 2. Update Manual Logger Statuses (only if main is NOT active)
     for (const key in SCRIPTS_CONFIG) {
         const item = status[key];
+        const config = SCRIPTS_CONFIG[key];
         const card = document.getElementById(`script-${key}`);
         if (!card) continue;
 
-        const circle = card.querySelector(&#39;.status-circle&#39;);
-        const text = card.querySelector(&#39;.status-text&#39;);
-        const startBtn = card.querySelector(&#39;.start-btn&#39;);
-        const stopBtn = card.querySelector(&#39;.stop-btn&#39;);
+        const circle = card.querySelector('.status-circle');
+        const text = card.querySelector('.status-text');
+        const startBtn = card.querySelector('.start-btn');
+        const stopBtn = card.querySelector('.stop-btn');
         const chartGenBtn = document.getElementById(`gen-${key}`);
         
         // Update individual logger status display
         if (item.running) {
-            circle.className = &#39;status-circle w-3 h-3 rounded-full mr-2 bg-green-500 pulse-active-green&#39;;
+            circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-green-500 pulse-active-green';
             text.textContent = `Running (PID: ${item.pid})`;
-            text.classList.add(&#39;text-green-400&#39;);
-            text.classList.remove(&#39;text-gray-400&#39;);
-            card.classList.add(&#39;shadow-lg&#39;, &#39;pulse-active-green&#39;);
+            text.classList.add('text-green-400');
+            text.classList.remove('text-gray-400');
+            card.classList.add('shadow-lg', 'pulse-active-green');
         } else {
-            circle.className = &#39;status-circle w-3 h-3 rounded-full mr-2 bg-gray-500&#39;;
-            text.textContent = &#39;Stopped&#39;;
-            text.classList.remove(&#39;text-green-400&#39;);
-            text.classList.add(&#39;text-gray-400&#39;);
-            card.classList.remove(&#39;shadow-lg&#39;, &#39;pulse-active-green&#39;);
+            circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-gray-500';
+            text.textContent = 'Stopped';
+            text.classList.remove('text-green-400');
+            text.classList.add('text-gray-400');
+            card.classList.remove('shadow-lg', 'pulse-active-green');
         }
 
         // Update manual control buttons based on mainActive status
@@ -363,23 +365,23 @@ function updateScriptStatus(status) {
             if (chartGenBtn) chartGenBtn.disabled = false;
         }
         
-        refreshChartImage(key, `/chart/${item.chart_file}`);
+        refreshChartImage(key, `/chart/${config.chart_file}`);
     }
 }
 
 async function fetchStatus() {
     try {
-        const response = await fetch(&#39;/api/status&#39;);
+        const response = await fetch('/api/status');
         if (response.ok) {
             const status = await response.json();
             updateScriptStatus(status);
         }
     } catch (error) {
-        console.error(&quot;Error fetching status:&quot;, error);
+        console.error("Error fetching status:", error);
         // Show network error on main controller status
-        document.getElementById(&#39;main_controller_status_text&#39;).textContent = &#39;Network Error&#39;;
-        document.getElementById(&#39;main_controller_status_text&#39;).classList.add(&#39;text-red-500&#39;);
-        document.getElementById(&#39;main_controller_status_circle&#39;).className = &#39;status-circle w-4 h-4 rounded-full mr-3 bg-red-500&#39;;
+        document.getElementById('main_controller_status_text').textContent = 'Network Error';
+        document.getElementById('main_controller_status_text').classList.add('text-red-500');
+        document.getElementById('main_controller_status_circle').className = 'status-circle w-4 h-4 rounded-full mr-3 bg-red-500';
     }
 }
 
@@ -387,31 +389,32 @@ async function controlScript(name, action) {
     const btn = document.querySelector(`#script-${name} .${action}-btn`);
     const originalText = btn.innerHTML;
     
+    // Temporarily disable all action buttons for this script
     const actionButtons = document.querySelectorAll(`#script-${name} button`);
-    actionButtons.forEach(b =&gt; b.disabled = true);
+    actionButtons.forEach(b => b.disabled = true);
 
-    btn.innerHTML = `&lt;div class=&quot;loading-ring mx-auto&quot;&gt;&lt;/div&gt;`;
+    btn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
 
     try {
-        const response = await fetch(`/api/script/${name}/${action}`, { method: &#39;POST&#39; });
+        const response = await fetch(`/api/script/${name}/${action}`, { method: 'POST' });
         const result = await response.json();
         
         if (result.success) {
-            showAlert(`${result.message}`, &#39;success&#39;);
+            showAlert(`${result.message}`, 'success');
         } else if (response.status === 403) {
-             showAlert(`${result.message}`, &#39;error&#39;);
+             showAlert(`${result.message}`, 'error');
         } else {
-            showAlert(`Error: ${result.message}`, &#39;error&#39;);
+            showAlert(`Error: ${result.message}`, 'error');
         }
     } catch (error) {
-        showAlert(`Network error: Could not contact server for ${action}.`, &#39;error&#39;);
+        showAlert(`Network error: Could not contact server for ${action}.`, 'error');
     } finally {
         btn.innerHTML = originalText;
         fetchStatus(); 
     }
 }
 
-// --- Chart Generation &amp; Display ---
+// --- Chart Generation & Display ---
 
 async function generateChart(name) {
   const genBtn = document.getElementById(`gen-${name}`);
@@ -419,41 +422,48 @@ async function generateChart(name) {
   const chartFile = SCRIPTS_CONFIG[name].chart_file;
   
   statusOutput.textContent = `Requesting ${name.toUpperCase()} chart generation...`;
-  statusOutput.classList.remove(&#39;text-red-400&#39;, &#39;text-green-400&#39;);
-  statusOutput.classList.add(&#39;text-yellow-400&#39;);
+  statusOutput.classList.remove('text-red-400', 'text-green-400');
+  statusOutput.classList.add('text-yellow-400');
   
   // Temporarily disable all chart generation buttons
-  document.querySelectorAll(&#39;#chart-controls button&#39;).forEach(b =&gt; b.disabled = true);
+  const originalChartBtns = [];
+  document.querySelectorAll('#chart-controls button').forEach(b => {
+      originalChartBtns.push({btn: b, disabled: b.disabled});
+      b.disabled = true;
+  });
+
 
   const originalText = genBtn.innerHTML;
-  genBtn.innerHTML = `&lt;div class=&quot;loading-ring mr-2&quot;&gt;&lt;/div&gt; Generating...`;
+  genBtn.innerHTML = `<div class="loading-ring mr-2"></div> Generating...`;
   
   try {
-    const response = await fetch(`/api/chart/${name}`, { method: &#39;POST&#39; });
+    const response = await fetch(`/api/chart/${name}`, { method: 'POST' });
     const result = await response.json();
 
-    if (response.ok &amp;&amp; result.success) {
+    if (response.ok && result.success) {
       statusOutput.textContent = `Success: ${result.message}\nRefreshing chart view...`;
-      statusOutput.classList.remove(&#39;text-yellow-400&#39;, &#39;text-red-400&#39;);
-      statusOutput.classList.add(&#39;text-green-400&#39;);
+      statusOutput.classList.remove('text-yellow-400', 'text-red-400');
+      statusOutput.classList.add('text-green-400');
       
       refreshChartImage(name, `/chart/${chartFile}`);
-      downloadLink.classList.remove(&#39;hidden&#39;);
+      downloadLink.classList.remove('hidden');
 
     } else if (response.status === 403) {
       throw new Error(result.message);
     }
     else {
-      throw new Error(result.message || &#39;Unknown plotting error.&#39;);
+      throw new Error(result.message || 'Unknown plotting error.');
     }
   } catch (error) {
     statusOutput.textContent = `Error: ${error.message}`;
-    statusOutput.classList.remove(&#39;text-yellow-400&#39;, &#39;text-green-400&#39;);
-    statusOutput.classList.add(&#39;text-red-400&#39;);
-    console.error(&quot;Failed to generate chart:&quot;, error);
+    statusOutput.classList.remove('text-yellow-400', 'text-green-400');
+    statusOutput.classList.add('text-red-400');
+    console.error("Failed to generate chart:", error);
   } finally {
     genBtn.innerHTML = originalText;
-    fetchStatus(); // Re-enable buttons based on controller status
+    
+    // Restore buttons to original state or call fetchStatus
+    fetchStatus(); 
   }
 }
 
@@ -466,15 +476,14 @@ function refreshChartImage(sensor, url) {
     imgElement.src = `${url}?t=${new Date().getTime()}`;
   }
   
-  imgElement.onload = () =&gt; {
+  imgElement.onload = () => {
       // If the image loads successfully, ensure download link is visible
-      downloadLink.classList.remove(&#39;hidden&#39;);
+      downloadLink.classList.remove('hidden');
   };
-  imgElement.onerror = () =&gt; {
-      // If the image fails to load, or loads the placeholder
-      if (imgElement.src.includes(&#39;placehold.co&#39;)) {
-         downloadLink.classList.add(&#39;hidden&#39;);
-      }
+  imgElement.onerror = () => {
+      // If the image fails to load, show placeholder and hide download link
+      downloadLink.classList.add('hidden');
+      imgElement.src='https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated';
   };
 }
 
@@ -482,55 +491,55 @@ function refreshChartImage(sensor, url) {
 
 async function systemControl(action) {
     // Custom replacement for window.confirm
-    const isConfirmed = await new Promise(resolve =&gt; {
-        const modal = document.createElement(&#39;div&#39;);
-        modal.className = &#39;fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50&#39;;
+    const isConfirmed = await new Promise(resolve => {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
         modal.innerHTML = `
-            &lt;div class=&quot;card p-6 w-11/12 max-w-sm&quot;&gt;
-                &lt;h3 class=&quot;text-xl font-bold text-red-500 mb-4&quot;&gt;CONFIRM SYSTEM ACTION&lt;/h3&gt;
-                &lt;p class=&quot;text-gray-300 mb-6&quot;&gt;Are you absolutely sure you want to &lt;strong&gt;${action.toUpperCase()}&lt;/strong&gt; the Raspberry Pi? This will interrupt operations and disconnect the dashboard.&lt;/p&gt;
-                &lt;div class=&quot;flex justify-end space-x-3&quot;&gt;
-                    &lt;button id=&quot;cancel-btn&quot; class=&quot;btn px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded&quot;&gt;Cancel&lt;/button&gt;
-                    &lt;button id=&quot;confirm-btn&quot; class=&quot;btn px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded&quot;&gt;
+            <div class="card p-6 w-11/12 max-w-sm">
+                <h3 class="text-xl font-bold text-red-500 mb-4">CONFIRM SYSTEM ACTION</h3>
+                <p class="text-gray-300 mb-6">Are you absolutely sure you want to <strong>${action.toUpperCase()}</strong> the Raspberry Pi? This will interrupt operations and disconnect the dashboard.</p>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancel-btn" class="btn px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancel</button>
+                    <button id="confirm-btn" class="btn px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded">
                         ${action.toUpperCase()}
-                    &lt;/button&gt;
-                &lt;/div&gt;
-            &lt;/div&gt;
+                    </button>
+                </div>
+            </div>
         `;
         document.body.appendChild(modal);
 
-        document.getElementById(&#39;cancel-btn&#39;).onclick = () =&gt; { modal.remove(); resolve(false); };
-        document.getElementById(&#39;confirm-btn&#39;).onclick = () =&gt; { modal.remove(); resolve(true); };
+        document.getElementById('cancel-btn').onclick = () => { modal.remove(); resolve(false); };
+        document.getElementById('confirm-btn').onclick = () => { modal.remove(); resolve(true); };
     });
 
     if (!isConfirmed) {
         return;
     }
 
-    const buttons = document.querySelectorAll(&#39;.btn&#39;);
-    buttons.forEach(b =&gt; b.disabled = true);
+    const buttons = document.querySelectorAll('.btn');
+    buttons.forEach(b => b.disabled = true);
 
     try {
-        const response = await fetch(`/api/control/${action}`, { method: &#39;POST&#39; });
+        const response = await fetch(`/api/control/${action}`, { method: 'POST' });
         const result = await response.json();
         
         if (result.success) {
-            showAlert(`${result.message}`, &#39;info&#39;);
+            showAlert(`${result.message}`, 'info');
             // Display success message prominently
-            document.body.innerHTML = `&lt;div class=&quot;text-center mt-20 text-xl font-semibold text-white&quot;&gt;${result.message}&lt;/div&gt;`;
+            document.body.innerHTML = `<div class="text-center mt-20 text-3xl font-bold text-red-500 p-8">${result.message}</div><div class="text-center text-gray-400">The connection will be lost. Please wait for the system to restart.</div>`;
         } else {
-            showAlert(`System control failed: ${result.message}`, &#39;error&#39;);
+            showAlert(`System control failed: ${result.message}`, 'error');
         }
     } catch (error) {
-        showAlert(`Network error: Failed to send ${action} command.`, &#39;error&#39;);
+        showAlert(`Network error: Failed to send ${action} command.`, 'error');
     } finally {
-        buttons.forEach(b =&gt; b.disabled = false);
+        buttons.forEach(b => b.disabled = false);
     }
 }
 
 
 // --- Initialization ---
-document.addEventListener(&#39;DOMContentLoaded&#39;, () =&gt; {
+document.addEventListener('DOMContentLoaded', () => {
     // Initial fetch
     fetchStatus();
     // Poll the status every 5 seconds
@@ -540,3 +549,4 @@ document.addEventListener(&#39;DOMContentLoaded&#39;, () =&gt; {
 </script>
 </body>
 </html>
+
