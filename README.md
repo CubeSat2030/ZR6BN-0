@@ -118,6 +118,19 @@ sudo systemctl enable dnsmasq
 
 ~~~
 
+
+~~~bash
+
+
+sudo reboot
+
+
+
+~~~
+
+
+
+
 **File structure:**
 ~~~
 
