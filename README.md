@@ -18,6 +18,16 @@ sudo nano /etc/dhcpcd.conf
 
 ~~~
 
+~~~bash
+
+# --- Static IP configuration for Kabot-1 Hotspot (wlan0) ---
+interface wlan0
+    static ip_address=192.168.4.1/24
+    nohook wpa_supplicant
+
+
+
+~~~
 
 
 **File structure:**
