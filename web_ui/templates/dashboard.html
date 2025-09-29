@@ -248,18 +248,15 @@ async function controlMainController(action) {
     targetBtn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
 
     try {
-        // *** PATCH APPLIED HERE ***
-        // Change from: /api/script/main_controller/${action}
-        // To: /api/flight_controller/${action}
-        const response = await fetch(`/api/flight_controller/${action}`, { method: 'POST' });
-        // *** END PATCH ***
+        // *** PATCH APPLIED HERE: Reverting to generic script control route for main.py ***
+        // Backend's api_script_control function now handles 'main_controller'
+        const response = await fetch(`/api/script/main_controller/${action}`, { method: 'POST' });
+        const result = await response.json();
         
-        // Note: The backend for this route returns status 405 by design, so we check for it.
-        if (response.ok || response.status === 405) {
-            const result = await response.json();
-            showAlert(`${result.message}`, 'info'); // Use 'info' for the expected manual start message
+        // Success check includes the possibility of status code 403 (Forbidden) if main.py is active
+        if (result.success) {
+            showAlert(`${result.message}`, 'success');
         } else {
-            const result = await response.json();
             showAlert(`Error: ${result.message}`, 'error');
         }
     } catch (error) {
