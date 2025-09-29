@@ -1,8 +1,8 @@
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server - AUTO-FALLBACK HOTSPOT
+# Kabot-1 Mission Control Dashboard Server - THREAD-SAFE VERSION
 # =========================================================================
-# FEATURE: Automatically switches to Hotspot mode if no external network 
-# connection is established within 30 seconds of starting.
+# FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
+# dictionary to prevent Internal Server Errors (500) due to race conditions.
 # =========================================================================
 
 import subprocess
@@ -14,7 +14,6 @@ import os
 import threading
 from flask import Flask, render_template, jsonify, send_from_directory, abort
 
-# --- GPIO/Buzzer Initialization (UNCHANGED) ---
 try:
     from gpiozero import Buzzer
     BUZZER = Buzzer(21) 
@@ -28,7 +27,6 @@ except Exception as e:
 
 
 # --- Configuration ---
-# ... (BASE_DIR, SCRIPTS_CONFIG, etc., are UNCHANGED) ...
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent 
 MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 
@@ -41,17 +39,11 @@ TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Global State and Timer Configuration ---
-AUTO_START_TIMEOUT = 60 # Seconds (For mission start)
-NETWORK_CHECK_TIMEOUT = 30 # Seconds (For Wi-Fi client connection)
+AUTO_START_TIMEOUT = 60 # Seconds
 LAST_CONNECTION_TIME = time.time()
 BUZZER_THREAD_STOP = threading.Event()
-WATCHDOG_THREAD_STOP = threading.Event() # NEW: Stop flag for the network check thread
 
-# NEW: State variables
-WIFI_MODE = "client" # Start in client mode
-NETWORK_CHECK_START_TIME = time.time() 
-
-# --- Flask App Initialization (UNCHANGED) ---
+# --- Flask App Initialization ---
 app = Flask(__name__, template_folder=str(TEMPLATES_DIR))
 
 RUNNING_PROCESSES = {}
@@ -84,151 +76,161 @@ SCRIPTS_CONFIG = {
 }
 
 # =========================================================================
-# SYSTEM PROCESS CHECK & CONTROL FUNCTIONS (UNCHANGED)
-# =========================================================================
-# (is_main_controller_active, get_status, start_script, stop_script, run_plotter)
-
-# ... (Previous functions are here, unchanged, as they only use the thread-safe PROCESS_LOCK) ...
-
-# =========================================================================
-# NEW: WIFI MODE MANAGEMENT FUNCTIONS
+# SYSTEM PROCESS CHECK & CONTROL FUNCTIONS (THREAD-SAFE)
 # =========================================================================
 
-def get_wifi_mode():
-    """Returns the current operational mode of the Pi (Client or Hotspot)."""
-    global WIFI_MODE
-    return WIFI_MODE
-
-def is_client_connected_to_internet():
-    """
-    Checks if the Pi has an internet connection by trying to ping a reliable DNS server.
-    Only relevant if WIFI_MODE is 'client'.
-    """
-    if get_wifi_mode() != "client":
-        return False
-        
-    try:
-        # Ping Google's DNS server (8.8.8.8) with a timeout of 1 packet/1 second
-        result = subprocess.run(
-            ['ping', '-c', '1', '-W', '1', '8.8.8.8'], 
-            capture_output=True, 
-            check=False
-        )
-        # Check if the process returned a success code AND if "1 received" is in output
-        return result.returncode == 0 and b"1 received" in result.stdout
-    except Exception:
-        return False
-
-def switch_to_hotspot_mode():
-    """Switches network interface wlan0 to Access Point mode."""
-    global WIFI_MODE
-    try:
-        if WIFI_MODE == "hotspot":
-            return True, "Already in Hotspot Mode."
-            
-        print("[NETWORK] Switching to Hotspot Mode...")
-        
-        # 1. Stop networking services
-        subprocess.run(['sudo', 'systemctl', 'stop', 'dhcpcd'], check=False)
-        subprocess.run(['sudo', 'systemctl', 'stop', 'wpa_supplicant'], check=False)
-        
-        # 2. Start Hotspot Services (Requires hostapd/dnsmasq config files to be in place)
-        subprocess.run(['sudo', 'systemctl', 'start', 'dnsmasq'], check=True)
-        subprocess.run(['sudo', 'systemctl', 'start', 'hostapd'], check=True)
-        
-        # 3. Apply static IP (If not done by dhcpcd config)
-        # This is often critical to ensure the AP comes up correctly.
-        subprocess.run(['sudo', 'ip', 'addr', 'flush', 'dev', 'wlan0'], check=True)
-        subprocess.run(['sudo', 'ifconfig', 'wlan0', '192.168.4.1'], check=True)
-        
-        WIFI_MODE = "hotspot"
-        print("[NETWORK] Successfully switched to Hotspot Mode.")
-        return True, "Switched to Hotspot Mode. Connect to the Kabot-1-Mission-Control network."
-    except subprocess.CalledProcessError as e:
-        WIFI_MODE = "error"
-        return False, f"Failed to switch to Hotspot Mode. Error: {e.stderr.strip()}"
-    except Exception as e:
-        WIFI_MODE = "error"
-        return False, f"An unexpected error occurred during hotspot switch: {str(e)}"
-
-def switch_to_client_mode():
-    """Switches network interface wlan0 to Wi-Fi Client mode (for internet)."""
-    global WIFI_MODE
-    global NETWORK_CHECK_START_TIME # Reset timer when we switch back
-    try:
-        if WIFI_MODE == "client":
-            return True, "Already in Client Mode."
-            
-        print("[NETWORK] Switching to Client Mode...")
-        
-        # 1. Stop Hotspot Services
-        subprocess.run(['sudo', 'systemctl', 'stop', 'hostapd'], check=False)
-        subprocess.run(['sudo', 'systemctl', 'stop', 'dnsmasq'], check=False)
-        
-        # 2. Restart networking services to pick up client config
-        # dhcpcd handles obtaining an IP address and manages wpa_supplicant
-        subprocess.run(['sudo', 'systemctl', 'start', 'dhcpcd'], check=True)
-        # Force a re-scan and connection attempt
-        subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'reconfigure'], check=False)
-        
-        WIFI_MODE = "client"
-        NETWORK_CHECK_START_TIME = time.time() # Start the 30s timer again
-        print("[NETWORK] Successfully switched to Client Mode. Checking for internet...")
-        return True, "Switched to Client Mode. Pi is attempting to connect to an authenticated network."
-    except subprocess.CalledProcessError as e:
-        WIFI_MODE = "error"
-        return False, f"Failed to switch to Client Mode. Error: {e.stderr.strip()}"
-    except Exception as e:
-        WIFI_MODE = "error"
-        return False, f"An unexpected error occurred during client switch: {str(e)}"
-
-
-def network_watchdog():
-    """
-    Background thread that manages the 30-second auto-fallback logic.
-    """
-    global NETWORK_CHECK_START_TIME
-    global WATCHDOG_THREAD_STOP
-    
-    # Give the system a moment to fully boot and attempt connection
-    time.sleep(5) 
-    
-    while not WATCHDOG_THREAD_STOP.is_set():
-        current_mode = get_wifi_mode()
-        
-        if current_mode == "client":
-            time_elapsed = time.time() - NETWORK_CHECK_START_TIME
-            
-            # Check 1: Did the Pi connect to the internet?
-            if is_client_connected_to_internet():
-                print(f"[WATCHDOG] Internet connection established. Client Mode is stable.")
-                # Wait longer before checking again
-                time.sleep(60) 
-            
-            # Check 2: Has the 30-second timeout expired?
-            elif time_elapsed >= NETWORK_CHECK_TIMEOUT:
-                print(f"[WATCHDOG] {NETWORK_CHECK_TIMEOUT} seconds elapsed. No internet connection found.")
-                switch_to_hotspot_mode()
-                # Wait longer since we are now in AP mode
-                time.sleep(60) 
-                
+def is_main_controller_active():
+    """Checks if main.py is currently running."""
+    with PROCESS_LOCK:
+        if 'main' in RUNNING_PROCESSES:
+            if RUNNING_PROCESSES['main'].poll() is None:
+                return True
             else:
-                # Still waiting for connection
-                # print(f"[WATCHDOG] Waiting for connection... {NETWORK_CHECK_TIMEOUT - time_elapsed:.1f}s remaining.")
-                time.sleep(3) 
+                del RUNNING_PROCESSES['main'] 
+        return False
 
-        elif current_mode == "hotspot":
-            # If in hotspot mode, just keep checking periodically.
-            time.sleep(10)
+def get_status():
+    """Returns the current status of all scripts."""
+    status = {}
+    running_state = {}
+    
+    with PROCESS_LOCK:
+        # Check and update the state of all running processes safely
+        for name in SCRIPTS_CONFIG:
+            is_running = False
+            pid = None
+            if name in RUNNING_PROCESSES:
+                if RUNNING_PROCESSES[name].poll() is None:
+                    is_running = True
+                    pid = RUNNING_PROCESSES[name].pid
+                else:
+                    del RUNNING_PROCESSES[name]
+            running_state[name] = {'running': is_running, 'pid': pid}
+
+    # Build the final status dictionary outside the lock
+    for name, config in SCRIPTS_CONFIG.items():
+        state = running_state[name]
+        if config.get('is_main_controller', False):
+             status['main_controller'] = {
+                "running": state['running'],
+                "title": config['title'],
+                "pid": state['pid'],
+            }
+        else:
+            status[name] = {
+                "title": config['title'],
+                "running": state['running'],
+                "pid": state['pid'],
+                "chart_file": config.get('chart_file')
+            }
             
-        else: # error/unknown mode
-            time.sleep(5) 
+    if 'main_controller' not in status:
+         status['main_controller'] = {
+            "running": False,
+            "title": SCRIPTS_CONFIG['main']['title'],
+            "pid": None,
+        }
+            
+    return status
+
+def start_script(name):
+    """Starts a Python script in a non-blocking subprocess."""
+    
+    if name != 'main' and is_main_controller_active():
+        return False, "Flight Controller (main.py) is running. Manual loggers are disabled."
+    
+    if name not in SCRIPTS_CONFIG:
+        return False, "Unknown script name." 
+    
+    config = SCRIPTS_CONFIG[name]
+    script_path = str(config['log_script']) 
+    
+    with PROCESS_LOCK: # Acquire lock for process manipulation
+        if name in RUNNING_PROCESSES and RUNNING_PROCESSES[name].poll() is None:
+            return False, f"{config['title']} is already running (PID: {RUNNING_PROCESSES[name].pid})."
+        
+        try:
+            process = subprocess.Popen(
+                [sys.executable, script_path],
+                preexec_fn=os.setsid, 
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=str(BASE_DIR) 
+            )
+            RUNNING_PROCESSES[name] = process
+            
+            if name == 'main':
+                 return True, f"Started Flight Controller (PID: {process.pid}). Loggers are now active."
+            else:
+                 return True, f"Started {config['title']} (PID: {process.pid})."
+        except Exception as e:
+            return False, f"Failed to start {config['title']}: {str(e)}"
+
+def stop_script(name):
+    """Stops a running script by sending a termination signal."""
+    
+    if name != 'main' and is_main_controller_active():
+        return False, "Flight Controller (main.py) is running. Manual loggers cannot be stopped."
+
+    with PROCESS_LOCK: # Acquire lock for process manipulation
+        if name not in RUNNING_PROCESSES or RUNNING_PROCESSES[name].poll() is not None:
+            return False, f"{SCRIPTS_CONFIG.get(name, {}).get('title', name)} is not running or has already stopped."
+
+        try:
+            os.killpg(os.getpgid(RUNNING_PROCESSES[name].pid), signal.SIGTERM)
+            time.sleep(0.5)
+            
+            if name in RUNNING_PROCESSES:
+                del RUNNING_PROCESSES[name]
+                
+            if name == 'main':
+                return True, f"Stopped Flight Controller."
+            else:
+                return True, f"Stopped {SCRIPTS_CONFIG.get(name, {}).get('title', name)}."
+                
+        except Exception:
+            if name in RUNNING_PROCESSES:
+                del RUNNING_PROCESSES[name]
+            return False, f"Failed to stop {name}. Process entry cleared."
+
+def run_plotter(name):
+    """Runs a Python plotter script synchronously."""
+    if is_main_controller_active():
+        return False, "Flight Controller (main.py) is running. Chart generation is disabled."
+        
+    if name not in SCRIPTS_CONFIG or 'plot_script' not in SCRIPTS_CONFIG[name]:
+        return False, "Unknown or non-plotter script name."
+    
+    # ... (Plotter logic remains unchanged as it doesn't touch RUNNING_PROCESSES)
+    config = SCRIPTS_CONFIG[name]
+    script_path = str(config['plot_script']) 
+    chart_file = config['chart_file']
+    
+    try:
+        result = subprocess.run(
+            [sys.executable, script_path],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=45, 
+            cwd=str(BASE_DIR) 
+        )
+        
+        if result.returncode == 0 and os.path.exists(CHARTS_DIR / chart_file):
+            return True, f"Chart generated successfully: {chart_file}"
+        else:
+            error_msg = result.stderr.strip() or f"Plotter failed with exit code {result.returncode}."
+            return False, f"Plotting failed: {error_msg}"
+
+    except subprocess.TimeoutExpired:
+        return False, f"Plotter {name} timed out after 45 seconds."
+    except Exception as e:
+        return False, f"Failed to run plotter {name}: {str(e)}"
 
 
 # =========================================================================
-# BUZZER COUNTDOWN AND AUTO-START LOGIC (UNCHANGED, but relies on get_wifi_mode)
+# BUZZER COUNTDOWN AND AUTO-START LOGIC
 # =========================================================================
-# ... (reset_auto_start_timer, buzzer_double_beep, start_buzzer_countdown are here, UNCHANGED) ...
 
 def reset_auto_start_timer():
     """Stops the buzzer and resets the auto-start timer."""
@@ -236,20 +238,102 @@ def reset_auto_start_timer():
     if BUZZER_AVAILABLE:
         BUZZER.off() 
     
-    # Only reset the auto-start timer if we are in a mission-ready state (i.e., not a connection error state)
-    if not is_main_controller_active() and get_wifi_mode() != "error":
+    if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
+
+def buzzer_double_beep(delay_between_beeps=0.1, total_duration=3.0):
+    """Executes the two rapid beeps and waits for the remaining duration."""
+    if not BUZZER_AVAILABLE:
+        time.sleep(total_duration)
+        return
+        
+    start_wait = time.time()
+    
+    # Beep 1
+    BUZZER.on()
+    time.sleep(delay_between_beeps)
+    BUZZER.off()
+    
+    # Short pause
+    time.sleep(delay_between_beeps)
+    
+    # Beep 2
+    BUZZER.on()
+    time.sleep(delay_between_beeps)
+    BUZZER.off()
+    
+    # Wait for the remaining time
+    remaining_wait = total_duration - (time.time() - start_wait)
+    if remaining_wait > 0:
+        time.sleep(remaining_wait)
 
 
 def start_buzzer_countdown():
-    # ... (Logic is unchanged, relies on is_main_controller_active and the timer logic) ...
-    # Note: If the watchdog thread is active, this countdown logic should be fine
-    # as the buzzer will be reset/silenced if the Pi is running properly or in AP standby.
-    # ... (rest of start_buzzer_countdown) ...
+    """
+    Runs in a background thread. Manages the countdown, buzzer beeping, 
+    and automatically launches main.py if the timer expires.
+    """
+    global LAST_CONNECTION_TIME
+    global BUZZER_THREAD_STOP
+    
+    while not BUZZER_THREAD_STOP.is_set():
+        
+        if is_main_controller_active():
+            if BUZZER_AVAILABLE:
+                BUZZER.off()
+            time.sleep(5)
+            continue
+            
+        time_elapsed = time.time() - LAST_CONNECTION_TIME
+        time_remaining = AUTO_START_TIMEOUT - time_elapsed
+        
+        if time_remaining <= 0:
+            # --- AUTO-START TRIGGERED ---
+            print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
+            if BUZZER_AVAILABLE:
+                BUZZER.off()
+            
+            # The start_script call is now thread-safe
+            success, message = start_script('main') 
+            
+            if success:
+                print(f"[AUTO-START SUCCESS] {message}")
+            else:
+                print(f"[AUTO-START FAILURE] {message}")
+            
+            time.sleep(5) 
+            
+        elif time_remaining < AUTO_START_TIMEOUT - 5: 
+            # --- COUNTDOWN BEEPING ---
+            
+            if time_remaining <= 10:
+                # FAST BEEP
+                delay = 0.2
+                if BUZZER_AVAILABLE: BUZZER.on()
+                time.sleep(delay)
+                if BUZZER_AVAILABLE: BUZZER.off()
+                time.sleep(delay)
+                
+            elif time_remaining <= 30:
+                # MEDIUM BEEP
+                delay = 0.5
+                if BUZZER_AVAILABLE: BUZZER.on()
+                time.sleep(delay)
+                if BUZZER_AVAILABLE: BUZZER.off()
+                time.sleep(delay)
 
-# =========================================================================
-# FLASK API ROUTES (UPDATED)
-# =========================================================================
+            else:
+                # SLOW BEEP
+                delay = 1.0 
+                if BUZZER_AVAILABLE: BUZZER.on()
+                time.sleep(0.1) 
+                if BUZZER_AVAILABLE: BUZZER.off()
+                time.sleep(delay - 0.1)
+            
+        else: 
+            # --- CONNECTION STANDBY HEARTBEAT ---
+            buzzer_double_beep(delay_between_beeps=0.1, total_duration=3.0)
+
 
 @app.before_request
 def update_last_connection_time():
@@ -257,40 +341,86 @@ def update_last_connection_time():
     reset_auto_start_timer()
 
 
+# =========================================================================
+# FLASK API ROUTES (UNCHANGED)
+# =========================================================================
+
+@app.route("/")
+def index():
+    serializable_config = {}
+    for key, config in SCRIPTS_CONFIG.items():
+        if not config.get('is_main_controller'):
+            serializable_config[key] = {
+                "title": config["title"],
+                "chart_file": config["chart_file"] 
+            }
+    return render_template("dashboard.html", scripts_config=serializable_config)
+
 @app.route("/api/status", methods=['GET'])
 def api_status():
-    status = get_status()
-    # Now includes the current Wi-Fi status
-    status['wifi_mode'] = get_wifi_mode() 
-    if status['wifi_mode'] == "client":
-        status['client_connected'] = is_client_connected_to_internet()
-    return jsonify(status)
+    return jsonify(get_status())
 
-
-@app.route('/api/wifi_mode/<target_mode>', methods=['POST'])
-def api_wifi_control(target_mode):
-    if target_mode == 'hotspot':
-        success, message = switch_to_hotspot_mode()
-    elif target_mode == 'client':
-        success, message = switch_to_client_mode()
-    else:
-        return jsonify({"success": False, "message": "Invalid target mode. Use 'hotspot' or 'client'."}), 400
+@app.route('/api/script/<name>/<action>', methods=['POST'])
+def api_script_control(name, action):
+    if name == 'main_controller':
+        name = 'main'
         
-    return jsonify({
-        "success": success, 
-        "message": message, 
-        "new_mode": get_wifi_mode()
-    })
+    if name != 'main' and is_main_controller_active():
+        return jsonify({"success": False, "message": "Flight Controller is active. Cannot control manual scripts."}), 403
 
-# ... (All other API routes are UNCHANGED) ...
+    if action == 'start':
+        success, message = start_script(name)
+    elif action == 'stop':
+        success, message = stop_script(name)
+    else:
+        return jsonify({"success": False, "message": "Invalid action."}), 400
+    
+    return jsonify({"success": success, "message": message, "status": get_status()})
+
+@app.route('/api/chart/<name>', methods=['POST'])
+def api_chart_generate(name):
+    if is_main_controller_active():
+        return jsonify({"success": False, "message": "Flight Controller is active. Cannot generate charts."}), 403
+        
+    success, message = run_plotter(name)
+    return jsonify({"success": success, "message": message})
+
+@app.route("/chart/<path:filename>")
+def get_chart_display(filename):
+    if ".." in filename or "/" in filename: abort(400)
+    return send_from_directory(CHARTS_DIR, filename, as_attachment=False)
+
+@app.route("/download/chart/<filename>")
+def download_chart(filename):
+    if ".." in filename or "/" in filename: abort(400)
+    file_path = CHARTS_DIR / filename
+    if not file_path.exists(): abort(404, description="Chart not found.")
+    return send_from_directory(CHARTS_DIR, filename, as_attachment=True)
+    
+@app.route('/api/control/<action>', methods=['POST'])
+def api_system_control(action):
+    if action == 'reboot':
+        cmd = ["sudo", "reboot"]
+        message = "System will reboot momentarily."
+    elif action == 'shutdown':
+        cmd = ["sudo", "shutdown", "now"]
+        message = "System will shut down momentarily."
+    else:
+        return jsonify({"success": False, "message": "Invalid control action."}), 400
+
+    try:
+        subprocess.Popen(
+            cmd, 
+            start_new_session=True, 
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL
+        )
+        return jsonify({"success": True, "message": message})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to execute command: {str(e)}"}), 500
 
 
 if __name__ == "__main__":
-    # Start the Network Watchdog FIRST
-    watchdog_thread = threading.Thread(target=network_watchdog, daemon=True)
-    watchdog_thread.start()
-    
-    # Start the Buzzer Countdown SECOND
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
     countdown_thread.start()
     
@@ -298,8 +428,7 @@ if __name__ == "__main__":
         if BUZZER_AVAILABLE:
             BUZZER.off()
         BUZZER_THREAD_STOP.set()
-        WATCHDOG_THREAD_STOP.set() # Stop the new thread
-        print("\n[CLEANUP] All threads stopped.")
+        print("\n[CLEANUP] Buzzer and countdown thread stopped.")
         sys.exit(0)
         
     signal.signal(signal.SIGINT, exit_handler)
@@ -307,6 +436,12 @@ if __name__ == "__main__":
     
     print("------------------------------------------------------------------")
     print("Kabot-1 Mission Control Dashboard is starting...")
-    print(f"Initial Wi-Fi Mode: {WIFI_MODE.upper()}. Auto-fallback in {NETWORK_CHECK_TIMEOUT}s.")
+    print(f"Access the dashboard at: http://0.0.0.0:5000/")
+    print(f"Auto-Start Timeout: {AUTO_START_TIMEOUT} seconds.")
+    if BUZZER_AVAILABLE:
+        print("Buzzer Countdown: ACTIVE on GPIO 21.")
+        print("Status: Standby Heartbeat (2 quick beeps/3s) while connected.")
+    else:
+        print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=False)
