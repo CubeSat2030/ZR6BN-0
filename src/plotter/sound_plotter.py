@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 DATA_FILE = "src/logger/data/sound.txt"
-CHARTS_DIR = "src/charts"
+CHARTS_DIR = "src/plotter/charts"
 CHART_FILE = os.path.join(CHARTS_DIR, "sound_chart.svg")
 
 def generate_sound_chart():
