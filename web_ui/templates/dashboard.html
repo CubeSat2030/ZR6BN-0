@@ -3,140 +3,128 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kabot-1 HAB Mission Console</title>
+  <title>Kabot-1 HAB Mission Control</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Custom styles for a slightly more polished look */
+    /* ===============================
+       Custom Styles for Mission Control
+       =============================== */
+    :root {
+      --bg-dark: #0d1117;
+      --bg-card: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+    }
+
     body {
-      background-color: #0d1117;
-      color: #c9d1d9;
+      background-color: var(--bg-dark);
+      color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     }
+
     .card {
-      background-color: #161b22;
-      border: 1px solid #30363d;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border);
       border-radius: 8px;
     }
+
     .btn {
       transition: all 0.2s ease-in-out;
-      border: 1px solid #30363d;
+      border: 1px solid var(--border);
     }
+
     .btn:disabled {
       cursor: not-allowed;
       opacity: 0.5;
     }
+
     .status-box {
-        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-        background-color: #0d1117;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        min-height: 80px;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+      background-color: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      min-height: 80px;
+      padding: 0.5rem;
     }
+
     .chart-container img {
-        border-radius: 6px;
-        border: 1px solid #30363d;
-        background-color: #0d1117;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background-color: var(--bg-dark);
+    }
+
+    /* Pulsing green/red shadow for active processes */
+    .pulse-active-green { animation: pulse-shadow-green 1.5s infinite; }
+    @keyframes pulse-shadow-green {
+      0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 0, 0.4); }
+      50% { box-shadow: 0 0 10px rgba(0, 255, 0, 0.7); }
+    }
+
+    .pulse-active-red { animation: pulse-shadow-red 1.5s infinite; }
+    @keyframes pulse-shadow-red {
+      0%, 100% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.4); }
+      50% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); }
+    }
+
+    /* Loading spinner */
+    .loading-ring {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #3b82f6;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 
+      0% { transform: rotate(0deg); } 
+      100% { transform: rotate(360deg); } 
     }
   </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
+  <!-- Floating Alert Container -->
+  <div id="alert-container" class="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full"></div>
 
   <div class="max-w-7xl mx-auto">
     <!-- Header -->
     <header class="mb-8">
-      <h1 class="text-3xl font-bold text-white">Kabot-1 HAB Mission Console</h1>
-      <p class="text-gray-400">Post-Flight Blackbox Analyzer</p>
+      <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control Dashboard</h1>
+      <p class="text-gray-300">Manage scripts, generate charts, and control the Pi payload.</p>
     </header>
 
-    <!-- Controls Section -->
-    <section class="card p-6 mb-8">
-      <h2 class="text-xl font-semibold mb-4 text-white">Chart Generation</h2>
-      <div class="flex flex-wrap gap-4 items-center">
-        <button id="btn-dht" onclick="generateChart('dht')" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">
-          Generate DHT Chart
-        </button>
-        <button id="btn-mpu" onclick="generateChart('mpu')" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">
-          Generate MPU6050 Chart
-        </button>
-        <button id="btn-sound" onclick="generateChart('sound')" class="btn bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-md">
-          Generate Sound Chart
-        </button>
+    <!-- Subsystem Status -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <div class="card p-4 flex items-center justify-between">
+        <span>Telemetry</span>
+        <div class="w-4 h-4 rounded-full bg-green-500 pulse-active-green"></div>
       </div>
-      <div id="status-container" class="mt-5">
-        <label class="font-semibold text-gray-300">Status:</label>
-        <pre id="status_output" class="status-box p-3 text-sm text-gray-400 whitespace-pre-wrap">Awaiting commands...</pre>
+      <div class="card p-4 flex items-center justify-between">
+        <span>Logging</span>
+        <div class="w-4 h-4 rounded-full bg-red-500 pulse-active-red"></div>
+      </div>
+      <div class="card p-4 flex items-center justify-between">
+        <span>Uplink</span>
+        <div class="loading-ring"></div>
       </div>
     </section>
 
-    <!-- Charts Display Section -->
-    <section class="card p-6">
-      <h2 class="text-xl font-semibold mb-4 text-white">Generated Charts</h2>
-      <div id="charts-grid" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="chart-container">
-          <h3 class="font-semibold text-center mb-2 text-gray-300">DHT Sensor</h3>
-          <img id="dht_chart" src="https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated" alt="DHT Chart placeholder">
-        </div>
-        <div class="chart-container">
-          <h3 class="font-semibold text-center mb-2 text-gray-300">MPU-6050 Sensor</h3>
-          <img id="mpu_chart" src="https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated" alt="MPU Chart placeholder">
-        </div>
-        <div class="chart-container">
-          <h3 class="font-semibold text-center mb-2 text-gray-300">Sound Sensor</h3>
-          <img id="sound_chart" src="https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated" alt="Sound Chart placeholder">
-        </div>
+    <!-- Event Log -->
+    <section class="mb-8">
+      <h2 class="text-xl font-semibold mb-2">Event Log</h2>
+      <div class="status-box overflow-y-auto">
+        <p>[00:00:01] Mission Control Initialized</p>
+        <p>[00:00:05] Telemetry link established</p>
       </div>
     </section>
 
+    <!-- Chart Section -->
+    <section>
+      <h2 class="text-xl font-semibold mb-2">Telemetry Charts</h2>
+      <div class="chart-container grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <img src="https://via.placeholder.com/400x200?text=Altitude+Chart" alt="Altitude Chart">
+        <img src="https://via.placeholder.com/400x200?text=Temperature+Chart" alt="Temperature Chart">
+      </div>
+    </section>
   </div>
-
-  <script>
-    const statusOutput = document.getElementById('status_output');
-    const buttons = document.querySelectorAll('.btn');
-    
-    // Asynchronously generates a chart by calling the backend API
-    async function generateChart(sensor) {
-      const btn = document.getElementById(`btn-${sensor}`);
-      statusOutput.textContent = `Requesting ${sensor.toUpperCase()} chart generation...`;
-      statusOutput.classList.remove('text-red-400', 'text-green-400');
-      statusOutput.classList.add('text-yellow-400');
-      
-      // Disable all buttons to prevent concurrent requests
-      buttons.forEach(b => b.disabled = true);
-
-      try {
-        const response = await fetch(`/generate/${sensor}`);
-        const data = await response.json();
-
-        if (response.ok) {
-          statusOutput.textContent = `Success: ${data.message}\nRefreshing chart view...`;
-          statusOutput.classList.remove('text-yellow-400', 'text-red-400');
-          statusOutput.classList.add('text-green-400');
-          refreshChartImage(sensor, data.chart_url);
-        } else {
-          throw new Error(data.message || 'Unknown server error.');
-        }
-      } catch (error) {
-        statusOutput.textContent = `Error: ${error.message}`;
-        statusOutput.classList.remove('text-yellow-400', 'text-green-400');
-        statusOutput.classList.add('text-red-400');
-        console.error("Failed to generate chart:", error);
-      } finally {
-        // Re-enable all buttons after the operation is complete
-        buttons.forEach(b => b.disabled = false);
-      }
-    }
-
-    // Refreshes the specific image element to show the newly generated chart
-    function refreshChartImage(sensor, url) {
-      const imgElement = document.getElementById(`${sensor}_chart`);
-      if (imgElement) {
-        // Appending a timestamp to the URL (cache-busting) ensures the browser
-        // fetches the latest version of the image instead of showing a cached one.
-        imgElement.src = `${url}?t=${new Date().getTime()}`;
-      }
-    }
-  </script>
-
 </body>
 </html>
-
