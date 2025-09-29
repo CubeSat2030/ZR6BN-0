@@ -1,3 +1,14 @@
+~~~bash
+
+
+Sudo apt update
+sudo apt install hostapd dnsmasq -y
+sudo apt install avahi-daemon -y # For .local address support
+
+
+~~~
+
+
 **File structure:**
 
 ~~~
