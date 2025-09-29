@@ -18,7 +18,8 @@ DHT_SENSOR = Adafruit_DHT.DHT11
 DHT_PIN = 4 
 
 # Directory for data files (Relative to src/logger/)
-DATA_DIR = / "src" / "logger" / "data"
+# PATCH: Corrected the invalid path syntax to use os.path.join()
+DATA_DIR = os.path.join("src", "logger", "data")
 DATA_FILE = os.path.join(DATA_DIR, "DHT11.txt")
 
 # Central file for real-time monitoring dashboard
@@ -89,6 +90,8 @@ def main_loop():
             humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR, DHT_PIN)
             
             if humidity is not None and temperature is not None:
+                # The DHT11 sensor can sometimes return extreme or bad values, 
+                # so we add a simple sanity check for flight stability.
                 if 20 <= humidity <= 90:
                     # Use only HH:MM:SS for timestamp to save space in log
                     timestamp = datetime.now().strftime("%H:%M:%S")
