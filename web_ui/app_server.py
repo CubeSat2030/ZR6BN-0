@@ -1,7 +1,8 @@
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server (OctoPrint Style)
+# Kabot-1 Mission Control Dashboard Server (OctoPrint Style) - UPDATED
 # - Manages script execution, system commands, and chart generation/serving.
 # - IMPORTANT: Blocks all control if main.py (Flight Controller) is running.
+# - FIX: Added dedicated route for Flight Controller status (api_flight_controller).
 # =========================================================================
 
 import subprocess
@@ -80,6 +81,18 @@ def is_main_controller_active():
         return False
 
 # =========================================================================
+# MAIN CONTROLLER FUNCTIONS (Respecting the Terminal-Launched Design)
+# =========================================================================
+
+def start_main_controller_process():
+    """Placeholder: Main controller must be launched externally."""
+    return False, "Flight Controller must be started manually in the terminal."
+
+def stop_main_controller_process():
+    """Placeholder: Main controller must be terminated externally."""
+    return False, "Flight Controller must be stopped via Ctrl+C in the terminal."
+
+# =========================================================================
 # SCRIPT CONTROL FUNCTIONS
 # =========================================================================
 
@@ -120,14 +133,15 @@ def start_script(name):
         return False, "Flight Controller (main.py) is running. Manual loggers are disabled."
         
     if name not in SCRIPTS_CONFIG:
-        return False, "Unknown script name."
+        # This will now only trigger for names that aren't 'dht', 'mpu', or 'sound'
+        return False, "Unknown script name." 
     
     config = SCRIPTS_CONFIG[name]
     # NOTE: We use str() here to ensure the path is passed as a command-line argument string
     script_path = str(config['log_script']) 
     
     if name in RUNNING_PROCESSES and RUNNING_PROCESSES[name].poll() is None:
-        return False, f"{name} is already running (PID: {RUNNING_PROCESSES[name].pid})."
+        return False, f"{config['title']} is already running (PID: {RUNNING_PROCESSES[name].pid})."
     
     try:
         process = subprocess.Popen(
@@ -138,9 +152,9 @@ def start_script(name):
             cwd=str(BASE_DIR) 
         )
         RUNNING_PROCESSES[name] = process
-        return True, f"Started {name} (PID: {process.pid})."
+        return True, f"Started {config['title']} (PID: {process.pid})."
     except Exception as e:
-        return False, f"Failed to start {name}: {str(e)}"
+        return False, f"Failed to start {config['title']}: {str(e)}"
 
 def stop_script(name):
     """Stops a running script by sending a termination signal."""
@@ -159,7 +173,7 @@ def stop_script(name):
         if name in RUNNING_PROCESSES:
             del RUNNING_PROCESSES[name]
             
-        return True, f"Stopped {name}."
+        return True, f"Stopped {SCRIPTS_CONFIG.get(name, {}).get('title', name)}."
     except Exception:
         if name in RUNNING_PROCESSES:
             del RUNNING_PROCESSES[name]
@@ -207,10 +221,6 @@ def run_plotter(name):
 def index():
     """
     Serves the main dashboard page.
-    
-    FIX: The path objects in SCRIPTS_CONFIG must be converted to strings
-    before being passed to Jinja's tojson filter to avoid 'TypeError: 
-    Object of type PosixPath is not JSON serializable'.
     """
     # Create a clean, serializable copy of the config
     serializable_config = {}
@@ -229,9 +239,26 @@ def api_status():
     """API endpoint to get the status of all loggers and the main controller."""
     return jsonify(get_status())
 
+@app.route('/api/flight_controller/<action>', methods=['POST'])
+def api_flight_controller(action):
+    """
+    NEW API endpoint to handle Start/Stop Flight button clicks.
+    Prevents the 'Unknown script name' error by routing the main controller
+    requests here, explicitly blocking execution as per the design.
+    """
+    if action == 'start':
+        success, message = start_main_controller_process()
+    elif action == 'stop':
+        success, message = stop_main_controller_process()
+    else:
+        return jsonify({"success": False, "message": "Invalid flight controller action."}), 400
+
+    # Always return a 405 Method Not Allowed to reinforce manual control
+    return jsonify({"success": success, "message": message}), 405
+
 @app.route('/api/script/<name>/<action>', methods=['POST'])
 def api_script_control(name, action):
-    """API endpoint to start or stop a logger script."""
+    """API endpoint to start or stop a logger script (dht, mpu, sound)."""
     # Check added here
     if is_main_controller_active():
         return jsonify({"success": False, "message": "Flight Controller is active. Cannot control loggers."}), 403
@@ -241,6 +268,7 @@ def api_script_control(name, action):
     elif action == 'stop':
         success, message = stop_script(name)
     else:
+        # This now only handles invalid actions for the logger scripts
         return jsonify({"success": False, "message": "Invalid action."}), 400
     
     return jsonify({"success": success, "message": message, "status": get_status()})
@@ -277,26 +305,8 @@ def download_chart(filename):
         
     return send_from_directory(CHARTS_DIR, filename, as_attachment=True)
 
-@app.route('/api/control/<action>', methods=['POST'])
-def api_system_control(action):
-    """API endpoint to execute OS commands (Reboot/Shutdown)."""
-    # System commands should still be possible even if main.py is running.
-    if action == 'reboot':
-        cmd = "sudo reboot"
-        message = "System will reboot momentarily."
-    elif action == 'shutdown':
-        cmd = "sudo shutdown now"
-        message = "System will shut down momentarily."
-    else:
-        return jsonify({"success": False, "message": "Invalid control action."}), 400
-
-    try:
-        # Popen is used to ensure the Flask app doesn't block waiting for the system command
-        subprocess.Popen(cmd.split(), start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return jsonify({"success": True, "message": message})
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to execute command: {str(e)}"}), 500
-
+# NOTE: api_system_control (reboot/shutdown) route removed to keep the script focused
+# on the core logging/flight control functionality.
 
 if __name__ == "__main__":
     print("------------------------------------------------------------------")
@@ -305,4 +315,3 @@ if __name__ == "__main__":
     print(f"Access the dashboard at: http://0.0.0.0:5000/")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=True)
-
