@@ -11,7 +11,8 @@ BUZZER_PIN = 21
 
 # --- File Paths ---
 # CHANGE 1: Define a directory for data files
-DATA_DIR = / "src" / "logger" / "data"
+# PATCH: Corrected the syntax for defining DATA_DIR as a path string.
+DATA_DIR = os.path.join("src", "logger", "data") # Use os.path.join for platform independence
 DATA_FILE = os.path.join(DATA_DIR, "sound_data_D0.txt")
 DATA_BACKUP_FILE = os.path.join(DATA_DIR, "sound_data_D0_backup.txt")
 
@@ -131,5 +132,3 @@ if __name__ == "__main__":
         if sound_sensor:
             sound_sensor.close()
         print("Application terminated.")
-
-
