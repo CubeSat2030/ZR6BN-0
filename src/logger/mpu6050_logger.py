@@ -13,7 +13,8 @@ import random
 
 # --- Configuration Settings ---
 FLIGHT_MODE = True 
-DATA_DIR = / "src" / "logger" / "data"
+# PATCH: Corrected the path construction from invalid syntax to use os.path.join
+DATA_DIR = os.path.join("src", "logger", "data")
 LOG_FILE = os.path.join(DATA_DIR, "MPU6050.txt")
 
 # Central file for real-time monitoring dashboard
