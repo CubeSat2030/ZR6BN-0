@@ -13,7 +13,7 @@ except Exception:
 
 DATA_DIR = "src/logger/data"
 DATA_FILE = os.path.join(DATA_DIR, "DHT11.txt")
-CHARTS_DIR = "src/charts"
+CHARTS_DIR = "src/plotter/charts"
 CHART_FILE = os.path.join(CHARTS_DIR, "dht_chart.svg")
 CHART_BACKUP_FILE = os.path.join(CHARTS_DIR, "dht_chart_backup.svg")
 
