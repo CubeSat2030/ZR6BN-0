@@ -55,6 +55,17 @@ address=/kabot-1.local/192.168.4.1
 ~~~
 
 
+
+
+~~~bash
+
+
+sudo nano /etc/hostapd/hostapd.conf
+
+
+
+~~~
+
 **File structure:**
 ~~~
 
