@@ -11,7 +11,6 @@ sudo apt install avahi-daemon -y # For .local address support
 
 **File structure:**
 
-~~~
 
 ~~~bash
 
