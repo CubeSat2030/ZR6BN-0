@@ -5,6 +5,9 @@
 
 PYTHON_EXECUTABLE="python3"
 
+# PATH VARIABLE:
+ROOT_PATH="kabot-1"
+
 # Define script and chart paths
 DHT_PLOTTER_SCRIPT="src/plotter/dht_plotter.py"
 MPU_PLOTTER_SCRIPT="src/plotter/mpu6050_plotter.py"
