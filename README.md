@@ -9,7 +9,7 @@ sudo apt install avahi-daemon -y # For .local address support
 ~~~
 
 
-**File structure:**
+
 
 
 ~~~bash
@@ -18,6 +18,9 @@ sudo nano /etc/dhcpcd.conf
 
 ~~~
 
+
+
+**File structure:**
 ~~~
 
 ├── .gitattributes
