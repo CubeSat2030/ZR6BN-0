@@ -66,6 +66,33 @@ sudo nano /etc/hostapd/hostapd.conf
 
 ~~~
 
+
+~~~bash
+
+# --- Kabot-1 HostAP Daemon Configuration ---
+interface=wlan0
+driver=nl80211
+country=US  # IMPORTANT: Change this to your country code (e.g., GB, CA, DE)
+ssid=Kabot-1-Mission-Control
+hw_mode=g
+channel=7
+macaddr_acl=0
+auth_algs=1
+ignore_broadcast_ssid=0
+wpa=2
+wpa_passphrase=YOUR_PASSWORD_HERE # CHANGE THIS PASSWORD! (Must be 8+ characters)
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+
+
+
+~~~
+
+
+
+
+
+
 **File structure:**
 ~~~
 
