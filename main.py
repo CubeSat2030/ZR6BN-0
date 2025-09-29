@@ -1,13 +1,11 @@
 # =========================================================================
 # Kabot I Mission Master Launcher (main.py)
 # =========================================================================
-# This script launches all logger processes and the Flask web server 
-# concurrently and silently in the background.
+# This script launches all logger processes (monitored) and the Flask 
+# web server (detached) concurrently and silently in the background.
 #
-# EXECUTION: python3 main.py
-#
-# This script ensures that if the terminal session (SSH) is lost, all 
-# mission-critical logging continues uninterrupted.
+# CRITICAL: The Web Server is explicitly detached and WILL NOT be terminated
+# when this script receives a KeyboardInterrupt (Ctrl+C).
 # =========================================================================
 
 import subprocess
@@ -16,97 +14,109 @@ import os
 
 # --- Configuration ---
 
-# Processes to launch. The paths are relative to the project root directory
-# (where this main.py file is located).
-PROCESSES = [
-    # 1. DHT11 Temperature/Humidity Logger (Logs to CSV and JSON)
+# 1. PROCESSES TO MONITOR AND TERMINATE (Loggers)
+# These processes must stop when the main launcher stops.
+LOGGING_PROCESSES = [
     ("DHT Logger", "src/logger/dht_logger.py"),
-    
-    # 2. MPU-6050 Motion Logger (Logs to CSV and JSON)
     ("MPU Logger", "src/logger/mpu6050_logger.py"),
-    
-    # 3. Sound Logger (Placeholder - assumes this script is ready)
     ("Sound Logger", "src/logger/sound_logger.py"),
-    
-    # 4. Web UI Server (Starts Flask server, reads from logger JSON files)
-#    ("Web Server", "web_ui/app_server.py"),
+]
+
+# 2. PROCESSES TO DETACH (Web UI)
+# This process must remain running if the main launcher stops or the terminal is closed.
+DETACHED_PROCESSES = [
+    ("Web Server", "web_ui/app_server.py"), 
 ]
 
 def launch_processes():
-    """Launches all configured processes concurrently using subprocess.Popen."""
+    """Launches all configured processes concurrently."""
     
-    running_processes = []
+    running_loggers = []
     
     print("--- Kabot I Mission Control Startup ---")
-    print(f"Launching {len(PROCESSES)} critical processes...")
-
-    # Redirect all stdout/stderr output from subprocesses to null to prevent 
-    # terminal artifacts from corrupting logs or memory.
-    DEVNULL = open(os.devnull, 'w')
     
-    for name, script_path in PROCESSES:
+    # Redirect all stdout/stderr output from subprocesses to null
+    try:
+        DEVNULL = open(os.devnull, 'w')
+    except Exception as e:
+        print(f"[ERROR] Could not open os.devnull: {e}")
+        return
+
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    
+    # --- Launch Logging Processes (Monitored) ---
+    print(f"Launching {len(LOGGING_PROCESSES)} critical logger processes...")
+    for name, script_path in LOGGING_PROCESSES:
         try:
-            # Construct the command: python3 /path/to/script.py
             command = ["python3", script_path]
-            
-            # Use Popen to launch the process and detach it
             process = subprocess.Popen(
                 command, 
-                stdout=DEVNULL, # Silence all output
-                stderr=DEVNULL, # Silence all errors (errors are logged internally by loggers if FLIGHT_MODE=False)
-                # Run from the project root directory
-                cwd=os.path.dirname(os.path.abspath(__file__))
+                stdout=DEVNULL, 
+                stderr=DEVNULL, 
+                cwd=project_root 
             )
-            
-            running_processes.append((name, process))
+            running_loggers.append((name, process))
             print(f"[SUCCESS] Launched {name} (PID: {process.pid})")
-            time.sleep(0.5) # Slight delay to ensure clean startup order
+            time.sleep(0.5) 
+        except Exception as e:
+            print(f"[CRITICAL FAILURE] Failed to launch {name} ({script_path}): {e}")
 
-        except FileNotFoundError:
-            print(f"[ERROR] Python interpreter not found.")
-            break
+    # --- Launch Detached Processes (Web UI) ---
+    print(f"\nLaunching {len(DETACHED_PROCESSES)} detached processes...")
+    for name, script_path in DETACHED_PROCESSES:
+        try:
+            command = ["python3", script_path]
+            # Launch the Web Server but DO NOT track it for termination.
+            subprocess.Popen(
+                command, 
+                stdout=DEVNULL, 
+                stderr=DEVNULL, 
+                cwd=project_root 
+            )
+            print(f"[SUCCESS] Launched {name} (Detached)")
+            time.sleep(0.5) 
         except Exception as e:
             print(f"[CRITICAL FAILURE] Failed to launch {name} ({script_path}): {e}")
             
     print("\n--- System Status ---")
     
-    if running_processes:
-        print("All processes launched successfully.")
-        print("Logging and Web UI are active in the background.")
-        print("Web Dashboard: Access http://<Pi_IP_Address>:5000")
-        
-        # Keep the main launcher script running to monitor status and prevent 
-        # the terminal session from exiting immediately.
-        monitor_processes(running_processes)
+    if running_loggers:
+        print("Loggers are active. Web Dashboard: http://<Pi_IP_Address>:5000")
+        monitor_processes(running_loggers, DEVNULL)
     else:
-        print("No processes were launched. Mission aborted.")
+        print("No loggers were launched. Mission aborted.")
+        DEVNULL.close()
 
-def monitor_processes(processes):
-    """Monitors the launched processes and cleans up on keyboard interrupt."""
+def monitor_processes(processes_to_monitor, DEVNULL):
+    """Monitors ONLY the logger processes and cleans them up on keyboard interrupt."""
     try:
         while True:
-            # Simple check to see if any process died
-            for name, proc in processes:
-                if proc.poll() is not None: # poll returns exit code if process terminated
-                    print(f"\n[ALERT] Process '{name}' (PID: {proc.pid}) has terminated unexpectedly!")
-                    # You could re-launch here, but for a simple mission, an alert is enough.
+            # Check for unexpected logger termination
+            for name, proc in processes_to_monitor:
+                if proc.poll() is not None: 
+                    print(f"\n[ALERT] Logger '{name}' (PID: {proc.pid}) has terminated unexpectedly!")
                     
-            time.sleep(5) # Check status every 5 seconds
+            time.sleep(5)
             
     except KeyboardInterrupt:
         print("\n\n--- TERMINATION SEQUENCE INITIATED ---")
-        print("Stopping all running Kabot I payload processes...")
+        print("Stopping monitored logger processes...")
         
-        for name, proc in processes:
+        for name, proc in processes_to_monitor:
             if proc.poll() is None: # Only try to terminate if still running
                 try:
-                    proc.terminate()
+                    # Send a terminate signal to all child processes
+                    proc.terminate() 
                     print(f"[STOPPED] {name} (PID: {proc.pid})")
                 except Exception as e:
                     print(f"[ERROR] Could not terminate {name}: {e}")
 
-        print("\nMission components safely shut down. Data logging is complete.")
+        print("\nMonitored components safely shut down.")
+        print("NOTE: The Web Server remains ACTIVE in the background.")
+        
+    finally:
         DEVNULL.close()
+
 
 if __name__ == "__main__":
     launch_processes()
