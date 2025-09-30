@@ -68,21 +68,7 @@ body {
   50% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); }
 }
 
-/* Loading spinner */
-.loading-ring {
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #3b82f6;
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  animation: spin 1s linear infinite;
-}
-@keyframes spin { 
-  0% { transform: rotate(0deg); } 
-  100% { transform: rotate(360deg); } 
-}
-
-/* NEW: Style for the Power Button icon (using an SVG for better scalability) */
+/* Style for the Power Button icon (using an SVG for better scalability) */
 #power-icon-btn {
   cursor: pointer;
   padding: 0.5rem;
@@ -97,6 +83,20 @@ body {
   background-color: rgba(201, 209, 217, 0.1);
 }
 
+/* Loading spinner */
+.loading-ring {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #3b82f6;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { 
+  0% { transform: rotate(0deg); } 
+  100% { transform: rotate(360deg); } 
+}
+
 </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
@@ -107,30 +107,41 @@ body {
         <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control Dashboard</h1>
         <p class="text-gray-300">Manage scripts, generate charts, and control the Kabot-1 payload.</p>
     </div>
-    <button id="power-icon-btn" onclick="openSystemControlModal()" title="System Control">
-        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-            <path d="M7.5 4.21l1.5 -1.21"></path>
-            <path d="M12 3v3"></path>
-            <path d="M16.5 4.21l-1.5 1.21"></path>
-            <path d="M18.324 7.72l1.176 1.175"></path>
-            <path d="M21 12h-3"></path>
-            <path d="M18.324 16.28l1.176 1.175"></path>
-            <path d="M16.5 19.79l-1.5 -1.21"></path>
-            <path d="M12 18v3"></path>
-            <path d="M7.5 19.79l1.5 -1.21"></path>
-            <path d="M5.676 16.28l-1.176 1.175"></path>
-            <path d="M3 12h3"></path>
-            <path d="M5.676 7.72l-1.176 -1.175"></path>
-        </svg>
-    </button>
+    <!-- NEW: Heartbeat indicator next to the System Control icon -->
+    <div class="flex items-center space-x-3">
+        <div id="heartbeat-container" class="relative">
+            <!-- This circle will pulse green when healthy. Title shows the countdown. -->
+            <span id="heartbeat-circle" 
+                  class="w-4 h-4 rounded-full bg-green-500 pulse-active-green transition-colors" 
+                  title="Connection: Stable (60s)">
+            </span>
+        </div>
+
+        <button id="power-icon-btn" onclick="openSystemControlModal()" title="System Control">
+            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path stroke="none" d="M0 0h24v24H0h24v24H0h24v24H0z" fill="none"></path>
+                <path d="M7.5 4.21l1.5 -1.21"></path>
+                <path d="M12 3v3"></path>
+                <path d="M16.5 4.21l-1.5 1.21"></path>
+                <path d="M18.324 7.72l1.176 1.175"></path>
+                <path d="M21 12h-3"></path>
+                <path d="M18.324 16.28l1.176 1.175"></path>
+                <path d="M16.5 19.79l-1.5 -1.21"></path>
+                <path d="M12 18v3"></path>
+                <path d="M7.5 19.79l1.5 -1.21"></path>
+                <path d="M5.676 16.28l-1.176 1.175"></path>
+                <path d="M3 12h3"></path>
+                <path d="M5.676 7.72l-1.176 -1.175"></path>
+            </svg>
+        </button>
+    </div>
 </header>
 
 <div id="system-control-modal" class="hidden fixed inset-0 z-50 bg-gray-900 bg-opacity-95 flex items-center justify-center transition-opacity duration-300">
     <div class="card p-8 w-11/12 max-w-lg relative" style="background-color: var(--bg-card); border: 1px solid var(--border);">
         <button onclick="closeSystemControlModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white transition p-1 rounded-full bg-gray-800 hover:bg-gray-700" title="Close">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+                <path stroke="none" d="M0 0h24v24H0h24v24H0z" fill="none"></path>
                 <path d="M18 6l-12 12"></path>
                 <path d="M6 6l12 12"></path>
             </svg>
@@ -144,13 +155,13 @@ body {
         <div class="flex flex-col space-y-4">
             <button onclick="handleModalSystemControl('shutdown')" 
                     class="btn w-full bg-red-800 hover:bg-red-900 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M7.5 4.21l1.5 -1.21"></path><path d="M12 3v3"></path><path d="M16.5 4.21l-1.5 1.21"></path><path d="M21 10h-3"></path><path d="M18.324 16.28l1.176 1.175"></path><path d="M12 18v3"></path><path d="M5.676 16.28l-1.176 1.175"></path><path d="M3 10h3"></path><path d="M4.4 6.04l1.255 1.05"></path><path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0h24v24H0h24v24H0z" fill="none"></path><path d="M7.5 4.21l1.5 -1.21"></path><path d="M12 3v3"></path><path d="M16.5 4.21l-1.5 1.21"></path><path d="M21 10h-3"></path><path d="M18.324 16.28l1.176 1.175"></path><path d="M12 18v3"></path><path d="M5.676 16.28l-1.176 1.175"></path><path d="M3 10h3"></path><path d="M4.4 6.04l1.255 1.05"></path><path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path></svg>
                 <span>Shutdown Kabot-1</span>
             </button>
             
             <button onclick="handleModalSystemControl('reboot')" 
                     class="btn w-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M19.95 11a8 8 0 0 0 -7.95 -7a8 8 0 0 0 -7.95 7"></path><path d="M4.05 13a8 8 0 0 0 7.95 7a8 8 0 0 0 7.95 -7"></path><path d="M20 4l-2.5 2.5"></path><path d="M4 20l2.5 -2.5"></path></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0h24v24H0z" fill="none"></path><path d="M19.95 11a8 8 0 0 0 -7.95 -7a8 8 0 0 0 -7.95 7"></path><path d="M4.05 13a8 8 0 0 0 7.95 7a8 8 0 0 0 7.95 -7"></path><path d="M20 4l-2.5 2.5"></path><path d="M4 20l2.5 -2.5"></path></svg>
                 <span>Reboot Kabot-1</span>
             </button>
         </div>
@@ -243,19 +254,6 @@ body {
   </div>
 </section>
 
-<section class="card p-6 mb-8 hidden">
-    <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Kabot-1 System Control</h2>
-    <div class="flex flex-wrap gap-4 items-center">
-        <button onclick="systemControl('reboot')" class="btn bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md">
-            Reboot Kabot-1
-        </button>
-        <button onclick="systemControl('shutdown')" class="btn bg-red-800 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-md">
-            Shutdown Kabot-1
-        </button>
-    </div>
-</section>
-
-
 <section class="card p-6">
   <h2 class="text-xl font-semibold mb-4 text-white">Generated Charts Preview</h2>
   <div id="charts-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -276,6 +274,14 @@ body {
 const statusOutput = document.getElementById('status_output');
 // CORRECTED: The scripts_config variable is now properly initialized from Jinja
 const SCRIPTS_CONFIG = {{ scripts_config | tojson }};
+
+// --- Connection Heartbeat Constants and State ---
+let statusIntervalId; 
+let monitorIntervalId; 
+let lastSuccessfulHeartbeat = Date.now();
+const CONNECTION_TIMEOUT_MS = 60000; // 60 seconds dead-man switch
+// UPDATED: Polling frequency changed from 5000ms to 2000ms for faster feedback.
+const POLLING_INTERVAL_MS = 2000; // 2 seconds
 
 // --- Utility Functions ---
 
@@ -313,12 +319,9 @@ async function controlMainController(action) {
     targetBtn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
 
     try {
-        // *** PATCH APPLIED HERE: Reverting to generic script control route for main.py ***
-        // Backend's api_script_control function now handles 'main_controller'
         const response = await fetch(`/api/script/main_controller/${action}`, { method: 'POST' });
         const result = await response.json();
         
-        // Success check includes the possibility of status code 403 (Forbidden) if main.py is active
         if (result.success) {
             showAlert(`${result.message}`, 'success');
         } else {
@@ -334,10 +337,9 @@ async function controlMainController(action) {
 }
 
 
-// --- Status Update Logic ---
+// --- Status Update Logic (Handles script statuses and calls refreshHeartbeat) ---
 
 function updateScriptStatus(status) {
-    // Note: status.main_controller.pid is not provided by the backend, but we can check if it's running
     const mainActive = status.main_controller.running;
     const mainCard = document.getElementById('main-controller-card');
     const loggerSection = document.getElementById('logger-section');
@@ -349,19 +351,20 @@ function updateScriptStatus(status) {
     const mainStartBtn = document.getElementById('main_start_btn');
     const mainStopBtn = document.getElementById('main_stop_btn');
     
+    // Check if we are in a connection loss state to maintain disabled state
+    const isConnectionLost = monitorIntervalId === null;
+
     // 1. Update Main Controller Status and Controls
     if (mainActive) {
         mainCircle.className = 'status-circle w-4 h-4 rounded-full mr-3 bg-red-600 pulse-active-red';
-        // Note: The backend only returns "running": true/false for the main controller, not PID.
         mainText.textContent = `ACTIVE (Mission Running)`; 
         mainText.classList.add('text-red-400');
         mainText.classList.remove('text-green-400', 'text-yellow-500');
         warning.classList.remove('hidden');
         mainCard.classList.add('pulse-active-red');
         
-        // Main control logic
         mainStartBtn.disabled = true;
-        mainStopBtn.disabled = false;
+        mainStopBtn.disabled = isConnectionLost ? true : false;
         
         // Disable ALL other sections
         loggerSection.style.opacity = 0.5;
@@ -377,13 +380,14 @@ function updateScriptStatus(status) {
         warning.classList.add('hidden');
         mainCard.classList.remove('pulse-active-red');
         
-        // Main control logic
-        mainStartBtn.disabled = false;
+        mainStartBtn.disabled = isConnectionLost ? true : false;
         mainStopBtn.disabled = true;
 
-        // Re-enable logger/chart sections for manual control/post-flight analysis
-        loggerSection.style.opacity = 1.0;
-        chartSection.style.opacity = 1.0;
+        // Re-enable logger/chart sections for manual control/post-flight analysis if link is good
+        if (!isConnectionLost) {
+            loggerSection.style.opacity = 1.0;
+            chartSection.style.opacity = 1.0;
+        }
     }
 
     // 2. Update Manual Logger Statuses (only if main is NOT active)
@@ -414,12 +418,8 @@ function updateScriptStatus(status) {
             card.classList.remove('shadow-lg', 'pulse-active-green');
         }
 
-        // Update manual control buttons based on mainActive status
-        if (mainActive) {
-            startBtn.disabled = true;
-            stopBtn.disabled = true;
-            if (chartGenBtn) chartGenBtn.disabled = true;
-        } else {
+        // Update manual control buttons based on mainActive and connection status
+        if (!mainActive && !isConnectionLost) {
             startBtn.disabled = item.running;
             stopBtn.disabled = !item.running;
             if (chartGenBtn) chartGenBtn.disabled = false;
@@ -429,21 +429,97 @@ function updateScriptStatus(status) {
     }
 }
 
+// *** HEARTBEAT LOGIC START ***
+
 async function fetchStatus() {
     try {
         const response = await fetch('/api/status');
         if (response.ok) {
+            // Heartbeat: Reset the timer on successful poll
+            lastSuccessfulHeartbeat = Date.now(); 
+            
+            // Visual feedback: Reset to healthy pulse on success
+            const circleElement = document.getElementById('heartbeat-circle');
+            circleElement.classList.remove('bg-gray-700', 'pulse-active-red', 'bg-red-500', 'bg-yellow-500');
+            circleElement.classList.add('bg-green-500', 'pulse-active-green', 'transition-colors');
+            circleElement.title = `Connection: Stable (${Math.ceil(CONNECTION_TIMEOUT_MS / 1000)}s)`;
+
             const status = await response.json();
             updateScriptStatus(status);
+
+        } else {
+            // Soft failure, timer continues to tick down
+            console.warn("Status fetch failed with status:", response.status);
         }
     } catch (error) {
-        console.error("Error fetching status:", error);
-        // Show network error on main controller status
-        document.getElementById('main_controller_status_text').textContent = 'Network Error';
-        document.getElementById('main_controller_status_text').classList.add('text-red-500');
-        document.getElementById('main_controller_status_circle').className = 'status-circle w-4 h-4 rounded-full mr-3 bg-red-500';
+        // Network error, timer continues to tick down
+        console.error("Network error fetching status:", error);
     }
 }
+
+function monitorConnection() {
+    // Stop monitoring if connection loss has already been handled
+    if (monitorIntervalId === null) return;
+
+    const timeSinceLastHeartbeat = Date.now() - lastSuccessfulHeartbeat;
+    const remainingTime = Math.max(0, CONNECTION_TIMEOUT_MS - timeSinceLastHeartbeat);
+    const secondsRemaining = Math.ceil(remainingTime / 1000);
+
+    const circleElement = document.getElementById('heartbeat-circle');
+    
+    if (secondsRemaining > 0) {
+        // Update the title with the exact countdown
+        circleElement.title = `Connection: Stable (${secondsRemaining}s)`;
+
+        // Visual state changes based on remaining time
+        if (secondsRemaining <= 10) {
+            // Critical Warning: < 10 seconds remaining (Pulsing Red)
+            circleElement.classList.remove('bg-green-500', 'bg-yellow-500', 'pulse-active-green');
+            circleElement.classList.add('bg-red-500', 'pulse-active-red');
+        } else if (secondsRemaining <= 30) {
+            // Warning State: 11-30 seconds remaining (Pulsing Green on Yellow dot)
+            circleElement.classList.remove('bg-green-500', 'bg-red-500', 'pulse-active-red');
+            circleElement.classList.add('bg-yellow-500', 'pulse-active-green');
+        } else {
+            // Healthy State: > 30 seconds remaining (Pulsing Green)
+            circleElement.classList.remove('bg-yellow-500', 'bg-red-500', 'pulse-active-red');
+            circleElement.classList.add('bg-green-500', 'pulse-active-green');
+        }
+    } else {
+        // Critical Failure State
+        handleConnectionLoss();
+    }
+}
+
+function handleConnectionLoss() {
+    // Check if loss handler has already run
+    if (monitorIntervalId === null) return;
+    
+    // Stop all intervals
+    clearInterval(statusIntervalId);
+    clearInterval(monitorIntervalId);
+    monitorIntervalId = null; 
+
+    // Visually lock the entire dashboard
+    document.querySelectorAll('.btn, #power-icon-btn').forEach(b => b.disabled = true);
+    document.getElementById('logger-section').style.opacity = 0.2;
+    document.getElementById('chart-section').style.opacity = 0.2;
+    document.getElementById('main-controller-card').style.opacity = 0.2;
+    
+    // Update Heartbeat Status in the header
+    const circleElement = document.getElementById('heartbeat-circle');
+    circleElement.classList.remove('bg-green-500', 'bg-yellow-500', 'bg-red-500', 'pulse-active-green', 'pulse-active-red');
+    circleElement.classList.add('bg-gray-700');
+    circleElement.title = 'CRITICAL: Connection Lost (0s)';
+    
+    // Force all status buttons to disabled
+    updateScriptStatus({main_controller: {running: false}});
+
+    showAlert('CRITICAL ERROR: Connection heartbeat lost (60s timeout). Dashboard is locked.', 'error');
+}
+
+// *** HEARTBEAT LOGIC END ***
+
 
 async function controlScript(name, action) {
     const btn = document.querySelector(`#script-${name} .${action}-btn`);
@@ -486,12 +562,7 @@ async function generateChart(name) {
   statusOutput.classList.add('text-yellow-400');
   
   // Temporarily disable all chart generation buttons
-  const originalChartBtns = [];
-  document.querySelectorAll('#chart-controls button').forEach(b => {
-      originalChartBtns.push({btn: b, disabled: b.disabled});
-      b.disabled = true;
-  });
-
+  document.querySelectorAll('#chart-controls button').forEach(b => b.disabled = true);
 
   const originalText = genBtn.innerHTML;
   genBtn.innerHTML = `<div class="loading-ring mr-2"></div> Generating...`;
@@ -600,7 +671,7 @@ async function systemControl(action) {
     }
 }
 
-// --- NEW Modal Functions ---
+// --- Modal Functions ---
 
 function openSystemControlModal() {
     const modal = document.getElementById('system-control-modal');
@@ -624,10 +695,16 @@ function handleModalSystemControl(action) {
 document.addEventListener('DOMContentLoaded', () => {
     // Initial fetch
     fetchStatus();
-    // Poll the status every 5 seconds
-    setInterval(fetchStatus, 5000); 
+    
+    // Start polling the status every 2 seconds (the connection 'heartbeat' poll)
+    statusIntervalId = setInterval(fetchStatus, POLLING_INTERVAL_MS); 
+    
+    // Start monitoring the time since the last successful heartbeat every 1 second
+    monitorConnection();
+    monitorIntervalId = setInterval(monitorConnection, 1000); 
 });
 
 </script>
 </body>
 </html>
+
