@@ -2,10 +2,9 @@
 # Kabot-1 Mission Control Dashboard Server - THREAD-SAFE & SINGLE-CLIENT
 # =========================================================================
 # FIX: Strict Single-Client WebUI Access Control enforced via IP address 
-#      and an inactivity timeout. Viewing for unauthorized clients is now blocked.
-# FIX: Added threading.Lock around access control variables.
-# FIX: Removed the 3-second solid beep that occurred before auto-start (as requested).
-# FIX: api_trigger_beep endpoint is now disabled.
+#      and an inactivity timeout.
+# FIX: All Auto-Start/Countdown/Beep logic REMOVED to prevent conflict with 
+#      main.py (the launcher) and honor the request to remove the solid beep.
 # =========================================================================
 
 import subprocess
@@ -19,6 +18,8 @@ from flask import Flask, render_template, jsonify, send_from_directory, abort, r
 
 try:
     from gpiozero import Buzzer
+    # NOTE: Buzzer remains initialized but is only used by solid_beep/double_beep
+    # functions which are now only stubs or unused.
     BUZZER = Buzzer(21) 
     BUZZER_AVAILABLE = True
 except ImportError:
@@ -31,7 +32,8 @@ except Exception as e:
 
 # --- Configuration ---
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent 
-MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
+# The Flight Controller is now assumed to be launched by main.py
+MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py" 
 
 SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger"
@@ -42,15 +44,17 @@ TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Global State and Timer Configuration ---
-AUTO_START_TIMEOUT = 60 # Seconds
+# AUTO_START_TIMEOUT and LAST_CONNECTION_TIME are no longer used for auto-start
+# but LAST_CONNECTION_TIME is repurposed for ACCESS_CONTROL_TIMEOUT logic.
+AUTO_START_TIMEOUT = 60 # Seconds (Kept for compatibility, now unused for auto-start)
 LAST_CONNECTION_TIME = time.time()
-BUZZER_THREAD_STOP = threading.Event()
+BUZZER_THREAD_STOP = threading.Event() # Now unused
 
 # --- SINGLE-CLIENT ACCESS CONTROL VARIABLES ---
 ACCESS_CONTROL_TIMEOUT = 50 # Seconds after which control is released if inactive
 AUTHORIZED_CLIENT_IP = None
 LAST_ACTIVE_IP = None # Used to display which IP currently has control
-ACCESS_CONTROL_LOCK = threading.Lock() # New lock for access control variables
+ACCESS_CONTROL_LOCK = threading.Lock() 
 # ----------------------------------------------
 
 # --- Flask App Initialization ---
@@ -146,6 +150,7 @@ def get_status():
 def start_script(name):
     """Starts a Python script in a non-blocking subprocess."""
     
+    # Check if main.py (the launcher) is running, if so, block other manual loggers
     if name != 'main' and is_main_controller_active():
         return False, "Flight Controller (main.py) is running. Manual loggers are disabled."
     
@@ -160,6 +165,7 @@ def start_script(name):
             return False, f"{config['title']} is already running (PID: {RUNNING_PROCESSES[name].pid})."
         
         try:
+            # We assume main.py starts detached processes and running loggers as per its launcher role
             process = subprocess.Popen(
                 [sys.executable, script_path],
                 preexec_fn=os.setsid, 
@@ -170,7 +176,7 @@ def start_script(name):
             RUNNING_PROCESSES[name] = process
             
             if name == 'main':
-                 return True, f"Started Flight Controller (PID: {process.pid}). Loggers are now active."
+                 return True, f"Started Flight Controller Launcher (PID: {process.pid}). Loggers and Web UI are starting."
             else:
                  return True, f"Started {config['title']} (PID: {process.pid})."
         except Exception as e:
@@ -194,7 +200,7 @@ def stop_script(name):
                 del RUNNING_PROCESSES[name]
                 
             if name == 'main':
-                return True, f"Stopped Flight Controller."
+                return True, f"Stopped Flight Controller Launcher."
             else:
                 return True, f"Stopped {SCRIPTS_CONFIG.get(name, {}).get('title', name)}."
                 
@@ -238,149 +244,46 @@ def run_plotter(name):
 
 
 # =========================================================================
-# BUZZER COUNTDOWN AND AUTO-START LOGIC
+# BUZZER FUNCTIONS (NO LONGER USED FOR AUTO-START)
 # =========================================================================
 
 def reset_auto_start_timer():
-    """Stops the buzzer and resets the auto-start timer."""
+    """Stops the buzzer (if running) and resets the LAST_CONNECTION_TIME."""
     global LAST_CONNECTION_TIME
     if BUZZER_AVAILABLE:
+        # Stop any residual beeping, although the countdown thread is gone
         BUZZER.off() 
     
-    if not is_main_controller_active():
-        LAST_CONNECTION_TIME = time.time() 
+    # We always update this timer for access control timeout
+    LAST_CONNECTION_TIME = time.time() 
 
 def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0):
-    """Executes the two rapid beeps and waits for the remaining duration."""
-    if not BUZZER_AVAILABLE:
-        time.sleep(total_duration)
-        return
-        
-    start_wait = time.time()
-    
-    # Beep 1
-    BUZZER.on()
-    time.sleep(delay_between_beeps)
-    BUZZER.off()
-    
-    # Short pause
-    time.sleep(delay_between_beeps)
-    
-    # Beep 2
-    BUZZER.on()
-    time.sleep(delay_between_beeps)
-    BUZZER.off()
-    
-    # Wait for the remaining time
-    remaining_wait = total_duration - (time.time() - start_wait)
-    if remaining_wait > 0:
-        time.sleep(remaining_wait)
+    """(Kept as stub but no longer runs in a loop)"""
+    pass
 
 def solid_beep(duration=3.0):
-    """Executes a single, solid beep for the specified duration."""
-    if not BUZZER_AVAILABLE:
-        print(f"[BUZZER] Solid beep of {duration}s requested but unavailable.")
-        return True
-        
-    try:
-        BUZZER.on()
-        time.sleep(duration)
-        BUZZER.off()
-        return True
-    except RuntimeError as e:
-        # This typically indicates a permission or hardware issue when accessing GPIO
-        print(f"[BUZZER ERROR] Failed to perform solid beep due to permissions: {e}. Try running server with 'sudo' or ensure user is in 'gpio' group.")
-        return False
-    except Exception as e:
-        print(f"[BUZZER ERROR] Failed to perform solid beep: {e}")
-        return False
+    """(Kept as stub but no longer runs in a loop)"""
+    pass
 
 
-def start_buzzer_countdown():
-    """
-    Runs in a background thread. Manages the countdown, buzzer beeping, 
-    and automatically launches main.py if the timer expires.
-    """
-    global LAST_CONNECTION_TIME
-    global BUZZER_THREAD_STOP
-    
-    while not BUZZER_THREAD_STOP.is_set():
-        
-        if is_main_controller_active():
-            if BUZZER_AVAILABLE:
-                BUZZER.off()
-            time.sleep(5)
-            continue
-            
-        time_elapsed = time.time() - LAST_CONNECTION_TIME
-        time_remaining = AUTO_START_TIMEOUT - time_elapsed
-        
-        if time_remaining <= 0:
-            # --- AUTO-START TRIGGERED: SOLID BEEP REMOVED AS REQUESTED ---
-            print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
-            
-            # solid_beep(3.0) # <--- REMOVED THIS LINE AS REQUESTED
-            
-            # The start_script call is now thread-safe
-            success, message = start_script('main') 
-            
-            if success:
-                print(f"[AUTO-START SUCCESS] {message}")
-            else:
-                print(f"[AUTO-START FAILURE] {message}")
-            
-            time.sleep(5) 
-            
-        elif time_remaining < AUTO_START_TIMEOUT - 5: 
-            # --- COUNTDOWN BEEPING ---
-            
-            if time_remaining <= 10:
-                # FAST BEEP
-                delay = 0.2
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                
-            elif time_remaining <= 30:
-                # MEDIUM BEEP
-                delay = 0.5
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-
-            else:
-                # SLOW BEEP
-                delay = 1.0 
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(0.1) 
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay - 0.1)
-            
-        else: 
-            # --- CONNECTION STANDBY HEARTBEAT ---
-            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
-
+# The start_buzzer_countdown function is entirely removed.
+# =========================================================================
+# ACCESS CONTROL LOGIC
+# =========================================================================
 
 @app.before_request
 def update_last_connection_time():
-    """Hook runs before every request to reset the auto-start timer."""
+    """Hook runs before every request to reset the access control timer."""
     global AUTHORIZED_CLIENT_IP
     # Only update the connection time if the client is currently authorized
     if AUTHORIZED_CLIENT_IP == request.remote_addr:
         reset_auto_start_timer()
 
 
-# =========================================================================
-# ACCESS CONTROL LOGIC
-# =========================================================================
-
 @app.before_request
 def before_request_access_check():
     """
-    STRICT Single-Client Access Enforcement. 
-    A client maintains control as long as they are active and the timeout hasn't expired.
+    STRICT Single-Client Access Enforcement with inactivity timeout. 
     """
     global AUTHORIZED_CLIENT_IP
     global LAST_ACTIVE_IP
@@ -408,7 +311,7 @@ def before_request_access_check():
             if request.path == url_for('index'):
                 AUTHORIZED_CLIENT_IP = current_ip
                 LAST_ACTIVE_IP = current_ip
-                reset_auto_start_timer() # Reset the global connection timer on new authorization
+                reset_auto_start_timer() # Reset the connection timer on new authorization
                 print(f"[ACCESS CONTROL] Authorized initial client: {current_ip}")
                 return None # Proceed to the dashboard
             else:
@@ -419,20 +322,20 @@ def before_request_access_check():
         elif current_ip == AUTHORIZED_CLIENT_IP:
             # Authorized client - renew access and proceed
             LAST_ACTIVE_IP = current_ip # Update active IP
-            reset_auto_start_timer() # Reset the global connection timer
+            reset_auto_start_timer() # Reset the connection timer
             return None 
             
         else:
-            # Block unauthorized client - NO EXCEPTIONS (STRICTLY enforce single-client)
+            # Block unauthorized client - STRICTLY enforce single-client
             print(f"[ACCESS CONTROL] Unauthorized client {current_ip} blocked from access.")
             
             # For API calls, return a 403 response instead of a redirect
             if request.path.startswith('/api'):
+                # Use LAST_ACTIVE_IP for the message as AUTHORIZED_CLIENT_IP might be None right after timeout
                 return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {LAST_ACTIVE_IP}."}), 403
             else:
                 return redirect(url_for('lockout'))
 
-    # If authorized, proceed.
     return None
 
 # =========================================================================
@@ -442,13 +345,11 @@ def before_request_access_check():
 @app.route("/lockout")
 def lockout():
     """Page displayed when a client attempts to access the UI while another client is authorized."""
-    # LAST_ACTIVE_IP holds the IP that last had control (or the initial one)
     controller_ip = LAST_ACTIVE_IP if LAST_ACTIVE_IP else "N/A (First client to load will take control)"
     return render_template("lockout.html", controller_ip=controller_ip), 403
 
 @app.route("/")
 def index():
-    # Access check is done in before_request_access_check.
     serializable_config = {}
     for key, config in SCRIPTS_CONFIG.items():
         if not config.get('is_main_controller'):
@@ -502,20 +403,16 @@ def api_trigger_beep(duration):
     Triggers the buzzer for a set duration. Returns 503 if the buzzer hardware
     is not initialized (BUZZER_AVAILABLE is False).
     """
-    # NOTE: Manual beep remains disabled as per prior request, which aligns with 
-    # not wanting the solid beep before auto-start.
     print(f"[BUZZER] Manual beep request for {duration}s received but disabled.")
     return jsonify({"success": True, "message": f"Manual beep feature is currently disabled."})
 
 @app.route("/chart/<path:filename>")
 def get_chart_display(filename):
-    # Access check for viewing charts is now handled strictly in before_request_access_check
     if ".." in filename or "/" in filename: abort(400)
     return send_from_directory(CHARTS_DIR, filename, as_attachment=False)
 
 @app.route("/download/chart/<filename>")
 def download_chart(filename):
-    # Access check for downloading charts is now handled strictly in before_request_access_check
     if ".." in filename or "/" in filename: abort(404, description="Chart not found.")
     file_path = CHARTS_DIR / filename
     if not file_path.exists(): abort(404, description="Chart not found.")
@@ -549,14 +446,14 @@ def api_system_control(action):
 
 
 if __name__ == "__main__":
-    countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
-    countdown_thread.start()
+    # Removed: countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
+    # Removed: countdown_thread.start()
     
     def exit_handler(signum, frame):
         if BUZZER_AVAILABLE:
             BUZZER.off()
-        BUZZER_THREAD_STOP.set()
-        print("\n[CLEANUP] Buzzer and countdown thread stopped.")
+        BUZZER_THREAD_STOP.set() # Flag set, but thread is gone
+        print("\n[CLEANUP] Server shutting down.")
         sys.exit(0)
         
     signal.signal(signal.SIGINT, exit_handler)
@@ -565,12 +462,8 @@ if __name__ == "__main__":
     print("------------------------------------------------------------------")
     print("Kabot-1 Mission Control Dashboard is starting...")
     print(f"Access the dashboard at: http://0.0.0.0:5000/")
-    print(f"Auto-Start Timeout: {AUTO_START_TIMEOUT} seconds.")
-    if BUZZER_AVAILABLE:
-        print("Buzzer Countdown: ACTIVE on GPIO 21.")
-        print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.")
-        print("Alarm: NO SOLID BEEP before auto-start. Only countdown beeps.")
-    else:
-        print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
+    print(f"Auto-Start Timeout: {AUTO_START_TIMEOUT} seconds (Auto-Start Disabled).")
+    print("Buzzer Countdown: DISABLED.")
+    print("WARNING: This server must be launched by 'main.py' for full functionality.")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=False)
