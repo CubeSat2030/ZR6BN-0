@@ -70,7 +70,7 @@ def launch_processes():
     print("--- Kabot I Mission Control Startup ---")
     
     # ---------------------------------------------------------------
-    # NEW: Execute the 3-second solid beep now that it's moved here.
+    # CORRECT: Execute the 3-second solid beep here at initialization.
     # ---------------------------------------------------------------
     if BUZZER_AVAILABLE:
         print("[BUZZER] Starting 3-second initialization beep...")
