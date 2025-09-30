@@ -241,7 +241,7 @@ def reset_auto_start_timer():
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
 
-def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # <-- MODIFIED: total_duration set to 10.0
+def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # 10.0s total pulse time
     """Executes the two rapid beeps and waits for the remaining duration."""
     if not BUZZER_AVAILABLE:
         time.sleep(total_duration)
@@ -288,10 +288,13 @@ def start_buzzer_countdown():
         time_remaining = AUTO_START_TIMEOUT - time_elapsed
         
         if time_remaining <= 0:
-            # --- AUTO-START TRIGGERED ---
+            # --- AUTO-START TRIGGERED: SOLID BEEP FOR 3 SECONDS ---
             print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
+            
             if BUZZER_AVAILABLE:
-                BUZZER.off()
+                BUZZER.on() # Solid beep ON
+                time.sleep(3.0) # Wait for 3 seconds
+                BUZZER.off() # Solid beep OFF
             
             # The start_script call is now thread-safe
             success, message = start_script('main') 
@@ -332,7 +335,7 @@ def start_buzzer_countdown():
             
         else: 
             # --- CONNECTION STANDBY HEARTBEAT ---
-            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0) # <-- MODIFIED: total_duration set to 10.0
+            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
 
 
 @app.before_request
@@ -440,8 +443,8 @@ if __name__ == "__main__":
     print(f"Auto-Start Timeout: {AUTO_START_TIMEOUT} seconds.")
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
-        # Note the change in the print statement to reflect the new duration
-        print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.") 
+        print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.")
+        print("Alarm: Solid beep for 3 seconds before auto-start.") 
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
