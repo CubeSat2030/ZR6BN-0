@@ -1,10 +1,10 @@
 # =========================================================================
 # Kabot-1 Mission Control Dashboard Server - THREAD-SAFE VERSION
 # =========================================================================
-# FIX: Refactored start_buzzer_countdown to acquire PROCESS_LOCK only for
-# state checking and decision making, preventing deadlock when calling
-# start_script (which also uses the lock) and avoiding long sleeps while holding
-# the lock.
+# FIX 1: Refactored start_buzzer_countdown to acquire PROCESS_LOCK only for
+# state checking and decision making, preventing deadlock and race conditions.
+# FIX 2: Ensured 100% consistent 4-space indentation throughout the file 
+# to resolve the TabError reported in the user's environment.
 # =========================================================================
 
 import subprocess
@@ -83,14 +83,6 @@ SCRIPTS_CONFIG = {
 
 def is_main_controller_active():
     """Checks if main.py is currently running."""
-    # This function is designed to be called while holding the lock
-    # or to acquire the lock if called independently (like in the APIs).
-    # Since it's only called internally by functions that hold the lock 
-    # or by the main API calls, the existing structure is fine.
-    # We will ensure the countdown thread handles its lock correctly.
-    
-    # NOTE: The implementation already assumes the lock is held 
-    # when called from get_status, but acquires it here if called elsewhere.
     with PROCESS_LOCK:
         if 'main' in RUNNING_PROCESSES:
             if RUNNING_PROCESSES['main'].poll() is None:
@@ -248,8 +240,7 @@ def reset_auto_start_timer():
     if BUZZER_AVAILABLE:
         BUZZER.off() 
     
-    # CRITICAL: We need to check state *before* updating the timer.
-    # is_main_controller_active acquires its own lock, which is fine here.
+    # Check if main is active using its thread-safe function
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
 
@@ -280,13 +271,11 @@ def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # 10.0s to
         time.sleep(remaining_wait)
 
 
-# =========================================================================
-# FIX APPLIED HERE: Re-factored to prevent deadlock/race condition
-# =========================================================================
 def start_buzzer_countdown():
     """
     Runs in a background thread. Manages the countdown, buzzer beeping, 
     and automatically launches main.py if the timer expires.
+    (Contains threading/deadlock fixes)
     """
     global LAST_CONNECTION_TIME
     global BUZZER_THREAD_STOP
@@ -297,11 +286,9 @@ def start_buzzer_countdown():
         should_auto_start = False
         time_remaining = AUTO_START_TIMEOUT 
         
-        # 1. Acquire lock only for checking and deciding the state.
+        # 1. Acquire lock only for checking the global state and making the decision.
         with PROCESS_LOCK:
             # Check state and update status variables
-            # is_main_controller_active acquires its own lock, but since 
-            # we already hold the lock, it will check the global state safely.
             is_active = is_main_controller_active() 
             if is_active:
                 if BUZZER_AVAILABLE:
@@ -330,8 +317,7 @@ def start_buzzer_countdown():
                 time.sleep(3.0) 
                 BUZZER.off() # Solid beep OFF
             
-            # The start_script call is thread-safe and manages its own lock, 
-            # so calling it here is safe and prevents the deadlock.
+            # The start_script call is thread-safe and manages its own lock.
             success, message = start_script('main') 
             
             if success:
@@ -345,12 +331,12 @@ def start_buzzer_countdown():
             # --- COUNTDOWN BEEPING ---
 
             if time_remaining <= 10:
-		# SUPER FAST BEEP
-		delay = 0.1
-		if BUZZER_AVAILABLE: BUZZER.on()
-		time.sleep(delay)
-		if BUZZER_AVAILABLE: BUZZER.off()
-		time.sleep(delay)
+                # SUPER FAST BEEP
+                delay = 0.1
+                if BUZZER_AVAILABLE: BUZZER.on()
+                time.sleep(delay)
+                if BUZZER_AVAILABLE: BUZZER.off()
+                time.sleep(delay)
 
             elif time_remaining <= 20:
                 # FAST BEEP
@@ -379,7 +365,6 @@ def start_buzzer_countdown():
         else:
             # --- CONNECTION STANDBY HEARTBEAT ---
             buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
-# =========================================================================
 
 
 @app.before_request
@@ -493,3 +478,4 @@ if __name__ == "__main__":
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=False)
+
