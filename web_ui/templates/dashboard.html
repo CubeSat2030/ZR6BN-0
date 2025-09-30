@@ -558,7 +558,7 @@ async function systemControl(action) {
         modal.innerHTML = `
             <div class="card p-6 w-11/12 max-w-sm">
                 <h3 class="text-xl font-bold text-red-500 mb-4">CONFIRM SYSTEM ACTION</h3>
-                <p class="text-gray-300 mb-6">Are you absolutely sure you want to <strong>${action.toUpperCase()}</strong> the Raspberry Pi? This will interrupt operations and disconnect the dashboard.</p>
+                <p class="text-gray-300 mb-6">Are you absolutely sure you want to <strong>${action.toUpperCase()}</strong> Kabot-1? This will interrupt operations and disconnect the dashboard.</p>
                 <div class="flex justify-end space-x-3">
                     <button id="cancel-btn" class="btn px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancel</button>
                     <button id="confirm-btn" class="btn px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded">
@@ -589,7 +589,7 @@ async function systemControl(action) {
         if (result.success) {
             showAlert(`${result.message}`, 'info');
             // Display success message prominently
-            document.body.innerHTML = `<div class="text-center mt-20 text-3xl font-bold text-red-500 p-8">${result.message}</div><div class="text-center text-gray-400">The connection will be lost. Please wait for the system to restart.</div>`;
+            document.body.innerHTML = `<div class="text-center mt-20 text-3xl font-bold text-red-500 p-8">${result.message}</div><div class="text-center text-gray-400">The connection will be lost. Please wait for Kabot-1 to restart.</div>`;
         } else {
             showAlert(`System control failed: ${result.message}`, 'error');
         }

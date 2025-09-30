@@ -306,18 +306,26 @@ def start_buzzer_countdown():
             
             time.sleep(5) 
             
-        elif time_remaining < AUTO_START_TIMEOUT - 5: 
+        elif time_remaining < AUTO_START_TIMEOUT - 1: 
             # --- COUNTDOWN BEEPING ---
-            
+
             if time_remaining <= 10:
+		# SUPER FAST BEEP
+		delay = 0.1
+		if BUZZER_AVAILABLE: BUZZER.on()
+		time.sleep(delay)
+		if BUZZER_AVAILABLE: BUZZER.off()
+		time.sleep(delay)
+
+            elif time_remaining <= 20:
                 # FAST BEEP
                 delay = 0.2
                 if BUZZER_AVAILABLE: BUZZER.on()
                 time.sleep(delay)
                 if BUZZER_AVAILABLE: BUZZER.off()
                 time.sleep(delay)
-                
-            elif time_remaining <= 30:
+
+            elif time_remaining <= 40:
                 # MEDIUM BEEP
                 delay = 0.5
                 if BUZZER_AVAILABLE: BUZZER.on()
@@ -327,13 +335,13 @@ def start_buzzer_countdown():
 
             else:
                 # SLOW BEEP
-                delay = 1.0 
+                delay = 1.0
                 if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(0.1) 
+                time.sleep(0.1)
                 if BUZZER_AVAILABLE: BUZZER.off()
                 time.sleep(delay - 0.1)
-            
-        else: 
+
+        else:
             # --- CONNECTION STANDBY HEARTBEAT ---
             buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
 
