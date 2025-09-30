@@ -4,6 +4,7 @@
 # FIX: Strict Single-Client WebUI Access Control enforced via IP address 
 #      and an inactivity timeout. Viewing for unauthorized clients is now blocked.
 # FIX: Added threading.Lock around access control variables.
+# UPDATE: api_trigger_beep endpoint is now disabled to remove the manual 3s beep.
 # =========================================================================
 
 import subprocess
@@ -499,17 +500,13 @@ def api_trigger_beep(duration):
     """
     Triggers the buzzer for a set duration. Returns 503 if the buzzer hardware
     is not initialized (BUZZER_AVAILABLE is False).
+    
+    NOTE: The manual beep is currently disabled by request (it returns success
+    without triggering the solid_beep function). The auto-start beep remains active.
     """
-    global BUZZER_AVAILABLE 
-    
-    if not BUZZER_AVAILABLE:
-        print(f"[BUZZER] Solid beep requested but unavailable. Returning error.")
-        return jsonify({"success": False, "message": "Buzzer hardware unavailable on the server."}), 503
-    
-    # Run beep in a separate thread so the Flask request can complete immediately
-    threading.Thread(target=solid_beep, args=(duration,)).start()
-    
-    return jsonify({"success": True, "message": f"Solid beep triggered for {duration} seconds."})
+    # Change applied: Disable the manual beep on this endpoint by returning success immediately.
+    print(f"[BUZZER] Manual beep request for {duration}s received but disabled.")
+    return jsonify({"success": True, "message": f"Manual beep feature is currently disabled."})
 
 @app.route("/chart/<path:filename>")
 def get_chart_display(filename):
@@ -573,8 +570,10 @@ if __name__ == "__main__":
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
         print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.")
-        print("Alarm: Solid beep for 3 seconds before auto-start AND on manual start.")
+        # NOTE: The manual beep on start click is now disabled.
+        print("Alarm: Solid beep for 3 seconds BEFORE AUTO-START ONLY.")
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=False)
+
