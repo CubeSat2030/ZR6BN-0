@@ -233,6 +233,49 @@ function showAlert(message, type = 'success') {
     }, 5000);
 }
 
+// =========================================================================
+// Buzzer Control Logic (Integrated from buzzer_control.js)
+// =========================================================================
+
+/**
+ * Triggers a beep on the Kabot server via the API.
+ * Handles HTTP 200 (success) and HTTP 503 (hardware failure).
+ * @param {number} duration - The length of the beep in seconds.
+ * @returns {Promise<boolean>} - True if the beep command was successfully accepted (HTTP 200), false otherwise.
+ */
+async function triggerBeep(duration) {
+    const url = `/api/beep/${duration}`;
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+
+        // CRITICAL CHECK: response.ok is true for status codes 200-299.
+        if (response.ok) {
+            showNotification(data.message, 'success');
+            return true;
+        } else {
+            // This block handles status codes like 503 (Buzzer unavailable)
+            console.error(`API Error (${response.status}):`, data.message);
+            // Display the server's error message as a dashboard notification
+            showAlert(`BEEP FAILED: ${data.message}`, 'error');
+            return false;
+        }
+    } catch (error) {
+        // This catch block handles network failures (server offline, CORS)
+        console.error('Network or processing error during beep:', error);
+        showAlert('Failed to connect to server for beep command. Check network.', 'error');
+        return false;
+    }
+}
+
+
 // --- Main Controller Control ---
 
 async function controlMainController(action) {
@@ -253,12 +296,20 @@ async function controlMainController(action) {
     // 1. If action is 'start', trigger the 3-second beep
     if (action === 'start') {
         showAlert('Flight Controller start requested. Triggering 3-second pre-launch beep...', 'info');
-        try {
-            // Call the new buzzer endpoint with 3.0 seconds
-            await fetch(`/api/beep/3.0`, { method: 'POST' }); 
-        } catch (error) {
-            // Log error but continue trying to start the script
-            console.warn("Buzzer beep failed, but proceeding with script start.", error);
+        
+        // --- NEW: Use triggerBeep and check the return value ---
+        const beepSuccess = await triggerBeep(3.0);
+        
+        // If beep failed (503 status returned), abort the launch process
+        if (!beepSuccess) {
+            finalMessage = "Pre-launch beep failed. Flight Controller start aborted.";
+            finalSuccess = false;
+            
+            // Restore buttons and refresh status, then exit
+            startBtn.innerHTML = originalStartText;
+            stopBtn.innerHTML = 'Stop Flight';
+            fetchStatus(); 
+            return; 
         }
     }
 
@@ -280,7 +331,8 @@ async function controlMainController(action) {
     } finally {
         if (finalSuccess) {
             showAlert(`${finalMessage}`, 'success');
-        } else {
+        } else if (action !== 'start' || finalMessage !== "Pre-launch beep failed. Flight Controller start aborted.") {
+            // Only show an error if it wasn't the beep failure (which already showed an error)
             showAlert(`${finalMessage}`, 'error');
         }
         
@@ -566,3 +618,4 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
