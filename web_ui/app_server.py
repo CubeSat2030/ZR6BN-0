@@ -3,6 +3,10 @@
 # =========================================================================
 # FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
 # dictionary to prevent Internal Server Errors (500) due to race conditions.
+# UPDATE 1: Increased PLOTTER_TIMEOUT to 300s to prevent timeout exceptions 
+#           during long-running chart generation.
+# UPDATE 2: Implemented fluid, frequency-based buzzer countdown logic 
+#           for a smoother audio warning.
 # =========================================================================
 
 import subprocess
@@ -40,6 +44,7 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Global State and Timer Configuration ---
 AUTO_START_TIMEOUT = 60 # Seconds
+PLOTTER_TIMEOUT = 300   # Seconds (5 minutes) - Increased for long-running chart generation
 LAST_CONNECTION_TIME = time.time()
 BUZZER_THREAD_STOP = threading.Event()
 
@@ -212,7 +217,7 @@ def run_plotter(name):
             capture_output=True,
             text=True,
             check=False,
-            timeout=300, # Gives each plotter scripts a timeout of 5 minutes each to prevent any deadlocks. 
+            timeout=PLOTTER_TIMEOUT, # Use the new, increased timeout (300s)
             cwd=str(BASE_DIR) 
         )
         
@@ -223,7 +228,7 @@ def run_plotter(name):
             return False, f"Plotting failed: {error_msg}"
 
     except subprocess.TimeoutExpired:
-        return False, f"Plotter {name} timed out after 45 seconds."
+        return False, f"Plotter {name} timed out after {PLOTTER_TIMEOUT} seconds." # Updated message
     except Exception as e:
         return False, f"Failed to run plotter {name}: {str(e)}"
 
@@ -275,6 +280,13 @@ def start_buzzer_countdown():
     """
     global LAST_CONNECTION_TIME
     global BUZZER_THREAD_STOP
+
+    # --- Fluid Beeping Constants and State ---
+    COUNTDOWN_START = 30.0 # Time remaining (s) when fluid beeping starts
+    MAX_FREQ = 8.0         # Max beeps/second (at 0s remaining)
+    MIN_FREQ = 0.5         # Min beeps/second (at COUNTDOWN_START)
+    CYCLE_TIME = 0.05      # Fixed thread loop cycle time (20 Hz update)
+    current_time_in_cycle = 0.0 # Tracks time within the current beep/pause cycle
     
     while not BUZZER_THREAD_STOP.is_set():
         
@@ -282,6 +294,8 @@ def start_buzzer_countdown():
             if BUZZER_AVAILABLE:
                 BUZZER.off()
             time.sleep(5)
+            # Reset fluid state when main is active or stopped
+            current_time_in_cycle = 0.0 
             continue
             
         time_elapsed = time.time() - LAST_CONNECTION_TIME
@@ -304,55 +318,46 @@ def start_buzzer_countdown():
             else:
                 print(f"[AUTO-START FAILURE] {message}")
             
+            current_time_in_cycle = 0.0 # Reset fluid state
             time.sleep(5) 
             
-        elif time_remaining < AUTO_START_TIMEOUT - 5: 
-            # --- COUNTDOWN BEEPING ---
+        elif time_remaining <= COUNTDOWN_START: 
+            # --- FLUID COUNTDOWN BEEPING (Replaces old stepped logic) ---
             
-            if time_remaining <= 5:
-                # SUPER SUPER FAST BEEP
-                delay = 0.0625
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-     
+            # 1. Calculate the normalized time (0.0 at 30s, 1.0 at 0s)
+            normalized_time = 1.0 - (time_remaining / COUNTDOWN_START)
             
-            if time_remaining <= 10:
-                # SUPER FAST BEEP
-                delay = 0.125
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-     
+            # 2. Map normalized time to a smoothly increasing frequency
+            freq_range = MAX_FREQ - MIN_FREQ
+            # Add a small floor to frequency to prevent division by zero near t=0
+            beep_frequency = max(MIN_FREQ + (normalized_time * freq_range), 0.1) 
             
-            if time_remaining <= 20:
-                # FAST BEEP
-                delay = 0.25
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-                
-            elif time_remaining <= 30:
-                # MEDIUM BEEP
-                delay = 0.5
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
+            # 3. Calculate the full period (time for one beep ON + one beep OFF)
+            period = 1.0 / beep_frequency
+            half_period = period / 2.0
+            
+            # 4. Update the time within the current beep/pause cycle
+            current_time_in_cycle += CYCLE_TIME
+            
+            # 5. Determine the Buzzer State
+            if BUZZER_AVAILABLE:
+                if current_time_in_cycle < half_period:
+                    # Buzzer is ON for the first half of the period
+                    BUZZER.on() 
+                else:
+                    # Buzzer is OFF for the second half of the period
+                    BUZZER.off()
 
-            else:
-                # SLOW BEEP
-                delay = 1.0 
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(0.1) 
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay - 0.1)
+                # 6. Cycle Wrap-around Check
+                if current_time_in_cycle >= period:
+                    current_time_in_cycle = 0.0
             
+            # Wait for the fixed cycle time before repeating
+            time.sleep(CYCLE_TIME)
+
         else: 
-            # --- CONNECTION STANDBY HEARTBEAT ---
+            # --- CONNECTION STANDBY HEARTBEAT (Before countdown starts) ---
+            current_time_in_cycle = 0.0 # Reset fluid state
             buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
 
 
@@ -467,3 +472,4 @@ if __name__ == "__main__":
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=False)
+
