@@ -4,7 +4,8 @@
 # FIX: Strict Single-Client WebUI Access Control enforced via IP address 
 #      and an inactivity timeout. Viewing for unauthorized clients is now blocked.
 # FIX: Added threading.Lock around access control variables.
-# FIX: api_trigger_beep endpoint is now disabled to remove the manual 3s beep.
+# FIX: Removed the 3-second solid beep that occurred before auto-start (as requested).
+# FIX: api_trigger_beep endpoint is now disabled.
 # =========================================================================
 
 import subprocess
@@ -315,10 +316,10 @@ def start_buzzer_countdown():
         time_remaining = AUTO_START_TIMEOUT - time_elapsed
         
         if time_remaining <= 0:
-            # --- AUTO-START TRIGGERED: SOLID BEEP FOR 3 SECONDS ---
+            # --- AUTO-START TRIGGERED: SOLID BEEP REMOVED AS REQUESTED ---
             print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
             
-            solid_beep(3.0) # Solid beep for 3 seconds
+            # solid_beep(3.0) # <--- REMOVED THIS LINE AS REQUESTED
             
             # The start_script call is now thread-safe
             success, message = start_script('main') 
@@ -500,10 +501,9 @@ def api_trigger_beep(duration):
     """
     Triggers the buzzer for a set duration. Returns 503 if the buzzer hardware
     is not initialized (BUZZER_AVAILABLE is False).
-    
-    NOTE: The manual beep is currently disabled by request.
     """
-    # Change applied: Disable the manual beep on this endpoint by returning success immediately.
+    # NOTE: Manual beep remains disabled as per prior request, which aligns with 
+    # not wanting the solid beep before auto-start.
     print(f"[BUZZER] Manual beep request for {duration}s received but disabled.")
     return jsonify({"success": True, "message": f"Manual beep feature is currently disabled."})
 
@@ -569,7 +569,7 @@ if __name__ == "__main__":
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
         print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.")
-        print("Alarm: Solid beep for 3 seconds BEFORE AUTO-START ONLY.")
+        print("Alarm: NO SOLID BEEP before auto-start. Only countdown beeps.")
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
