@@ -247,21 +247,43 @@ async function controlMainController(action) {
     const targetBtn = (action === 'start') ? startBtn : stopBtn;
     targetBtn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
 
+    let finalMessage = "";
+    let finalSuccess = false;
+    
+    // 1. If action is 'start', trigger the 3-second beep
+    if (action === 'start') {
+        showAlert('Flight Controller start requested. Triggering 3-second pre-launch beep...', 'info');
+        try {
+            // Call the new buzzer endpoint with 3.0 seconds
+            await fetch(`/api/beep/3.0`, { method: 'POST' }); 
+        } catch (error) {
+            // Log error but continue trying to start the script
+            console.warn("Buzzer beep failed, but proceeding with script start.", error);
+        }
+    }
+
+    // 2. Start/Stop the actual script
     try {
-        // *** PATCH APPLIED HERE: Reverting to generic script control route for main.py ***
         // Backend's api_script_control function now handles 'main_controller'
         const response = await fetch(`/api/script/main_controller/${action}`, { method: 'POST' });
         const result = await response.json();
         
-        // Success check includes the possibility of status code 403 (Forbidden) if main.py is active
-        if (result.success) {
-            showAlert(`${result.message}`, 'success');
+        finalSuccess = result.success;
+        if (finalSuccess) {
+            finalMessage = result.message;
         } else {
-            showAlert(`Error: ${result.message}`, 'error');
+            finalMessage = `Error: ${result.message}`;
         }
     } catch (error) {
-        showAlert(`Network error: Could not contact server for ${action}.`, 'error');
+        finalMessage = `Network error: Could not contact server for ${action}.`;
+        finalSuccess = false;
     } finally {
+        if (finalSuccess) {
+            showAlert(`${finalMessage}`, 'success');
+        } else {
+            showAlert(`${finalMessage}`, 'error');
+        }
+        
         startBtn.innerHTML = originalStartText;
         stopBtn.innerHTML = 'Stop Flight';
         fetchStatus(); // Refresh status to update button states
