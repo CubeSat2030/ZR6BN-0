@@ -7,6 +7,8 @@
 # FIX 5: Reworked the countdown to use the fluid, accelerating frequency 
 #        starting from the full 60-second AUTO_START_TIMEOUT down to 0s. 
 #        (Minimum frequency is 0.2Hz (1 beep/5s) at 60s.)
+# FIX 6: Removed "Haywire" feature. Timer reset now results in an immediate,
+#        clean reset of the buzzer (BUZZER.off()) and the timer.
 # =========================================================================
 
 import subprocess
@@ -47,6 +49,7 @@ AUTO_START_TIMEOUT = 60 # Seconds
 PLOTTER_TIMEOUT = 300   # Seconds (5 minutes)
 LAST_CONNECTION_TIME = time.time()
 BUZZER_THREAD_STOP = threading.Event()
+# BUZZER_HAYWIRE_EVENT is removed for clean operation.
 
 # --- Flask App Initialization ---
 app = Flask(__name__, template_folder=str(TEMPLATES_DIR))
@@ -236,15 +239,6 @@ def run_plotter(name):
 # BUZZER COUNTDOWN AND AUTO-START LOGIC
 # =========================================================================
 
-def reset_auto_start_timer():
-    """Stops the buzzer and resets the auto-start timer."""
-    global LAST_CONNECTION_TIME
-    if BUZZER_AVAILABLE:
-        BUZZER.off() 
-    
-    if not is_main_controller_active():
-        LAST_CONNECTION_TIME = time.time() 
-
 def start_buzzer_countdown():
     """
     Runs in a background thread. Manages the countdown, buzzer beeping, 
@@ -254,7 +248,6 @@ def start_buzzer_countdown():
     global BUZZER_THREAD_STOP
 
     # --- Fluid Beeping Constants and State ---
-    # Countdown now runs from 60s down to 0s
     COUNTDOWN_START = AUTO_START_TIMEOUT # 60.0 seconds
     MAX_FREQ = 8.0         # Max beeps/second (at 0s remaining)
     MIN_FREQ = 0.20        # Min beeps/second (at 60s remaining) -> 1 beep every 5 seconds
@@ -271,6 +264,9 @@ def start_buzzer_countdown():
             current_time_in_cycle = 0.0 
             continue
             
+        # The haywire logic has been removed. The timer reset is now handled 
+        # instantly by the @app.before_request hook.
+        
         time_elapsed = time.time() - LAST_CONNECTION_TIME
         time_remaining = AUTO_START_TIMEOUT - time_elapsed
         
@@ -280,7 +276,6 @@ def start_buzzer_countdown():
             
             if BUZZER_AVAILABLE:
                # BUZZER.on() # Solid beep ON - Uncomment if you want a solid beep
-               # time.sleep(3.0) 
                 BUZZER.off() 
             
             success, message = start_script('main') 
@@ -297,7 +292,6 @@ def start_buzzer_countdown():
             # --- FLUID COUNTDOWN BEEPING (60s to 0s) ---
             
             # 1. Calculate the normalized time (0.0 at 60s, 1.0 at 0s)
-            # normalized_time ranges from 0.0 (at t=60s) to 1.0 (at t=0s)
             normalized_time = 1.0 - (time_remaining / COUNTDOWN_START)
             
             # 2. Map normalized time to a smoothly increasing frequency
@@ -330,8 +324,16 @@ def start_buzzer_countdown():
 
 @app.before_request
 def update_last_connection_time():
-    """Hook runs before every request to reset the auto-start timer."""
-    reset_auto_start_timer()
+    """Hook runs before every request to reset the auto-start timer and ensure a clean state."""
+    global LAST_CONNECTION_TIME
+    
+    if not is_main_controller_active():
+        # Reset the timer
+        LAST_CONNECTION_TIME = time.time()
+        
+    # Ensure the buzzer is off immediately regardless of timer state, suppressing any unintended sound.
+    if BUZZER_AVAILABLE:
+        BUZZER.off() 
 
 
 # =========================================================================
@@ -434,7 +436,7 @@ if __name__ == "__main__":
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
         print("Status: Fluid, accelerating countdown from 60 seconds.")
-        print("Alarm: Solid beep for 3 seconds before auto-start.") 
+        print("Reset Behavior: Immediate, clean BUZZER.off() on client request.")
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
