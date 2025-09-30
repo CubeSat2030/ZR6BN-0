@@ -241,7 +241,7 @@ def reset_auto_start_timer():
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
 
-def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # 10.0s total pulse time
+def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # MODIFIED: 10.0s total pulse time
     """Executes the two rapid beeps and waits for the remaining duration."""
     if not BUZZER_AVAILABLE:
         time.sleep(total_duration)
@@ -267,6 +267,21 @@ def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # 10.0s to
     if remaining_wait > 0:
         time.sleep(remaining_wait)
 
+def solid_beep(duration=3.0): # NEW FUNCTION for solid beep
+    """Executes a single, solid beep for the specified duration."""
+    if not BUZZER_AVAILABLE:
+        print(f"[BUZZER] Solid beep of {duration}s requested but unavailable.")
+        return True
+        
+    try:
+        BUZZER.on()
+        time.sleep(duration)
+        BUZZER.off()
+        return True
+    except Exception as e:
+        print(f"[BUZZER ERROR] Failed to perform solid beep: {e}")
+        return False
+
 
 def start_buzzer_countdown():
     """
@@ -291,10 +306,7 @@ def start_buzzer_countdown():
             # --- AUTO-START TRIGGERED: SOLID BEEP FOR 3 SECONDS ---
             print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
             
-            if BUZZER_AVAILABLE:
-                BUZZER.on() # Solid beep ON
-                time.sleep(3.0) # Wait for 3 seconds
-                BUZZER.off() # Solid beep OFF
+            solid_beep(3.0) # Solid beep for 3 seconds
             
             # The start_script call is now thread-safe
             success, message = start_script('main') 
@@ -335,7 +347,7 @@ def start_buzzer_countdown():
             
         else: 
             # --- CONNECTION STANDBY HEARTBEAT ---
-            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
+            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0) # MODIFIED: 10.0s pulse
 
 
 @app.before_request
@@ -345,7 +357,7 @@ def update_last_connection_time():
 
 
 # =========================================================================
-# FLASK API ROUTES (UNCHANGED)
+# FLASK API ROUTES
 # =========================================================================
 
 @app.route("/")
@@ -387,6 +399,16 @@ def api_chart_generate(name):
         
     success, message = run_plotter(name)
     return jsonify({"success": success, "message": message})
+
+@app.route('/api/beep/<float:duration>', methods=['POST']) # NEW ROUTE for immediate beep
+def api_trigger_beep(duration):
+    if not BUZZER_AVAILABLE:
+        return jsonify({"success": False, "message": "Buzzer hardware is not available."}), 503
+    
+    # Run beep in a separate thread so the Flask request can complete immediately
+    threading.Thread(target=solid_beep, args=(duration,)).start()
+    
+    return jsonify({"success": True, "message": f"Solid beep triggered for {duration} seconds."})
 
 @app.route("/chart/<path:filename>")
 def get_chart_display(filename):
@@ -444,7 +466,7 @@ if __name__ == "__main__":
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
         print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.")
-        print("Alarm: Solid beep for 3 seconds before auto-start.") 
+        print("Alarm: Solid beep for 3 seconds before auto-start AND on manual start.")
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
