@@ -1,5 +1,5 @@
 # =========================================================================
-# Kabot I Mission Master Launcher (main.py) - PATCHED
+# Kabot I Mission Master Launcher (main.py) - UPDATED
 # =========================================================================
 # This script launches all logger processes (monitored) and the Flask 
 # web server (detached) concurrently and silently in the background.
@@ -7,44 +7,22 @@
 # CRITICAL: The Web Server is explicitly detached and WILL NOT be terminated
 # when this script receives a KeyboardInterrupt (Ctrl+C).
 #
-# STATUS: 3-second solid beep is correctly placed here at the start of the 
-# mission launch.
+# UPDATES:
+# 1. Added explicit file existence check before launch.
+# 2. Implemented graceful SIGINT/wait/SIGKILL shutdown sequence.
+# 3. Implemented 'fail-fast' if any critical logger fails to launch.
 # =========================================================================
 
 import subprocess
 import time
 import os
 import os.path
-import signal 
-
-# --- Buzzer Setup ---
-try:
-    from gpiozero import Buzzer
-    BUZZER = Buzzer(21) 
-    BUZZER_AVAILABLE = True
-except ImportError:
-    print("[WARNING] gpiozero or RPi.GPIO not available. Buzzer feature disabled.")
-    BUZZER_AVAILABLE = False
-except Exception as e:
-    print(f"[WARNING] Could not initialize Buzzer on GPIO 21: {e}. Buzzer feature disabled.")
-    BUZZER_AVAILABLE = False
-
-def solid_beep(duration=3.0):
-    """Executes a single, solid beep for the specified duration."""
-    if not BUZZER_AVAILABLE:
-        print(f"[BUZZER] Solid beep of {duration}s requested but unavailable.")
-        return
-        
-    try:
-        BUZZER.on()
-        time.sleep(duration)
-        BUZZER.off()
-    except Exception as e:
-        print(f"[BUZZER ERROR] Failed to perform solid beep: {e}")
+import signal # <-- ADDED for graceful shutdown
 
 # --- Configuration ---
 
 # 1. PROCESSES TO MONITOR AND TERMINATE (Loggers)
+# These processes must stop when the main launcher stops.
 LOGGING_PROCESSES = [
     ("DHT Logger", "src/logger/dht_logger.py"),
     ("MPU Logger", "src/logger/mpu6050_logger.py"),
@@ -52,6 +30,7 @@ LOGGING_PROCESSES = [
 ]
 
 # 2. PROCESSES TO DETACH (Web UI)
+# This process must remain running if the main launcher stops or the terminal is closed.
 DETACHED_PROCESSES = [
     ("Web Server", "web_ui/app_server.py"), 
 ]
@@ -60,18 +39,10 @@ def launch_processes():
     """Launches all configured processes concurrently."""
     
     running_loggers = []
-    launch_failed = False
+    launch_failed = False # <-- ADDED FLAG
     
     print("--- Kabot I Mission Control Startup ---")
     
-    # ---------------------------------------------------------------
-    # CORRECT: Execute the 3-second solid beep here at initialization.
-    # ---------------------------------------------------------------
-    if BUZZER_AVAILABLE:
-        print("[BUZZER] Starting 3-second initialization beep...")
-        solid_beep(3.0)
-    # ---------------------------------------------------------------
-
     # Redirect all stdout/stderr output from subprocesses to null
     try:
         DEVNULL = open(os.devnull, 'w')
@@ -85,6 +56,7 @@ def launch_processes():
     print(f"Launching {len(LOGGING_PROCESSES)} critical logger processes...")
     for name, script_path in LOGGING_PROCESSES:
         
+        # Check 1: Script file must exist
         full_script_path = os.path.join(project_root, script_path)
         if not os.path.exists(full_script_path):
             print(f"[CRITICAL FAILURE] Script not found: {script_path}. Check file path.")
@@ -104,12 +76,13 @@ def launch_processes():
             time.sleep(0.5) 
         except Exception as e:
             print(f"[CRITICAL FAILURE] Failed to launch {name} ({script_path}): {e}")
-            launch_failed = True
+            launch_failed = True # <-- SET FLAG
 
     # --- Launch Detached Processes (Web UI) ---
     print(f"\nLaunching {len(DETACHED_PROCESSES)} detached processes...")
     for name, script_path in DETACHED_PROCESSES:
         
+        # Check 2: Script file must exist
         full_script_path = os.path.join(project_root, script_path)
         if not os.path.exists(full_script_path):
             print(f"[CRITICAL FAILURE] Script not found: {script_path}. Check file path.")
@@ -117,6 +90,7 @@ def launch_processes():
             
         try:
             command = ["python3", script_path]
+            # Launch the Web Server but DO NOT track it for termination.
             subprocess.Popen(
                 command, 
                 stdout=DEVNULL, 
@@ -133,6 +107,7 @@ def launch_processes():
     # --- FAIL-FAST CHECK ---
     if launch_failed or not running_loggers:
         print("CRITICAL FAILURE: One or more loggers failed to launch. Mission aborted.")
+        # If any loggers *did* start, attempt to terminate them now
         for name, proc in running_loggers:
             if proc.poll() is None:
                 try:
@@ -148,9 +123,12 @@ def monitor_processes(processes_to_monitor, DEVNULL):
     """Monitors ONLY the logger processes and cleans them up on keyboard interrupt."""
     try:
         while True:
+            # Check for unexpected logger termination
             for name, proc in processes_to_monitor:
                 if proc.poll() is not None: 
                     print(f"\n[ALERT] Logger '{name}' (PID: {proc.pid}) has terminated unexpectedly!")
+                    # NOTE: A more advanced version might try to restart the logger here.
+                    
             time.sleep(5)
             
     except KeyboardInterrupt:
@@ -158,15 +136,18 @@ def monitor_processes(processes_to_monitor, DEVNULL):
         print("Stopping monitored logger processes...")
         
         for name, proc in processes_to_monitor:
-            if proc.poll() is None: 
+            if proc.poll() is None: # Only try to terminate if still running
                 try:
+                    # 1. Send SIGINT (Ctrl+C) for graceful shutdown
                     proc.send_signal(signal.SIGINT)
                     print(f"[REQUESTED SHUTDOWN] {name} (PID: {proc.pid}). Waiting 2s...")
                     
+                    # 2. Wait for a short time for graceful exit
                     try:
                         proc.wait(timeout=2)
                         print(f"[STOPPED] {name} (PID: {proc.pid}) shut down gracefully.")
                     except subprocess.TimeoutExpired:
+                        # 3. If timeout, force kill
                         proc.kill()
                         print(f"[FORCE KILLED] {name} (PID: {proc.pid}) after timeout.")
                         
