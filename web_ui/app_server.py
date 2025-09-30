@@ -2,9 +2,8 @@
 # Kabot-1 Mission Control Dashboard Server - THREAD-SAFE VERSION
 # =========================================================================
 # FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
-# dictionary to prevent Internal Server Errors (500) due to race conditions.
-#
-# NEW FEATURE: Single-Client WebUI Access Control
+# NEW FEATURE: Single-Client WebUI Access Control enforced via IP address.
+# NEW FIX: api_trigger_beep now correctly reports failure if BUZZER_AVAILABLE is False.
 # =========================================================================
 
 import subprocess
@@ -34,7 +33,7 @@ MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 
 SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger"
-PLOT_DIR = PLOT_DIR / "plotter"
+PLOT_DIR = SRC_DIR / "plotter"
 CHARTS_DIR = PLOT_DIR / "charts"
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
@@ -360,7 +359,6 @@ def start_buzzer_countdown():
 @app.before_request
 def update_last_connection_time():
     """Hook runs before every request to reset the auto-start timer."""
-    # We only reset the timer if the request is from the currently authorized client
     global AUTHORIZED_CLIENT_IP
     if AUTHORIZED_CLIENT_IP == request.remote_addr:
         reset_auto_start_timer()
@@ -404,10 +402,8 @@ def before_request_access_check():
             return redirect(url_for('lockout'))
 
     # 2. Block all API/resource access if the current IP is not the authorized one
-    # Note: Requests for charts or API status will fail here if unauthorized
     if AUTHORIZED_CLIENT_IP is not None and current_ip != AUTHORIZED_CLIENT_IP:
         # Allow unauthorized users to see charts and API status ONLY if Flight Controller is running.
-        # This keeps the telemetry visible to observers.
         if is_main_controller_active():
             print(f"[ACCESS CONTROL] Unauthorized client {current_ip} permitted viewing (Flight Active).")
             return None 
@@ -456,8 +452,7 @@ def api_status():
 
 @app.route('/api/script/<name>/<action>', methods=['POST'])
 def api_script_control(name, action):
-    # This check is technically redundant due to before_request_access_check,
-    # but kept as a redundant safety measure for control actions.
+    # Enforced by before_request_access_check, but kept as safety
     if AUTHORIZED_CLIENT_IP != request.remote_addr:
         return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
         
@@ -478,7 +473,7 @@ def api_script_control(name, action):
 
 @app.route('/api/chart/<name>', methods=['POST'])
 def api_chart_generate(name):
-    # This check is technically redundant due to before_request_access_check
+    # Enforced by before_request_access_check, but kept as safety
     if AUTHORIZED_CLIENT_IP != request.remote_addr:
         return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
 
@@ -488,14 +483,19 @@ def api_chart_generate(name):
     success, message = run_plotter(name)
     return jsonify({"success": success, "message": message})
 
+
 @app.route('/api/beep/<float:duration>', methods=['POST'])
 def api_trigger_beep(duration):
-    # This check is technically redundant due to before_request_access_check
-    if AUTHORIZED_CLIENT_IP != request.remote_addr:
-        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
-
+    """
+    Triggers the buzzer for a set duration. Returns 503 if the buzzer hardware
+    is not initialized (BUZZER_AVAILABLE is False).
+    """
+    global BUZZER_AVAILABLE 
+    
+    # --- YOUR FIX IMPLEMENTED HERE ---
     if not BUZZER_AVAILABLE:
-        return jsonify({"success": False, "message": "Buzzer hardware is not available."}), 503
+        print(f"[BUZZER] Solid beep requested but unavailable. Returning error.")
+        return jsonify({"success": False, "message": "Buzzer hardware unavailable on the server."}), 503
     
     # Run beep in a separate thread so the Flask request can complete immediately
     threading.Thread(target=solid_beep, args=(duration,)).start()
@@ -516,7 +516,7 @@ def download_chart(filename):
     
 @app.route('/api/control/<action>', methods=['POST'])
 def api_system_control(action):
-    # This check is technically redundant due to before_request_access_check
+    # Enforced by before_request_access_check, but kept as safety
     if AUTHORIZED_CLIENT_IP != request.remote_addr:
         return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
         
@@ -567,3 +567,4 @@ if __name__ == "__main__":
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=False)
+
