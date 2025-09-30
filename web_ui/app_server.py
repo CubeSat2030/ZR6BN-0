@@ -3,13 +3,10 @@
 # =========================================================================
 # FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
 # dictionary to prevent Internal Server Errors (500) due to race conditions.
-# UPDATE 1: Increased PLOTTER_TIMEOUT to 300s to prevent timeout exceptions 
-#           during long-running chart generation.
-# UPDATE 2: Implemented fluid, frequency-based buzzer countdown logic 
-#           for a smoother audio warning.
-# UPDATE 3: Removed blocking sleep in the standby phase by replacing 
-#           buzzer_double_beep with non-blocking, fixed-cycle timing 
-#           for accurate countdown duration.
+# UPDATE 1: Increased PLOTTER_TIMEOUT to 300s.
+# FIX 5: Reworked the countdown to use the fluid, accelerating frequency 
+#        starting from the full 60-second AUTO_START_TIMEOUT down to 0s. 
+#        (Minimum frequency is 0.2Hz (1 beep/5s) at 60s.)
 # =========================================================================
 
 import subprocess
@@ -47,7 +44,7 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Global State and Timer Configuration ---
 AUTO_START_TIMEOUT = 60 # Seconds
-PLOTTER_TIMEOUT = 300   # Seconds (5 minutes) - Increased for long-running chart generation
+PLOTTER_TIMEOUT = 300   # Seconds (5 minutes)
 LAST_CONNECTION_TIME = time.time()
 BUZZER_THREAD_STOP = threading.Event()
 
@@ -209,7 +206,6 @@ def run_plotter(name):
     if name not in SCRIPTS_CONFIG or 'plot_script' not in SCRIPTS_CONFIG[name]:
         return False, "Unknown or non-plotter script name."
     
-    # ... (Plotter logic remains unchanged as it doesn't touch RUNNING_PROCESSES)
     config = SCRIPTS_CONFIG[name]
     script_path = str(config['plot_script']) 
     chart_file = config['chart_file']
@@ -220,7 +216,7 @@ def run_plotter(name):
             capture_output=True,
             text=True,
             check=False,
-            timeout=PLOTTER_TIMEOUT, # Use the new, increased timeout (300s)
+            timeout=PLOTTER_TIMEOUT, 
             cwd=str(BASE_DIR) 
         )
         
@@ -231,7 +227,7 @@ def run_plotter(name):
             return False, f"Plotting failed: {error_msg}"
 
     except subprocess.TimeoutExpired:
-        return False, f"Plotter {name} timed out after {PLOTTER_TIMEOUT} seconds." # Updated message
+        return False, f"Plotter {name} timed out after {PLOTTER_TIMEOUT} seconds." 
     except Exception as e:
         return False, f"Failed to run plotter {name}: {str(e)}"
 
@@ -249,8 +245,6 @@ def reset_auto_start_timer():
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
 
-# Removed the blocking function buzzer_double_beep
-
 def start_buzzer_countdown():
     """
     Runs in a background thread. Manages the countdown, buzzer beeping, 
@@ -260,10 +254,10 @@ def start_buzzer_countdown():
     global BUZZER_THREAD_STOP
 
     # --- Fluid Beeping Constants and State ---
-    COUNTDOWN_START = 30.0 # Time remaining (s) when fluid beeping starts
+    # Countdown now runs from 60s down to 0s
+    COUNTDOWN_START = AUTO_START_TIMEOUT # 60.0 seconds
     MAX_FREQ = 8.0         # Max beeps/second (at 0s remaining)
-    MIN_FREQ = 0.5         # Min beeps/second (at COUNTDOWN_START)
-    STANDBY_FREQ = 0.1     # 0.1 Hz = one beep every 10 seconds (for 60s to 30s)
+    MIN_FREQ = 0.20        # Min beeps/second (at 60s remaining) -> 1 beep every 5 seconds
     CYCLE_TIME = 0.05      # Fixed thread loop cycle time (20 Hz update)
     current_time_in_cycle = 0.0 # Tracks time within the current beep/pause cycle
     
@@ -300,15 +294,16 @@ def start_buzzer_countdown():
             time.sleep(5) 
             
         elif time_remaining <= COUNTDOWN_START: 
-            # --- FLUID COUNTDOWN BEEPING (30s to 0s) ---
+            # --- FLUID COUNTDOWN BEEPING (60s to 0s) ---
             
-            # 1. Calculate the normalized time (0.0 at 30s, 1.0 at 0s)
+            # 1. Calculate the normalized time (0.0 at 60s, 1.0 at 0s)
+            # normalized_time ranges from 0.0 (at t=60s) to 1.0 (at t=0s)
             normalized_time = 1.0 - (time_remaining / COUNTDOWN_START)
             
             # 2. Map normalized time to a smoothly increasing frequency
             freq_range = MAX_FREQ - MIN_FREQ
-            # Add a small floor to frequency to prevent division by zero near t=0
-            beep_frequency = max(MIN_FREQ + (normalized_time * freq_range), 0.1) 
+            # Calculated frequency accelerates from 0.2Hz to 8.0Hz
+            beep_frequency = max(MIN_FREQ + (normalized_time * freq_range), 0.05) # Ensure a small floor
             
             # 3. Calculate the full period (time for one beep ON + one beep OFF)
             period = 1.0 / beep_frequency
@@ -319,11 +314,10 @@ def start_buzzer_countdown():
             
             # 5. Determine the Buzzer State
             if BUZZER_AVAILABLE:
+                # The pulse duration (ON time) is set to half the period for a 50% duty cycle
                 if current_time_in_cycle < half_period:
-                    # Buzzer is ON for the first half of the period
                     BUZZER.on() 
                 else:
-                    # Buzzer is OFF for the second half of the period
                     BUZZER.off()
 
                 # 6. Cycle Wrap-around Check
@@ -331,29 +325,6 @@ def start_buzzer_countdown():
                     current_time_in_cycle = 0.0
             
             # Wait for the fixed cycle time before repeating
-            time.sleep(CYCLE_TIME)
-
-        else: 
-            # --- CONNECTION STANDBY HEARTBEAT (60s to 30s) ---
-            # Non-blocking, fixed 10s cycle (5s ON, 5s OFF)
-            
-            beep_frequency = STANDBY_FREQ
-            period = 1.0 / beep_frequency 
-            half_period = period / 2.0   
-            
-            current_time_in_cycle += CYCLE_TIME
-            
-            if BUZZER_AVAILABLE:
-                if current_time_in_cycle < half_period:
-                    # Buzzer is ON for the first half of the period
-                    BUZZER.on() 
-                else:
-                    # Buzzer is OFF for the second half of the period
-                    BUZZER.off()
-
-                if current_time_in_cycle >= period:
-                    current_time_in_cycle = 0.0
-            
             time.sleep(CYCLE_TIME)
 
 
@@ -462,7 +433,7 @@ if __name__ == "__main__":
     print(f"Auto-Start Timeout: {AUTO_START_TIMEOUT} seconds.")
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
-        print("Status: Standby Heartbeat (1 beep/10s) while connected.")
+        print("Status: Fluid, accelerating countdown from 60 seconds.")
         print("Alarm: Solid beep for 3 seconds before auto-start.") 
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
