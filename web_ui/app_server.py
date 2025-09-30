@@ -7,6 +7,9 @@
 #           during long-running chart generation.
 # UPDATE 2: Implemented fluid, frequency-based buzzer countdown logic 
 #           for a smoother audio warning.
+# UPDATE 3: Removed blocking sleep in the standby phase by replacing 
+#           buzzer_double_beep with non-blocking, fixed-cycle timing 
+#           for accurate countdown duration.
 # =========================================================================
 
 import subprocess
@@ -246,32 +249,7 @@ def reset_auto_start_timer():
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
 
-def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # 10.0s total pulse  pause interval
-    """Executes the two rapid beeps and waits for the remaining duration."""
-    if not BUZZER_AVAILABLE:
-        time.sleep(total_duration)
-        return
-        
-    start_wait = time.time()
-    
-    # Beep 1
-    BUZZER.on()
-    time.sleep(delay_between_beeps)
-    BUZZER.off()
-    
-    # Short pause
-    time.sleep(delay_between_beeps)
-    
-    # Beep 2
-    BUZZER.on()
-    time.sleep(delay_between_beeps)
-    BUZZER.off()
-    
-    # Wait for the remaining time
-    remaining_wait = total_duration - (time.time() - start_wait)
-    if remaining_wait > 0:
-        time.sleep(remaining_wait)
-
+# Removed the blocking function buzzer_double_beep
 
 def start_buzzer_countdown():
     """
@@ -285,6 +263,7 @@ def start_buzzer_countdown():
     COUNTDOWN_START = 30.0 # Time remaining (s) when fluid beeping starts
     MAX_FREQ = 8.0         # Max beeps/second (at 0s remaining)
     MIN_FREQ = 0.5         # Min beeps/second (at COUNTDOWN_START)
+    STANDBY_FREQ = 0.1     # 0.1 Hz = one beep every 10 seconds (for 60s to 30s)
     CYCLE_TIME = 0.05      # Fixed thread loop cycle time (20 Hz update)
     current_time_in_cycle = 0.0 # Tracks time within the current beep/pause cycle
     
@@ -306,11 +285,10 @@ def start_buzzer_countdown():
             print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
             
             if BUZZER_AVAILABLE:
-               # BUZZER.on() # Solid beep ON
-               # time.sleep(3.0) # Wait for 3 seconds
-                BUZZER.off() # Solid beep OFF
+               # BUZZER.on() # Solid beep ON - Uncomment if you want a solid beep
+               # time.sleep(3.0) 
+                BUZZER.off() 
             
-            # The start_script call is now thread-safe
             success, message = start_script('main') 
             
             if success:
@@ -322,7 +300,7 @@ def start_buzzer_countdown():
             time.sleep(5) 
             
         elif time_remaining <= COUNTDOWN_START: 
-            # --- FLUID COUNTDOWN BEEPING (Replaces old stepped logic) ---
+            # --- FLUID COUNTDOWN BEEPING (30s to 0s) ---
             
             # 1. Calculate the normalized time (0.0 at 30s, 1.0 at 0s)
             normalized_time = 1.0 - (time_remaining / COUNTDOWN_START)
@@ -356,9 +334,27 @@ def start_buzzer_countdown():
             time.sleep(CYCLE_TIME)
 
         else: 
-            # --- CONNECTION STANDBY HEARTBEAT (Before countdown starts) ---
-            current_time_in_cycle = 0.0 # Reset fluid state
-            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
+            # --- CONNECTION STANDBY HEARTBEAT (60s to 30s) ---
+            # Non-blocking, fixed 10s cycle (5s ON, 5s OFF)
+            
+            beep_frequency = STANDBY_FREQ
+            period = 1.0 / beep_frequency 
+            half_period = period / 2.0   
+            
+            current_time_in_cycle += CYCLE_TIME
+            
+            if BUZZER_AVAILABLE:
+                if current_time_in_cycle < half_period:
+                    # Buzzer is ON for the first half of the period
+                    BUZZER.on() 
+                else:
+                    # Buzzer is OFF for the second half of the period
+                    BUZZER.off()
+
+                if current_time_in_cycle >= period:
+                    current_time_in_cycle = 0.0
+            
+            time.sleep(CYCLE_TIME)
 
 
 @app.before_request
@@ -466,7 +462,7 @@ if __name__ == "__main__":
     print(f"Auto-Start Timeout: {AUTO_START_TIMEOUT} seconds.")
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
-        print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.")
+        print("Status: Standby Heartbeat (1 beep/10s) while connected.")
         print("Alarm: Solid beep for 3 seconds before auto-start.") 
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
