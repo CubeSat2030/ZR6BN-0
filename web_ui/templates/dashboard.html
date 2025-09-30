@@ -82,15 +82,80 @@ body {
   100% { transform: rotate(360deg); } 
 }
 
+/* NEW: Style for the Power Button icon (using an SVG for better scalability) */
+#power-icon-btn {
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+  fill: var(--text); /* Set SVG color */
+  border: none;
+  background-color: transparent;
+}
+
+#power-icon-btn:hover {
+  background-color: rgba(201, 209, 217, 0.1);
+}
+
 </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
 <div id="alert-container" class="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full"></div>
 <div class="max-w-7xl mx-auto">
-<header class="mb-8">
-<h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control Dashboard</h1>
-<p class="text-gray-300">Manage scripts, generate charts, and control the Kabot-1 payload.</p>
+<header class="mb-8 flex justify-between items-center">
+    <div>
+        <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control Dashboard</h1>
+        <p class="text-gray-300">Manage scripts, generate charts, and control the Kabot-1 payload.</p>
+    </div>
+    <button id="power-icon-btn" onclick="openSystemControlModal()" title="System Control">
+        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+            <path d="M7.5 4.21l1.5 -1.21"></path>
+            <path d="M12 3v3"></path>
+            <path d="M16.5 4.21l-1.5 1.21"></path>
+            <path d="M18.324 7.72l1.176 1.175"></path>
+            <path d="M21 12h-3"></path>
+            <path d="M18.324 16.28l1.176 1.175"></path>
+            <path d="M16.5 19.79l-1.5 -1.21"></path>
+            <path d="M12 18v3"></path>
+            <path d="M7.5 19.79l1.5 -1.21"></path>
+            <path d="M5.676 16.28l-1.176 1.175"></path>
+            <path d="M3 12h3"></path>
+            <path d="M5.676 7.72l-1.176 -1.175"></path>
+        </svg>
+    </button>
 </header>
+
+<div id="system-control-modal" class="hidden fixed inset-0 z-50 bg-gray-900 bg-opacity-95 flex items-center justify-center transition-opacity duration-300">
+    <div class="card p-8 w-11/12 max-w-lg relative" style="background-color: var(--bg-card); border: 1px solid var(--border);">
+        <button onclick="closeSystemControlModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white transition p-1 rounded-full bg-gray-800 hover:bg-gray-700" title="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+                <path d="M18 6l-12 12"></path>
+                <path d="M6 6l12 12"></path>
+            </svg>
+        </button>
+        
+        <h2 class="text-3xl font-bold text-white mb-6 border-b border-gray-700 pb-3">System Actions</h2>
+        <p class="text-red-400 mb-8 text-lg font-semibold">
+            ⚠️ WARNING: These actions will interrupt operations and disconnect the dashboard.
+        </p>
+
+        <div class="flex flex-col space-y-4">
+            <button onclick="handleModalSystemControl('shutdown')" 
+                    class="btn w-full bg-red-800 hover:bg-red-900 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M7.5 4.21l1.5 -1.21"></path><path d="M12 3v3"></path><path d="M16.5 4.21l-1.5 1.21"></path><path d="M21 10h-3"></path><path d="M18.324 16.28l1.176 1.175"></path><path d="M12 18v3"></path><path d="M5.676 16.28l-1.176 1.175"></path><path d="M3 10h3"></path><path d="M4.4 6.04l1.255 1.05"></path><path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path></svg>
+                <span>Shutdown Kabot-1</span>
+            </button>
+            
+            <button onclick="handleModalSystemControl('reboot')" 
+                    class="btn w-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M19.95 11a8 8 0 0 0 -7.95 -7a8 8 0 0 0 -7.95 7"></path><path d="M4.05 13a8 8 0 0 0 7.95 7a8 8 0 0 0 7.95 -7"></path><path d="M20 4l-2.5 2.5"></path><path d="M4 20l2.5 -2.5"></path></svg>
+                <span>Reboot Kabot-1</span>
+            </button>
+        </div>
+    </div>
+</div>
 
 <section class="card p-6 mb-8" id="main-controller-card">
     <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Main Flight Controller Status (main.py)</h2>
@@ -178,7 +243,7 @@ body {
   </div>
 </section>
 
-<section class="card p-6 mb-8">
+<section class="card p-6 mb-8 hidden">
     <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Kabot-1 System Control</h2>
     <div class="flex flex-wrap gap-4 items-center">
         <button onclick="systemControl('reboot')" class="btn bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md">
@@ -484,6 +549,7 @@ function refreshChartImage(sensor, url) {
 
 // --- System Control ---
 
+// The original systemControl function is KEPT. The new modal will call this.
 async function systemControl(action) {
     // Custom replacement for window.confirm
     const isConfirmed = await new Promise(resolve => {
@@ -508,6 +574,8 @@ async function systemControl(action) {
     });
 
     if (!isConfirmed) {
+        // If the user cancels the confirmation, we need to re-open the full-screen modal.
+        openSystemControlModal();
         return;
     }
 
@@ -530,6 +598,25 @@ async function systemControl(action) {
     } finally {
         buttons.forEach(b => b.disabled = false);
     }
+}
+
+// --- NEW Modal Functions ---
+
+function openSystemControlModal() {
+    const modal = document.getElementById('system-control-modal');
+    modal.classList.remove('hidden');
+}
+
+function closeSystemControlModal() {
+    document.getElementById('system-control-modal').classList.add('hidden');
+}
+
+// Handler function to bridge the modal button click to the existing systemControl logic
+function handleModalSystemControl(action) {
+    // 1. Close the full-screen modal
+    closeSystemControlModal();
+    // 2. Call the existing systemControl function, which handles the inner confirmation step
+    systemControl(action);
 }
 
 
