@@ -4,6 +4,7 @@
 # FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
 # NEW FEATURE: Single-Client WebUI Access Control enforced via IP address.
 # NEW FIX: api_trigger_beep now correctly reports failure if BUZZER_AVAILABLE is False.
+# FIX: solid_beep now catches and reports common GPIO permission RuntimeErrors.
 # =========================================================================
 
 import subprocess
@@ -284,6 +285,10 @@ def solid_beep(duration=3.0):
         time.sleep(duration)
         BUZZER.off()
         return True
+    except RuntimeError as e:
+        # This typically indicates a permission or hardware issue when accessing GPIO
+        print(f"[BUZZER ERROR] Failed to perform solid beep due to permissions: {e}. Try running server with 'sudo' or ensure user is in 'gpio' group.")
+        return False
     except Exception as e:
         print(f"[BUZZER ERROR] Failed to perform solid beep: {e}")
         return False
@@ -492,7 +497,6 @@ def api_trigger_beep(duration):
     """
     global BUZZER_AVAILABLE 
     
-    # --- YOUR FIX IMPLEMENTED HERE ---
     if not BUZZER_AVAILABLE:
         print(f"[BUZZER] Solid beep requested but unavailable. Returning error.")
         return jsonify({"success": False, "message": "Buzzer hardware unavailable on the server."}), 503
@@ -509,7 +513,7 @@ def get_chart_display(filename):
 
 @app.route("/download/chart/<filename>")
 def download_chart(filename):
-    if ".." in filename or "/" in filename: abort(400)
+    if ".." in filename or "/" in filename: abort(404, description="Chart not found.")
     file_path = CHARTS_DIR / filename
     if not file_path.exists(): abort(404, description="Chart not found.")
     return send_from_directory(CHARTS_DIR, filename, as_attachment=True)
