@@ -211,8 +211,8 @@ def run_plotter(name):
             [sys.executable, script_path],
             capture_output=True,
             text=True,
-            check=True,
-            timeout=45, 
+            check=False,
+            timeout=300, # Gives each plotter scripts a timeout of 5 minutes each to prevent any deadlocks. 
             cwd=str(BASE_DIR) 
         )
         
