@@ -1,11 +1,8 @@
 # =========================================================================
 # Kabot-1 Mission Control Dashboard Server - THREAD-SAFE VERSION
 # =========================================================================
-# FIX 1: Refactored start_buzzer_countdown to acquire PROCESS_LOCK only for
-# state checking and decision making, preventing deadlock and race conditions.
-# FIX 2: Ensured 100% consistent 4-space indentation throughout the file.
-# FIX 3: Implemented BUZZER.close() in the exit handler for robust GPIO cleanup
-#        to prevent the '[Errno 16] Device or resource busy' error on startup.
+# FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
+# dictionary to prevent Internal Server Errors (500) due to race conditions.
 # =========================================================================
 
 import subprocess
@@ -25,7 +22,6 @@ except ImportError:
     print("[WARNING] gpiozero or RPi.GPIO not available. Buzzer feature disabled.")
     BUZZER_AVAILABLE = False
 except Exception as e:
-    # This catches the 'Device or resource busy' error
     print(f"[WARNING] Could not initialize Buzzer on GPIO 21: {e}. Buzzer feature disabled.")
     BUZZER_AVAILABLE = False
 
@@ -242,7 +238,6 @@ def reset_auto_start_timer():
     if BUZZER_AVAILABLE:
         BUZZER.off() 
     
-    # Check if main is active using its thread-safe function
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
 
@@ -277,49 +272,31 @@ def start_buzzer_countdown():
     """
     Runs in a background thread. Manages the countdown, buzzer beeping, 
     and automatically launches main.py if the timer expires.
-    (Contains threading/deadlock fixes)
     """
     global LAST_CONNECTION_TIME
     global BUZZER_THREAD_STOP
     
     while not BUZZER_THREAD_STOP.is_set():
         
-        is_active = False
-        should_auto_start = False
-        time_remaining = AUTO_START_TIMEOUT 
-        
-        # 1. Acquire lock only for checking the global state and making the decision.
-        with PROCESS_LOCK:
-            # Check state and update status variables
-            is_active = is_main_controller_active() 
-            if is_active:
-                if BUZZER_AVAILABLE:
-                    BUZZER.off()
-            else:
-                # Calculate timer state
-                time_elapsed = time.time() - LAST_CONNECTION_TIME
-                time_remaining = AUTO_START_TIMEOUT - time_elapsed
-                
-                if time_remaining <= 0:
-                    should_auto_start = True
-        
-        # 2. Execute long sleeps, buzzer control, and auto-start *outside* the lock.
-        if is_active:
-            # Controller is running, just wait
+        if is_main_controller_active():
+            if BUZZER_AVAILABLE:
+                BUZZER.off()
             time.sleep(5)
             continue
             
-        if should_auto_start:
+        time_elapsed = time.time() - LAST_CONNECTION_TIME
+        time_remaining = AUTO_START_TIMEOUT - time_elapsed
+        
+        if time_remaining <= 0:
             # --- AUTO-START TRIGGERED: SOLID BEEP FOR 3 SECONDS ---
             print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
             
-            # Note: time.sleep here is outside the lock, which is correct.
             if BUZZER_AVAILABLE:
                 BUZZER.on() # Solid beep ON
-                time.sleep(3.0) 
+                time.sleep(3.0) # Wait for 3 seconds
                 BUZZER.off() # Solid beep OFF
             
-            # The start_script call is thread-safe and manages its own lock.
+            # The start_script call is now thread-safe
             success, message = start_script('main') 
             
             if success:
@@ -329,26 +306,18 @@ def start_buzzer_countdown():
             
             time.sleep(5) 
             
-        elif time_remaining < AUTO_START_TIMEOUT - 1: 
+        elif time_remaining < AUTO_START_TIMEOUT - 5: 
             # --- COUNTDOWN BEEPING ---
-
+            
             if time_remaining <= 10:
-                # SUPER FAST BEEP
-                delay = 0.1
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-
-            elif time_remaining <= 20:
                 # FAST BEEP
                 delay = 0.2
                 if BUZZER_AVAILABLE: BUZZER.on()
                 time.sleep(delay)
                 if BUZZER_AVAILABLE: BUZZER.off()
                 time.sleep(delay)
-
-            elif time_remaining <= 40:
+                
+            elif time_remaining <= 30:
                 # MEDIUM BEEP
                 delay = 0.5
                 if BUZZER_AVAILABLE: BUZZER.on()
@@ -358,13 +327,13 @@ def start_buzzer_countdown():
 
             else:
                 # SLOW BEEP
-                delay = 1.0
+                delay = 1.0 
                 if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(0.1)
+                time.sleep(0.1) 
                 if BUZZER_AVAILABLE: BUZZER.off()
                 time.sleep(delay - 0.1)
-
-        else:
+            
+        else: 
             # --- CONNECTION STANDBY HEARTBEAT ---
             buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
 
@@ -460,9 +429,7 @@ if __name__ == "__main__":
     
     def exit_handler(signum, frame):
         if BUZZER_AVAILABLE:
-            # Use .close() to ensure the GPIO pin is properly released 
-            # and prevents 'Device or resource busy' errors on next startup.
-            BUZZER.close()
+            BUZZER.off()
         BUZZER_THREAD_STOP.set()
         print("\n[CLEANUP] Buzzer and countdown thread stopped.")
         sys.exit(0)
@@ -482,4 +449,3 @@ if __name__ == "__main__":
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=False)
-
