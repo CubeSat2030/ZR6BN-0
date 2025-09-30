@@ -1,10 +1,10 @@
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server - THREAD-SAFE VERSION
+# Kabot-1 Mission Control Dashboard Server - THREAD-SAFE & SINGLE-CLIENT
 # =========================================================================
-# FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
-# NEW FEATURE: Single-Client WebUI Access Control enforced via IP address.
-# NEW FIX: api_trigger_beep now correctly reports failure if BUZZER_AVAILABLE is False.
-# FIX: solid_beep now catches and reports common GPIO permission RuntimeErrors.
+# FIX: Strict Single-Client WebUI Access Control enforced via IP address 
+#      and an inactivity timeout. Viewing for unauthorized clients is now blocked.
+# FIX: Added threading.Lock around access control variables.
+# FIX: api_trigger_beep endpoint is now disabled to remove the manual 3s beep.
 # =========================================================================
 
 import subprocess
@@ -46,8 +46,10 @@ LAST_CONNECTION_TIME = time.time()
 BUZZER_THREAD_STOP = threading.Event()
 
 # --- SINGLE-CLIENT ACCESS CONTROL VARIABLES ---
+ACCESS_CONTROL_TIMEOUT = 50 # Seconds after which control is released if inactive
 AUTHORIZED_CLIENT_IP = None
 LAST_ACTIVE_IP = None # Used to display which IP currently has control
+ACCESS_CONTROL_LOCK = threading.Lock() # New lock for access control variables
 # ----------------------------------------------
 
 # --- Flask App Initialization ---
@@ -208,7 +210,6 @@ def run_plotter(name):
     if name not in SCRIPTS_CONFIG or 'plot_script' not in SCRIPTS_CONFIG[name]:
         return False, "Unknown or non-plotter script name."
     
-    # ... (Plotter logic remains unchanged as it doesn't touch RUNNING_PROCESSES)
     config = SCRIPTS_CONFIG[name]
     script_path = str(config['plot_script']) 
     chart_file = config['chart_file']
@@ -365,6 +366,7 @@ def start_buzzer_countdown():
 def update_last_connection_time():
     """Hook runs before every request to reset the auto-start timer."""
     global AUTHORIZED_CLIENT_IP
+    # Only update the connection time if the client is currently authorized
     if AUTHORIZED_CLIENT_IP == request.remote_addr:
         reset_auto_start_timer()
 
@@ -376,12 +378,12 @@ def update_last_connection_time():
 @app.before_request
 def before_request_access_check():
     """
-    Enforces single-client access. The first client to access the root page 
-    becomes the AUTHORIZED_CLIENT_IP. Subsequent non-authorized clients are 
-    redirected to a lockout page.
+    STRICT Single-Client Access Enforcement. 
+    A client maintains control as long as they are active and the timeout hasn't expired.
     """
     global AUTHORIZED_CLIENT_IP
     global LAST_ACTIVE_IP
+    global LAST_CONNECTION_TIME
     
     current_ip = request.remote_addr
 
@@ -389,44 +391,47 @@ def before_request_access_check():
     if request.path == url_for('lockout'):
         return None # Proceed to the lockout page
 
-    # 1. Authorize on first access to the dashboard page ("/")
-    if request.path == url_for('index'):
+    with ACCESS_CONTROL_LOCK:
+        # 1. Check for Access Timeout (De-authorization Logic)
+        if AUTHORIZED_CLIENT_IP is not None:
+            time_since_last_connection = time.time() - LAST_CONNECTION_TIME
+            if time_since_last_connection > ACCESS_CONTROL_TIMEOUT:
+                # Client timed out - release control
+                print(f"[ACCESS CONTROL] Client {AUTHORIZED_CLIENT_IP} timed out. Releasing control.")
+                AUTHORIZED_CLIENT_IP = None
+                # LAST_ACTIVE_IP is kept for display on the lockout page
+
+        # 2. Authorize or Block
         if AUTHORIZED_CLIENT_IP is None:
-            AUTHORIZED_CLIENT_IP = current_ip
-            LAST_ACTIVE_IP = current_ip
-            print(f"[ACCESS CONTROL] Authorized initial client: {current_ip}")
-            return None # Proceed to the dashboard
+            # No one is authorized - first to request takes control
+            if request.path == url_for('index'):
+                AUTHORIZED_CLIENT_IP = current_ip
+                LAST_ACTIVE_IP = current_ip
+                reset_auto_start_timer() # Reset the global connection timer on new authorization
+                print(f"[ACCESS CONTROL] Authorized initial client: {current_ip}")
+                return None # Proceed to the dashboard
+            else:
+                # Block attempts to access other resources before the dashboard
+                print(f"[ACCESS CONTROL] Unauthorized client {current_ip} blocked from non-index path.")
+                return redirect(url_for('lockout'))
         
         elif current_ip == AUTHORIZED_CLIENT_IP:
+            # Authorized client - renew access and proceed
             LAST_ACTIVE_IP = current_ip # Update active IP
-            return None # Proceed to the dashboard
-            
-        else:
-            # Block unauthorized client attempting to access the dashboard
-            print(f"[ACCESS CONTROL] Unauthorized client {current_ip} blocked from index.")
-            return redirect(url_for('lockout'))
-
-    # 2. Block all API/resource access if the current IP is not the authorized one
-    if AUTHORIZED_CLIENT_IP is not None and current_ip != AUTHORIZED_CLIENT_IP:
-        # Allow unauthorized users to see charts and API status ONLY if Flight Controller is running.
-        if is_main_controller_active():
-            print(f"[ACCESS CONTROL] Unauthorized client {current_ip} permitted viewing (Flight Active).")
+            reset_auto_start_timer() # Reset the global connection timer
             return None 
             
-        # Block control actions or sensitive requests if not authorized.
-        if request.method == 'POST' or request.path.startswith('/api'):
-            print(f"[ACCESS CONTROL] Unauthorized client {current_ip} blocked from API/POST.")
+        else:
+            # Block unauthorized client - NO EXCEPTIONS (STRICTLY enforce single-client)
+            print(f"[ACCESS CONTROL] Unauthorized client {current_ip} blocked from access.")
+            
             # For API calls, return a 403 response instead of a redirect
             if request.path.startswith('/api'):
-                return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
+                return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {LAST_ACTIVE_IP}."}), 403
             else:
                 return redirect(url_for('lockout'))
-                
-        # Allow GET access to charts for general viewing
-        if request.path.startswith('/chart'):
-            return None
 
-    # If authorized or the path is not the index/lockout, proceed
+    # If authorized, proceed.
     return None
 
 # =========================================================================
@@ -436,12 +441,13 @@ def before_request_access_check():
 @app.route("/lockout")
 def lockout():
     """Page displayed when a client attempts to access the UI while another client is authorized."""
-    # Note: We use LAST_ACTIVE_IP here as AUTHORIZED_CLIENT_IP might be None
+    # LAST_ACTIVE_IP holds the IP that last had control (or the initial one)
     controller_ip = LAST_ACTIVE_IP if LAST_ACTIVE_IP else "N/A (First client to load will take control)"
     return render_template("lockout.html", controller_ip=controller_ip), 403
 
 @app.route("/")
 def index():
+    # Access check is done in before_request_access_check.
     serializable_config = {}
     for key, config in SCRIPTS_CONFIG.items():
         if not config.get('is_main_controller'):
@@ -457,9 +463,9 @@ def api_status():
 
 @app.route('/api/script/<name>/<action>', methods=['POST'])
 def api_script_control(name, action):
-    # Enforced by before_request_access_check, but kept as safety
+    # This check is redundant due to before_request_access_check but is kept as a safeguard
     if AUTHORIZED_CLIENT_IP != request.remote_addr:
-        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
+        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {LAST_ACTIVE_IP}."}), 403
         
     if name == 'main_controller':
         name = 'main'
@@ -478,9 +484,9 @@ def api_script_control(name, action):
 
 @app.route('/api/chart/<name>', methods=['POST'])
 def api_chart_generate(name):
-    # Enforced by before_request_access_check, but kept as safety
+    # This check is redundant due to before_request_access_check but is kept as a safeguard
     if AUTHORIZED_CLIENT_IP != request.remote_addr:
-        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
+        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {LAST_ACTIVE_IP}."}), 403
 
     if is_main_controller_active():
         return jsonify({"success": False, "message": "Flight Controller is active. Cannot generate charts."}), 403
@@ -494,25 +500,22 @@ def api_trigger_beep(duration):
     """
     Triggers the buzzer for a set duration. Returns 503 if the buzzer hardware
     is not initialized (BUZZER_AVAILABLE is False).
+    
+    NOTE: The manual beep is currently disabled by request.
     """
-    global BUZZER_AVAILABLE 
-    
-    if not BUZZER_AVAILABLE:
-        print(f"[BUZZER] Solid beep requested but unavailable. Returning error.")
-        return jsonify({"success": False, "message": "Buzzer hardware unavailable on the server."}), 503
-    
-    # Run beep in a separate thread so the Flask request can complete immediately
-    threading.Thread(target=solid_beep, args=(duration,)).start()
-    
-    return jsonify({"success": True, "message": f"Solid beep triggered for {duration} seconds."})
+    # Change applied: Disable the manual beep on this endpoint by returning success immediately.
+    print(f"[BUZZER] Manual beep request for {duration}s received but disabled.")
+    return jsonify({"success": True, "message": f"Manual beep feature is currently disabled."})
 
 @app.route("/chart/<path:filename>")
 def get_chart_display(filename):
+    # Access check for viewing charts is now handled strictly in before_request_access_check
     if ".." in filename or "/" in filename: abort(400)
     return send_from_directory(CHARTS_DIR, filename, as_attachment=False)
 
 @app.route("/download/chart/<filename>")
 def download_chart(filename):
+    # Access check for downloading charts is now handled strictly in before_request_access_check
     if ".." in filename or "/" in filename: abort(404, description="Chart not found.")
     file_path = CHARTS_DIR / filename
     if not file_path.exists(): abort(404, description="Chart not found.")
@@ -520,9 +523,9 @@ def download_chart(filename):
     
 @app.route('/api/control/<action>', methods=['POST'])
 def api_system_control(action):
-    # Enforced by before_request_access_check, but kept as safety
+    # This check is redundant due to before_request_access_check but is kept as a safeguard
     if AUTHORIZED_CLIENT_IP != request.remote_addr:
-        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
+        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {LAST_ACTIVE_IP}."}), 403
         
     if action == 'reboot':
         cmd = ["sudo", "reboot"]
@@ -566,9 +569,8 @@ if __name__ == "__main__":
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
         print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.")
-        print("Alarm: Solid beep for 3 seconds before auto-start AND on manual start.")
+        print("Alarm: Solid beep for 3 seconds BEFORE AUTO-START ONLY.")
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
     app.run(host="0.0.0.0", port=5000, debug=False)
-
