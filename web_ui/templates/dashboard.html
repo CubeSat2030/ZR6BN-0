@@ -1,710 +1,505 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Kabot-1 HAB Mission Control</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-/* ===============================
-Custom Styles for Mission Control
-=============================== */
-:root {
---bg-dark: #0d1117;
---bg-card: #161b22;
---border: #30363d;
---text: #c9d1d9;
-}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kabot-1 Mission Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'gray-900': '#0d1117',
+                        'gray-800': '#161b22',
+                        'gray-700': '#21262d',
+                        'gray-600': '#30363d',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+        }
+        body { background-color: var(--bg-dark); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"; }
+        .card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
+        .btn { transition: all 0.2s ease-in-out; border: 1px solid var(--border); }
+        .btn:disabled { cursor: not-allowed; opacity: 0.5; }
+        .status-box { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; background-color: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; min-height: 80px; padding: 0.5rem; }
+        .chart-container img { border-radius: 6px; border: 1px solid var(--border); background-color: var(--bg-dark); height: auto; width: 100%; }
 
-body {
-  background-color: var(--bg-dark);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-}
+        /* Pulsing indicators */
+        .pulse-active-green { animation: pulse-shadow-green 1.5s infinite; }
+        @keyframes pulse-shadow-green { 0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 0, 0.4); } 50% { box-shadow: 0 0 10px rgba(0, 255, 0, 0.7); } }
+        .pulse-active-red { animation: pulse-shadow-red 1.5s infinite; }
+        @keyframes pulse-shadow-red { 0%, 100% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.4); } 50% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); } }
+        
+        /* Style for the Power Button icon */
+        #power-icon-btn {
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            transition: background-color 0.2s, box-shadow 0.3s; /* Added box-shadow transition */
+            fill: var(--text);
+            border: none;
+            background-color: transparent;
+        }
+        #power-icon-btn:hover { background-color: rgba(201, 209, 217, 0.1); }
+        
+        /* NEW STYLES for the power icon countdown pulse */
+        .pulse-warning-yellow { animation: pulse-shadow-yellow 2s infinite; }
+        @keyframes pulse-shadow-yellow {
+            0%, 100% { box-shadow: 0 0 8px rgba(234, 179, 8, 0.5); } /* Tailwind's yellow-500 */
+            50% { box-shadow: 0 0 16px rgba(234, 179, 8, 0.8); }
+        }
+        .pulse-critical-red { animation: pulse-shadow-red-fast 1s infinite; } /* Faster animation for urgency */
+        @keyframes pulse-shadow-red-fast {
+            0%, 100% { box-shadow: 0 0 8px rgba(220, 38, 38, 0.6); } /* Tailwind's red-600 */
+            50% { box-shadow: 0 0 16px rgba(220, 38, 38, 0.9); }
+        }
 
-.card {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.btn {
-  transition: all 0.2s ease-in-out;
-  border: 1px solid var(--border);
-}
-
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.status-box {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-  background-color: var(--bg-dark);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  min-height: 80px;
-  padding: 0.5rem;
-}
-
-.chart-container img {
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background-color: var(--bg-dark);
-  height: auto; /* Ensure responsiveness */
-  width: 100%; /* Ensure responsiveness */
-}
-
-/* Pulsing indicators */
-.pulse-active-green { animation: pulse-shadow-green 1.5s infinite; }
-@keyframes pulse-shadow-green {
-  0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 0, 0.4); }
-  50% { box-shadow: 0 0 10px rgba(0, 255, 0, 0.7); }
-}
-
-.pulse-active-red { animation: pulse-shadow-red 1.5s infinite; }
-@keyframes pulse-shadow-red {
-  0%, 100% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.4); }
-  50% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); }
-}
-
-/* Style for the Power Button icon (using an SVG for better scalability) */
-#power-icon-btn {
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 50%;
-  transition: background-color 0.2s;
-  fill: var(--text); /* Set SVG color */
-  border: none;
-  background-color: transparent;
-}
-
-#power-icon-btn:hover {
-  background-color: rgba(201, 209, 217, 0.1);
-}
-
-/* Loading spinner */
-.loading-ring {
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #3b82f6;
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  animation: spin 1s linear infinite;
-}
-@keyframes spin { 
-  0% { transform: rotate(0deg); } 
-  100% { transform: rotate(360deg); } 
-}
-
-</style>
+        /* Loading spinner */
+        .loading-ring { border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
 </head>
-<body class="p-4 sm:p-6 lg:p-8">
-<div id="alert-container" class="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full"></div>
-<div class="max-w-7xl mx-auto">
-<header class="mb-8 flex justify-between items-center">
-    <div>
-        <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control Dashboard</h1>
-        <p class="text-gray-300">Manage scripts, generate charts, and control the Kabot-1 payload.</p>
-    </div>
-    <!-- NEW: Heartbeat indicator next to the System Control icon -->
-    <div class="flex items-center space-x-3">
-        <div id="heartbeat-container" class="relative">
-            <!-- This circle will pulse green when healthy. Title shows the countdown. -->
-            <span id="heartbeat-circle" 
-                  class="w-4 h-4 rounded-full bg-green-500 pulse-active-green transition-colors" 
-                  title="Connection: Stable (60s)">
-            </span>
-        </div>
+<body class="bg-gray-900 text-gray-300">
 
-        <button id="power-icon-btn" onclick="openSystemControlModal()" title="System Control">
-            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                <path stroke="none" d="M0 0h24v24H0h24v24H0h24v24H0z" fill="none"></path>
-                <path d="M7.5 4.21l1.5 -1.21"></path>
-                <path d="M12 3v3"></path>
-                <path d="M16.5 4.21l-1.5 1.21"></path>
-                <path d="M18.324 7.72l1.176 1.175"></path>
-                <path d="M21 12h-3"></path>
-                <path d="M18.324 16.28l1.176 1.175"></path>
-                <path d="M16.5 19.79l-1.5 -1.21"></path>
-                <path d="M12 18v3"></path>
-                <path d="M7.5 19.79l1.5 -1.21"></path>
-                <path d="M5.676 16.28l-1.176 1.175"></path>
-                <path d="M3 12h3"></path>
-                <path d="M5.676 7.72l-1.176 -1.175"></path>
-            </svg>
-        </button>
-    </div>
-</header>
+    <div id="alert-container" class="fixed top-5 right-5 z-50 w-full max-w-sm space-y-3"></div>
+    
+    <div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
 
-<div id="system-control-modal" class="hidden fixed inset-0 z-50 bg-gray-900 bg-opacity-95 flex items-center justify-center transition-opacity duration-300">
-    <div class="card p-8 w-11/12 max-w-lg relative" style="background-color: var(--bg-card); border: 1px solid var(--border);">
-        <button onclick="closeSystemControlModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white transition p-1 rounded-full bg-gray-800 hover:bg-gray-700" title="Close">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                <path stroke="none" d="M0 0h24v24H0h24v24H0z" fill="none"></path>
-                <path d="M18 6l-12 12"></path>
-                <path d="M6 6l12 12"></path>
-            </svg>
-        </button>
-        
-        <h2 class="text-3xl font-bold text-white mb-6 border-b border-gray-700 pb-3">System Actions</h2>
-        <p class="text-red-400 mb-8 text-lg font-semibold">
-            ⚠️ WARNING: These actions will interrupt operations and disconnect the dashboard.
-        </p>
-
-        <div class="flex flex-col space-y-4">
-            <button onclick="handleModalSystemControl('shutdown')" 
-                    class="btn w-full bg-red-800 hover:bg-red-900 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0h24v24H0h24v24H0z" fill="none"></path><path d="M7.5 4.21l1.5 -1.21"></path><path d="M12 3v3"></path><path d="M16.5 4.21l-1.5 1.21"></path><path d="M21 10h-3"></path><path d="M18.324 16.28l1.176 1.175"></path><path d="M12 18v3"></path><path d="M5.676 16.28l-1.176 1.175"></path><path d="M3 10h3"></path><path d="M4.4 6.04l1.255 1.05"></path><path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path></svg>
-                <span>Shutdown Kabot-1</span>
-            </button>
-            
-            <button onclick="handleModalSystemControl('reboot')" 
-                    class="btn w-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0h24v24H0z" fill="none"></path><path d="M19.95 11a8 8 0 0 0 -7.95 -7a8 8 0 0 0 -7.95 7"></path><path d="M4.05 13a8 8 0 0 0 7.95 7a8 8 0 0 0 7.95 -7"></path><path d="M20 4l-2.5 2.5"></path><path d="M4 20l2.5 -2.5"></path></svg>
-                <span>Reboot Kabot-1</span>
-            </button>
-        </div>
-    </div>
-</div>
-
-<section class="card p-6 mb-8" id="main-controller-card">
-    <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Main Flight Controller Status (main.py)</h2>
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-        <div class="flex items-center mb-4 sm:mb-0">
-            <h3 class="text-lg font-semibold text-white mr-4">Status:</h3>
-            <span id="main_controller_status_circle" class="status-circle w-4 h-4 rounded-full mr-3 bg-yellow-500"></span>
-            <span id="main_controller_status_text" class="text-lg font-medium text-yellow-500">Checking...</span>
-        </div>
-        <div class="flex space-x-3">
-            <button onclick="controlMainController('start')" 
-                    id="main_start_btn"
-                    class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md"
-                    disabled>
-                Start Flight
-            </button>
-            <button onclick="controlMainController('stop')" 
-                    id="main_stop_btn"
-                    class="btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md"
-                    disabled>
-                Stop Flight
-            </button>
-        </div>
-    </div>
-    <p id="controller_warning" class="text-sm mt-4 text-red-400 hidden font-bold">
-        ⚠️ WARNING: Manual logger control and chart generation is **DISABLED** while the Flight Controller is running.
-    </p>
-</section>
-
-<section id="logger-section" class="card p-6 mb-8">
-  <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Manual Logger Script Control</h2>
-  <div id="logger-list" class="space-y-4">
-    {% for key, script in scripts_config.items() %}
-    <div id="script-{{ key }}" class="flex flex-col sm:flex-row justify-between items-center p-3 bg-gray-800 rounded-lg">
-        <div class="flex-1 mb-2 sm:mb-0 sm:mr-4 w-full">
-            <h3 class="text-lg font-semibold text-white">{{ script.title }}</h3>
-            <div class="status-indicator text-sm mt-1 flex items-center">
-                <span class="status-circle w-3 h-3 rounded-full mr-2 bg-gray-500"></span>
-                <span class="status-text text-gray-400">Loading status...</span>
+        <header class="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
+            <div>
+                <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control</h1>
+                <p class="text-gray-400">Raspberry Pi Flight Computer Dashboard</p>
             </div>
-        </div>
-        <div class="flex space-x-2 w-full sm:w-auto">
-            <button onclick="controlScript('{{ key }}', 'start')" 
-                    class="start-btn w-1/2 sm:w-auto btn bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md flex justify-center items-center"
-                    disabled>
-                Start
-            </button>
-            <button onclick="controlScript('{{ key }}', 'stop')" 
-                    class="stop-btn w-1/2 sm:w-auto btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md flex justify-center items-center"
-                    disabled>
-                Stop
-            </button>
-        </div>
-    </div>
-    {% endfor %}
-  </div>
-</section>
-
-<section id="chart-section" class="card p-6 mb-8">
-  <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Chart Generation & Downloads</h2>
-  <div id="chart-controls" class="space-y-4">
-    {% for key, script in scripts_config.items() %}
-    <div id="chart-{{ key }}" class="flex flex-col sm:flex-row justify-between items-center p-3 bg-gray-800 rounded-lg">
-        <h3 class="text-lg font-semibold text-white mb-2 sm:mb-0 sm:mr-4">{{ script.title }}</h3>
-        <div class="flex space-x-2 w-full sm:w-auto">
-            <button onclick="generateChart('{{ key }}')" 
-                    id="gen-{{ key }}"
-                    class="btn w-1/2 sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center">
-                Generate Chart
-            </button>
-            <a href="/download/chart/{{ script.chart_file }}" 
-               download="{{ script.chart_file }}" 
-               id="download-{{ key }}"
-               class="btn w-1/2 sm:w-auto text-center text-blue-400 border-blue-600 hover:bg-blue-900 font-bold py-2 px-4 rounded-md hidden">
-                Download
-            </a>
-        </div>
-    </div>
-    {% endfor %}
-  </div>
-
-  <div id="status-container" class="mt-6">
-    <label class="font-semibold text-gray-300">Generation Status:</label>
-    <pre id="status_output" class="status-box p-3 text-sm text-gray-400 whitespace-pre-wrap">Awaiting commands...</pre>
-  </div>
-</section>
-
-<section class="card p-6">
-  <h2 class="text-xl font-semibold mb-4 text-white">Generated Charts Preview</h2>
-  <div id="charts-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-    {% for key, script in scripts_config.items() %}
-    <div class="chart-container">
-      <h3 class="font-semibold text-center mb-2 text-gray-300">{{ script.title }}</h3>
-      <img id="{{ key }}_chart" 
-           src="/chart/{{ script.chart_file }}" 
-           onerror="this.onerror=null; this.src='https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated'" 
-           alt="{{ script.title }} chart preview">
-    </div>
-    {% endfor %}
-  </div>
-</section>
-
-</div>
-<script>
-const statusOutput = document.getElementById('status_output');
-// CORRECTED: The scripts_config variable is now properly initialized from Jinja
-const SCRIPTS_CONFIG = {{ scripts_config | tojson }};
-
-// --- Connection Heartbeat Constants and State ---
-let statusIntervalId; 
-let monitorIntervalId; 
-let lastSuccessfulHeartbeat = Date.now();
-const CONNECTION_TIMEOUT_MS = 60000; // 60 seconds dead-man switch
-// UPDATED: Polling frequency changed from 5000ms to 2000ms for faster feedback.
-const POLLING_INTERVAL_MS = 2000; // 2 seconds
-
-// --- Utility Functions ---
-
-function showAlert(message, type = 'success') {
-    const colors = {
-        success: 'bg-green-600/90 border-green-700 text-white',
-        error: 'bg-red-600/90 border-red-700 text-white',
-        info: 'bg-blue-600/90 border-blue-700 text-white',
-    };
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `p-3 border-l-4 rounded-lg shadow-lg ${colors[type]} transition-opacity duration-300`;
-    alertDiv.innerHTML = `<p class="font-medium">${message}</p>`;
-    
-    const container = document.getElementById('alert-container');
-    container.appendChild(alertDiv);
-
-    setTimeout(() => {
-        alertDiv.classList.add('opacity-0');
-        alertDiv.addEventListener('transitionend', () => alertDiv.remove());
-    }, 5000);
-}
-
-// --- Main Controller Control ---
-
-async function controlMainController(action) {
-    const startBtn = document.getElementById('main_start_btn');
-    const stopBtn = document.getElementById('main_stop_btn');
-    const originalStartText = startBtn.innerHTML;
-
-    // Disable all control buttons in the main card during the operation
-    startBtn.disabled = true;
-    stopBtn.disabled = true;
-
-    const targetBtn = (action === 'start') ? startBtn : stopBtn;
-    targetBtn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
-
-    try {
-        const response = await fetch(`/api/script/main_controller/${action}`, { method: 'POST' });
-        const result = await response.json();
-        
-        if (result.success) {
-            showAlert(`${result.message}`, 'success');
-        } else {
-            showAlert(`Error: ${result.message}`, 'error');
-        }
-    } catch (error) {
-        showAlert(`Network error: Could not contact server for ${action}.`, 'error');
-    } finally {
-        startBtn.innerHTML = originalStartText;
-        stopBtn.innerHTML = 'Stop Flight';
-        fetchStatus(); // Refresh status to update button states
-    }
-}
-
-
-// --- Status Update Logic (Handles script statuses and calls refreshHeartbeat) ---
-
-function updateScriptStatus(status) {
-    const mainActive = status.main_controller.running;
-    const mainCard = document.getElementById('main-controller-card');
-    const loggerSection = document.getElementById('logger-section');
-    const chartSection = document.getElementById('chart-section');
-    const warning = document.getElementById('controller_warning');
-
-    const mainCircle = document.getElementById('main_controller_status_circle');
-    const mainText = document.getElementById('main_controller_status_text');
-    const mainStartBtn = document.getElementById('main_start_btn');
-    const mainStopBtn = document.getElementById('main_stop_btn');
-    
-    // Check if we are in a connection loss state to maintain disabled state
-    const isConnectionLost = monitorIntervalId === null;
-
-    // 1. Update Main Controller Status and Controls
-    if (mainActive) {
-        mainCircle.className = 'status-circle w-4 h-4 rounded-full mr-3 bg-red-600 pulse-active-red';
-        mainText.textContent = `ACTIVE (Mission Running)`; 
-        mainText.classList.add('text-red-400');
-        mainText.classList.remove('text-green-400', 'text-yellow-500');
-        warning.classList.remove('hidden');
-        mainCard.classList.add('pulse-active-red');
-        
-        mainStartBtn.disabled = true;
-        mainStopBtn.disabled = isConnectionLost ? true : false;
-        
-        // Disable ALL other sections
-        loggerSection.style.opacity = 0.5;
-        chartSection.style.opacity = 0.5;
-        loggerSection.querySelectorAll('button').forEach(b => b.disabled = true);
-        chartSection.querySelectorAll('button').forEach(b => b.disabled = true);
-
-    } else {
-        mainCircle.className = 'status-circle w-4 h-4 rounded-full mr-3 bg-green-600';
-        mainText.textContent = 'INACTIVE (Ready for Launch)';
-        mainText.classList.remove('text-red-400', 'text-yellow-500');
-        mainText.classList.add('text-green-400');
-        warning.classList.add('hidden');
-        mainCard.classList.remove('pulse-active-red');
-        
-        mainStartBtn.disabled = isConnectionLost ? true : false;
-        mainStopBtn.disabled = true;
-
-        // Re-enable logger/chart sections for manual control/post-flight analysis if link is good
-        if (!isConnectionLost) {
-            loggerSection.style.opacity = 1.0;
-            chartSection.style.opacity = 1.0;
-        }
-    }
-
-    // 2. Update Manual Logger Statuses (only if main is NOT active)
-    for (const key in SCRIPTS_CONFIG) {
-        const item = status[key];
-        const config = SCRIPTS_CONFIG[key];
-        const card = document.getElementById(`script-${key}`);
-        if (!card) continue;
-
-        const circle = card.querySelector('.status-circle');
-        const text = card.querySelector('.status-text');
-        const startBtn = card.querySelector('.start-btn');
-        const stopBtn = card.querySelector('.stop-btn');
-        const chartGenBtn = document.getElementById(`gen-${key}`);
-        
-        // Update individual logger status display
-        if (item.running) {
-            circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-green-500 pulse-active-green';
-            text.textContent = `Running (PID: ${item.pid})`;
-            text.classList.add('text-green-400');
-            text.classList.remove('text-gray-400');
-            card.classList.add('shadow-lg', 'pulse-active-green');
-        } else {
-            circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-gray-500';
-            text.textContent = 'Stopped';
-            text.classList.remove('text-green-400');
-            text.classList.add('text-gray-400');
-            card.classList.remove('shadow-lg', 'pulse-active-green');
-        }
-
-        // Update manual control buttons based on mainActive and connection status
-        if (!mainActive && !isConnectionLost) {
-            startBtn.disabled = item.running;
-            stopBtn.disabled = !item.running;
-            if (chartGenBtn) chartGenBtn.disabled = false;
-        }
-        
-        refreshChartImage(key, `/chart/${config.chart_file}`);
-    }
-}
-
-// *** HEARTBEAT LOGIC START ***
-
-async function fetchStatus() {
-    try {
-        const response = await fetch('/api/status');
-        if (response.ok) {
-            // Heartbeat: Reset the timer on successful poll
-            lastSuccessfulHeartbeat = Date.now(); 
-            
-            // Visual feedback: Reset to healthy pulse on success
-            const circleElement = document.getElementById('heartbeat-circle');
-            circleElement.classList.remove('bg-gray-700', 'pulse-active-red', 'bg-red-500', 'bg-yellow-500');
-            circleElement.classList.add('bg-green-500', 'pulse-active-green', 'transition-colors');
-            circleElement.title = `Connection: Stable (${Math.ceil(CONNECTION_TIMEOUT_MS / 1000)}s)`;
-
-            const status = await response.json();
-            updateScriptStatus(status);
-
-        } else {
-            // Soft failure, timer continues to tick down
-            console.warn("Status fetch failed with status:", response.status);
-        }
-    } catch (error) {
-        // Network error, timer continues to tick down
-        console.error("Network error fetching status:", error);
-    }
-}
-
-function monitorConnection() {
-    // Stop monitoring if connection loss has already been handled
-    if (monitorIntervalId === null) return;
-
-    const timeSinceLastHeartbeat = Date.now() - lastSuccessfulHeartbeat;
-    const remainingTime = Math.max(0, CONNECTION_TIMEOUT_MS - timeSinceLastHeartbeat);
-    const secondsRemaining = Math.ceil(remainingTime / 1000);
-
-    const circleElement = document.getElementById('heartbeat-circle');
-    
-    if (secondsRemaining > 0) {
-        // Update the title with the exact countdown
-        circleElement.title = `Connection: Stable (${secondsRemaining}s)`;
-
-        // Visual state changes based on remaining time
-        if (secondsRemaining <= 10) {
-            // Critical Warning: < 10 seconds remaining (Pulsing Red)
-            circleElement.classList.remove('bg-green-500', 'bg-yellow-500', 'pulse-active-green');
-            circleElement.classList.add('bg-red-500', 'pulse-active-red');
-        } else if (secondsRemaining <= 30) {
-            // Warning State: 11-30 seconds remaining (Pulsing Green on Yellow dot)
-            circleElement.classList.remove('bg-green-500', 'bg-red-500', 'pulse-active-red');
-            circleElement.classList.add('bg-yellow-500', 'pulse-active-green');
-        } else {
-            // Healthy State: > 30 seconds remaining (Pulsing Green)
-            circleElement.classList.remove('bg-yellow-500', 'bg-red-500', 'pulse-active-red');
-            circleElement.classList.add('bg-green-500', 'pulse-active-green');
-        }
-    } else {
-        // Critical Failure State
-        handleConnectionLoss();
-    }
-}
-
-function handleConnectionLoss() {
-    // Check if loss handler has already run
-    if (monitorIntervalId === null) return;
-    
-    // Stop all intervals
-    clearInterval(statusIntervalId);
-    clearInterval(monitorIntervalId);
-    monitorIntervalId = null; 
-
-    // Visually lock the entire dashboard
-    document.querySelectorAll('.btn, #power-icon-btn').forEach(b => b.disabled = true);
-    document.getElementById('logger-section').style.opacity = 0.2;
-    document.getElementById('chart-section').style.opacity = 0.2;
-    document.getElementById('main-controller-card').style.opacity = 0.2;
-    
-    // Update Heartbeat Status in the header
-    const circleElement = document.getElementById('heartbeat-circle');
-    circleElement.classList.remove('bg-green-500', 'bg-yellow-500', 'bg-red-500', 'pulse-active-green', 'pulse-active-red');
-    circleElement.classList.add('bg-gray-700');
-    circleElement.title = 'CRITICAL: Connection Lost (0s)';
-    
-    // Force all status buttons to disabled
-    updateScriptStatus({main_controller: {running: false}});
-
-    showAlert('CRITICAL ERROR: Connection heartbeat lost (60s timeout). Dashboard is locked.', 'error');
-}
-
-// *** HEARTBEAT LOGIC END ***
-
-
-async function controlScript(name, action) {
-    const btn = document.querySelector(`#script-${name} .${action}-btn`);
-    const originalText = btn.innerHTML;
-    
-    // Temporarily disable all action buttons for this script
-    const actionButtons = document.querySelectorAll(`#script-${name} button`);
-    actionButtons.forEach(b => b.disabled = true);
-
-    btn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
-
-    try {
-        const response = await fetch(`/api/script/${name}/${action}`, { method: 'POST' });
-        const result = await response.json();
-        
-        if (result.success) {
-            showAlert(`${result.message}`, 'success');
-        } else if (response.status === 403) {
-             showAlert(`${result.message}`, 'error');
-        } else {
-            showAlert(`Error: ${result.message}`, 'error');
-        }
-    } catch (error) {
-        showAlert(`Network error: Could not contact server for ${action}.`, 'error');
-    } finally {
-        btn.innerHTML = originalText;
-        fetchStatus(); 
-    }
-}
-
-// --- Chart Generation & Display ---
-
-async function generateChart(name) {
-  const genBtn = document.getElementById(`gen-${name}`);
-  const downloadLink = document.getElementById(`download-${name}`);
-  const chartFile = SCRIPTS_CONFIG[name].chart_file;
-  
-  statusOutput.textContent = `Requesting ${name.toUpperCase()} chart generation...`;
-  statusOutput.classList.remove('text-red-400', 'text-green-400');
-  statusOutput.classList.add('text-yellow-400');
-  
-  // Temporarily disable all chart generation buttons
-  document.querySelectorAll('#chart-controls button').forEach(b => b.disabled = true);
-
-  const originalText = genBtn.innerHTML;
-  genBtn.innerHTML = `<div class="loading-ring mr-2"></div> Generating...`;
-  
-  try {
-    const response = await fetch(`/api/chart/${name}`, { method: 'POST' });
-    const result = await response.json();
-
-    if (response.ok && result.success) {
-      statusOutput.textContent = `Success: ${result.message}\nRefreshing chart view...`;
-      statusOutput.classList.remove('text-yellow-400', 'text-red-400');
-      statusOutput.classList.add('text-green-400');
-      
-      refreshChartImage(name, `/chart/${chartFile}`);
-      downloadLink.classList.remove('hidden');
-
-    } else if (response.status === 403) {
-      throw new Error(result.message);
-    }
-    else {
-      throw new Error(result.message || 'Unknown plotting error.');
-    }
-  } catch (error) {
-    statusOutput.textContent = `Error: ${error.message}`;
-    statusOutput.classList.remove('text-yellow-400', 'text-green-400');
-    statusOutput.classList.add('text-red-400');
-    console.error("Failed to generate chart:", error);
-  } finally {
-    genBtn.innerHTML = originalText;
-    
-    // Restore buttons to original state or call fetchStatus
-    fetchStatus(); 
-  }
-}
-
-function refreshChartImage(sensor, url) {
-  const imgElement = document.getElementById(`${sensor}_chart`);
-  const downloadLink = document.getElementById(`download-${sensor}`);
-  
-  if (imgElement) {
-    // Cache-busting to force the browser to load the new image
-    imgElement.src = `${url}?t=${new Date().getTime()}`;
-  }
-  
-  imgElement.onload = () => {
-      // If the image loads successfully, ensure download link is visible
-      downloadLink.classList.remove('hidden');
-  };
-  imgElement.onerror = () => {
-      // If the image fails to load, show placeholder and hide download link
-      downloadLink.classList.add('hidden');
-      imgElement.src='https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated';
-  };
-}
-
-// --- System Control ---
-
-// The original systemControl function is KEPT. The new modal will call this.
-async function systemControl(action) {
-    // Custom replacement for window.confirm
-    const isConfirmed = await new Promise(resolve => {
-        const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
-        modal.innerHTML = `
-            <div class="card p-6 w-11/12 max-w-sm">
-                <h3 class="text-xl font-bold text-red-500 mb-4">CONFIRM SYSTEM ACTION</h3>
-                <p class="text-gray-300 mb-6">Are you absolutely sure you want to <strong>${action.toUpperCase()}</strong> Kabot-1? This will interrupt operations and disconnect the dashboard.</p>
-                <div class="flex justify-end space-x-3">
-                    <button id="cancel-btn" class="btn px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancel</button>
-                    <button id="confirm-btn" class="btn px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded">
-                        ${action.toUpperCase()}
-                    </button>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center" title="Connection: Stable">
+                    <div id="heartbeat-circle" class="w-4 h-4 rounded-full bg-green-500 pulse-active-green transition-colors"></div>
                 </div>
+                <button id="power-icon-btn" onclick="openSystemControlModal()" title="System Control">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M7 12l5 5l5 -5"></path><path d="M12 3v14"></path></svg>
+                </button>
             </div>
-        `;
-        document.body.appendChild(modal);
+        </header>
 
-        document.getElementById('cancel-btn').onclick = () => { modal.remove(); resolve(false); };
-        document.getElementById('confirm-btn').onclick = () => { modal.remove(); resolve(true); };
-    });
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-1 flex flex-col gap-6">
+                <section id="main-controller-card" class="card p-5">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-white">Flight Controller</h2>
+                        <div class="flex items-center text-sm font-semibold">
+                            <div id="main_controller_status_circle" class="w-4 h-4 rounded-full mr-3"></div>
+                            <span id="main_controller_status_text"></span>
+                        </div>
+                    </div>
+                    <p class="text-gray-400 mb-4">Main flight script that activates all sensor loggers automatically.</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button id="main_start_btn" onclick="controlMainController('start')" class="btn bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded-lg">Launch</button>
+                        <button id="main_stop_btn" onclick="controlMainController('stop')" class="btn bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded-lg">Stop Flight</button>
+                    </div>
+                    <p id="controller_warning" class="hidden text-yellow-400 text-sm mt-4">⚠️ Manual controls are disabled while the flight controller is active.</p>
+                </section>
 
-    if (!isConfirmed) {
-        // If the user cancels the confirmation, we need to re-open the full-screen modal.
-        openSystemControlModal();
-        return;
+                <section id="logger-section" class="card p-5">
+                    <h2 class="text-xl font-bold text-white mb-4">Manual Loggers</h2>
+                    <div id="scripts-container" class="space-y-4">
+                        {% for name, config in scripts_config.items() %}
+                        <div id="script-{{ name }}" class="card p-3 border border-gray-700/50">
+                            <h3 class="font-semibold text-white">{{ config.title }}</h3>
+                            <div class="flex items-center text-sm my-2">
+                                <div class="status-circle w-3 h-3 rounded-full mr-2"></div>
+                                <span class="status-text"></span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                <button onclick="controlScript('{{ name }}', 'start')" class="start-btn btn text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-2 rounded">Start</button>
+                                <button onclick="controlScript('{{ name }}', 'stop')" class="stop-btn btn text-xs bg-gray-600 hover:bg-gray-700 text-white font-semibold py-1 px-2 rounded">Stop</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </section>
+            </div>
+
+            <div id="chart-section" class="lg:col-span-2 flex flex-col gap-6">
+                 <section class="card p-5">
+                    <h2 class="text-xl font-bold text-white mb-4">Post-Flight Analysis</h2>
+                    <p class="text-gray-400 mb-4">Generate and view charts from logged sensor data. Chart generation is disabled when the Flight Controller is active.</p>
+                    <div id="chart-controls" class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                        {% for name, config in scripts_config.items() %}
+                        <button id="gen-{{ name }}" onclick="generateChart('{{ name }}')" class="btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 rounded-lg">Generate {{ config.title }} Chart</button>
+                        {% endfor %}
+                    </div>
+                    <div class="status-box text-sm text-gray-400" id="chart-status-output">Chart generation status will appear here...</div>
+                </section>
+                <section class="card p-5">
+                    <div class="grid grid-cols-1 md:grid-cols-1 gap-6">
+                        {% for name, config in scripts_config.items() %}
+                        <div class="chart-container">
+                             <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-lg font-semibold text-white">{{ config.title }}</h3>
+                                <a id="download-{{ name }}" href="/download/chart/{{ config.chart_file }}" class="hidden btn text-xs bg-gray-600 hover:bg-gray-700 text-white font-semibold py-1 px-3 rounded">Download</a>
+                            </div>
+                            <img id="{{ name }}_chart" src="https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated" alt="{{ config.title }} Chart">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <div id="system-control-modal" class="hidden fixed inset-0 bg-gray-900/90 z-40 flex items-center justify-center p-4">
+        <div class="relative w-full max-w-2xl bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-8">
+            <button onclick="closeSystemControlModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
+            <h2 class="text-3xl font-bold text-white mb-6 border-b border-gray-700 pb-3">System Actions</h2>
+            <p class="text-red-400 mb-8 text-lg font-semibold">⚠️ WARNING: These actions will interrupt operations and disconnect the dashboard.</p>
+            <div class="flex flex-col space-y-4">
+                <button onclick="handleModalSystemControl('shutdown')" class="btn w-full bg-red-800 hover:bg-red-900 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M7 6a7.75 7.75 0 1 0 10 0"></path><path d="M12 4l0 8"></path></svg>
+                    <span>Shutdown Kabot-1</span>
+                </button>
+                <button onclick="handleModalSystemControl('reboot')" class="btn w-full bg-orange-600 hover:bg-orange-700 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-0.5 -4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 15.5 2m0.5 4v-4h-4"></path></svg>
+                    <span>Reboot Kabot-1</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+<script>
+    // This data is passed from the Flask template
+    const SCRIPTS_CONFIG = {{ scripts_config|tojson }};
+    const statusOutput = document.getElementById('chart-status-output');
+
+    // — Connection Heartbeat Constants and State —
+    let statusIntervalId;
+    let monitorIntervalId;
+    let lastSuccessfulHeartbeat = Date.now();
+    const CONNECTION_TIMEOUT_MS = 60000; // 60 seconds dead-man switch
+    const POLLING_INTERVAL_MS = 2000;    // 2 seconds polling frequency
+
+    // — Utility Functions —
+    function showAlert(message, type = 'success') {
+        const colors = {
+            success: 'bg-green-600/90 border-green-700 text-white',
+            error: 'bg-red-600/90 border-red-700 text-white',
+            info: 'bg-blue-600/90 border-blue-700 text-white',
+        };
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `p-3 border-l-4 rounded-lg shadow-lg ${colors[type]} transition-opacity duration-300`;
+        alertDiv.innerHTML = `<p class="font-medium">${message}</p>`;
+
+        const container = document.getElementById('alert-container');
+        container.appendChild(alertDiv);
+
+        setTimeout(() => {
+            alertDiv.classList.add('opacity-0');
+            alertDiv.addEventListener('transitionend', () => alertDiv.remove());
+        }, 5000);
     }
 
-    const buttons = document.querySelectorAll('.btn');
-    buttons.forEach(b => b.disabled = true);
+    // — Main Controller Control —
+    async function controlMainController(action) {
+        const startBtn = document.getElementById('main_start_btn');
+        const stopBtn = document.getElementById('main_stop_btn');
+        const originalStartText = startBtn.innerHTML;
 
-    try {
-        const response = await fetch(`/api/control/${action}`, { method: 'POST' });
-        const result = await response.json();
-        
-        if (result.success) {
-            showAlert(`${result.message}`, 'info');
-            // Display success message prominently
-            document.body.innerHTML = `<div class="text-center mt-20 text-3xl font-bold text-red-500 p-8">${result.message}</div><div class="text-center text-gray-400">The connection will be lost. Please wait for Kabot-1 to restart.</div>`;
-        } else {
-            showAlert(`System control failed: ${result.message}`, 'error');
+        startBtn.disabled = true;
+        stopBtn.disabled = true;
+
+        const targetBtn = (action === 'start') ? startBtn : stopBtn;
+        targetBtn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
+
+        try {
+            const response = await fetch(`/api/script/main_controller/${action}`, { method: 'POST' });
+            const result = await response.json();
+            if (result.success) {
+                showAlert(`${result.message}`, 'success');
+            } else {
+                showAlert(`Error: ${result.message}`, 'error');
+            }
+        } catch (error) {
+            showAlert(`Network error: Could not contact server for ${action}.`, 'error');
+        } finally {
+            startBtn.innerHTML = originalStartText;
+            stopBtn.innerHTML = 'Stop Flight';
+            fetchStatus();
         }
-    } catch (error) {
-        showAlert(`Network error: Failed to send ${action} command.`, 'error');
-    } finally {
-        buttons.forEach(b => b.disabled = false);
     }
-}
 
-// --- Modal Functions ---
+    // — Status Update Logic —
+    function updateScriptStatus(status) {
+        const mainActive = status.main_controller.running;
+        const mainCard = document.getElementById('main-controller-card');
+        const loggerSection = document.getElementById('logger-section');
+        const chartSection = document.getElementById('chart-section');
+        const warning = document.getElementById('controller_warning');
+        const mainCircle = document.getElementById('main_controller_status_circle');
+        const mainText = document.getElementById('main_controller_status_text');
+        const mainStartBtn = document.getElementById('main_start_btn');
+        const mainStopBtn = document.getElementById('main_stop_btn');
+        const isConnectionLost = monitorIntervalId === null;
 
-function openSystemControlModal() {
-    const modal = document.getElementById('system-control-modal');
-    modal.classList.remove('hidden');
-}
+        if (mainActive) {
+            mainCircle.className = 'status-circle w-4 h-4 rounded-full mr-3 bg-red-600 pulse-active-red';
+            mainText.textContent = `ACTIVE (Mission Running)`; 
+            mainText.classList.add('text-red-400');
+            mainText.classList.remove('text-green-400', 'text-yellow-500');
+            warning.classList.remove('hidden');
+            mainCard.classList.add('pulse-active-red');
+            mainStartBtn.disabled = true;
+            mainStopBtn.disabled = isConnectionLost ? true : false;
+            
+            loggerSection.style.opacity = 0.5;
+            chartSection.style.opacity = 0.5;
+            loggerSection.querySelectorAll('button').forEach(b => b.disabled = true);
+            chartSection.querySelectorAll('button').forEach(b => b.disabled = true);
+        } else {
+            mainCircle.className = 'status-circle w-4 h-4 rounded-full mr-3 bg-green-600';
+            mainText.textContent = 'INACTIVE (Ready for Launch)';
+            mainText.classList.remove('text-red-400', 'text-yellow-500');
+            mainText.classList.add('text-green-400');
+            warning.classList.add('hidden');
+            mainCard.classList.remove('pulse-active-red');
+            mainStartBtn.disabled = isConnectionLost ? true : false;
+            mainStopBtn.disabled = true;
+            if (!isConnectionLost) {
+                loggerSection.style.opacity = 1.0;
+                chartSection.style.opacity = 1.0;
+            }
+        }
 
-function closeSystemControlModal() {
-    document.getElementById('system-control-modal').classList.add('hidden');
-}
+        for (const key in SCRIPTS_CONFIG) {
+            const item = status[key];
+            const config = SCRIPTS_CONFIG[key];
+            const card = document.getElementById(`script-${key}`);
+            if (!card) continue;
+            const circle = card.querySelector('.status-circle');
+            const text = card.querySelector('.status-text');
+            const startBtn = card.querySelector('.start-btn');
+            const stopBtn = card.querySelector('.stop-btn');
+            const chartGenBtn = document.getElementById(`gen-${key}`);
+            
+            if (item.running) {
+                circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-green-500 pulse-active-green';
+                text.textContent = `Running (PID: ${item.pid})`;
+                text.classList.add('text-green-400');
+                text.classList.remove('text-gray-400');
+                card.classList.add('shadow-lg', 'pulse-active-green');
+            } else {
+                circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-gray-500';
+                text.textContent = 'Stopped';
+                text.classList.remove('text-green-400');
+                text.classList.add('text-gray-400');
+                card.classList.remove('shadow-lg', 'pulse-active-green');
+            }
+            if (!mainActive && !isConnectionLost) {
+                startBtn.disabled = item.running;
+                stopBtn.disabled = !item.running;
+                if (chartGenBtn) chartGenBtn.disabled = false;
+            }
+            refreshChartImage(key, `/chart/${config.chart_file}`);
+        }
+    }
 
-// Handler function to bridge the modal button click to the existing systemControl logic
-function handleModalSystemControl(action) {
-    // 1. Close the full-screen modal
-    closeSystemControlModal();
-    // 2. Call the existing systemControl function, which handles the inner confirmation step
-    systemControl(action);
-}
+    // *** HEARTBEAT & CONNECTION LOGIC ***
+    async function fetchStatus() {
+        try {
+            const response = await fetch('/api/status');
+            if (response.ok) {
+                lastSuccessfulHeartbeat = Date.now();
+                const circleElement = document.getElementById('heartbeat-circle');
+                circleElement.classList.remove('bg-gray-700', 'pulse-active-red', 'bg-red-500', 'bg-yellow-500');
+                circleElement.classList.add('bg-green-500', 'pulse-active-green', 'transition-colors');
+                circleElement.title = `Connection: Stable (${Math.ceil(CONNECTION_TIMEOUT_MS / 1000)}s)`;
+                const status = await response.json();
+                updateScriptStatus(status);
+            } else {
+                console.warn("Status fetch failed with status:", response.status);
+            }
+        } catch (error) {
+            console.error("Network error fetching status:", error);
+        }
+    }
 
+    function monitorConnection() {
+        if (monitorIntervalId === null) return;
+        const timeSinceLastHeartbeat = Date.now() - lastSuccessfulHeartbeat;
+        const remainingTime = Math.max(0, CONNECTION_TIMEOUT_MS - timeSinceLastHeartbeat);
+        const secondsRemaining = Math.ceil(remainingTime / 1000);
+        const circleElement = document.getElementById('heartbeat-circle');
+        const powerIconButton = document.getElementById('power-icon-btn');
 
-// --- Initialization ---
-document.addEventListener('DOMContentLoaded', () => {
-    // Initial fetch
-    fetchStatus();
-    
-    // Start polling the status every 2 seconds (the connection 'heartbeat' poll)
-    statusIntervalId = setInterval(fetchStatus, POLLING_INTERVAL_MS); 
-    
-    // Start monitoring the time since the last successful heartbeat every 1 second
-    monitorConnection();
-    monitorIntervalId = setInterval(monitorConnection, 1000); 
-});
+        if (secondsRemaining > 0) {
+            circleElement.title = `Connection: Stable (${secondsRemaining}s)`;
+            if (secondsRemaining <= 10) {
+                circleElement.classList.remove('bg-green-500', 'bg-yellow-500', 'pulse-active-green');
+                circleElement.classList.add('bg-red-500', 'pulse-active-red');
+                powerIconButton.classList.remove('pulse-warning-yellow');
+                powerIconButton.classList.add('pulse-critical-red');
+            } else if (secondsRemaining <= 30) {
+                circleElement.classList.remove('bg-green-500', 'bg-red-500', 'pulse-active-red');
+                circleElement.classList.add('bg-yellow-500', 'pulse-active-green');
+                powerIconButton.classList.remove('pulse-critical-red');
+                powerIconButton.classList.add('pulse-warning-yellow');
+            } else {
+                circleElement.classList.remove('bg-yellow-500', 'bg-red-500', 'pulse-active-red');
+                circleElement.classList.add('bg-green-500', 'pulse-active-green');
+                powerIconButton.classList.remove('pulse-warning-yellow', 'pulse-critical-red');
+            }
+        } else {
+            handleConnectionLoss();
+        }
+    }
 
+    function handleConnectionLoss() {
+        if (monitorIntervalId === null) return;
+        clearInterval(statusIntervalId);
+        clearInterval(monitorIntervalId);
+        monitorIntervalId = null;
+        document.querySelectorAll('.btn, #power-icon-btn').forEach(b => b.disabled = true);
+        document.getElementById('logger-section').style.opacity = 0.2;
+        document.getElementById('chart-section').style.opacity = 0.2;
+        document.getElementById('main-controller-card').style.opacity = 0.2;
+        document.getElementById('power-icon-btn').classList.remove('pulse-warning-yellow', 'pulse-critical-red');
+        const circleElement = document.getElementById('heartbeat-circle');
+        circleElement.classList.remove('bg-green-500', 'bg-yellow-500', 'bg-red-500', 'pulse-active-green', 'pulse-active-red');
+        circleElement.classList.add('bg-gray-700');
+        circleElement.title = 'CRITICAL: Connection Lost (0s)';
+        updateScriptStatus({ main_controller: { running: false } });
+        showAlert('CRITICAL ERROR: Connection heartbeat lost (60s timeout). Dashboard is locked.', 'error');
+    }
+
+    // — Script & Chart Control —
+    async function controlScript(name, action) {
+        const btn = document.querySelector(`#script-${name} .${action}-btn`);
+        const originalText = btn.innerHTML;
+        const actionButtons = document.querySelectorAll(`#script-${name} button`);
+        actionButtons.forEach(b => b.disabled = true);
+        btn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
+        try {
+            const response = await fetch(`/api/script/${name}/${action}`, { method: 'POST' });
+            const result = await response.json();
+            if (result.success) {
+                showAlert(`${result.message}`, 'success');
+            } else {
+                showAlert(`Error: ${result.message}`, 'error');
+            }
+        } catch (error) {
+            showAlert(`Network error: Could not contact server for ${action}.`, 'error');
+        } finally {
+            btn.innerHTML = originalText;
+            fetchStatus();
+        }
+    }
+
+    async function generateChart(name) {
+        const genBtn = document.getElementById(`gen-${name}`);
+        const downloadLink = document.getElementById(`download-${name}`);
+        const chartFile = SCRIPTS_CONFIG[name].chart_file;
+        statusOutput.textContent = `Requesting ${name.toUpperCase()} chart generation...`;
+        statusOutput.classList.remove('text-red-400', 'text-green-400');
+        statusOutput.classList.add('text-yellow-400');
+        document.querySelectorAll('#chart-controls button').forEach(b => b.disabled = true);
+        const originalText = genBtn.innerHTML;
+        genBtn.innerHTML = `<div class="loading-ring mr-2"></div> Generating...`;
+        try {
+            const response = await fetch(`/api/chart/${name}`, { method: 'POST' });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                statusOutput.textContent = `Success: ${result.message}\nRefreshing chart view...`;
+                statusOutput.classList.remove('text-yellow-400', 'text-red-400');
+                statusOutput.classList.add('text-green-400');
+                refreshChartImage(name, `/chart/${chartFile}`);
+                downloadLink.classList.remove('hidden');
+            } else {
+                throw new Error(result.message || 'Unknown plotting error.');
+            }
+        } catch (error) {
+            statusOutput.textContent = `Error: ${error.message}`;
+            statusOutput.classList.remove('text-yellow-400', 'text-green-400');
+            statusOutput.classList.add('text-red-400');
+        } finally {
+            genBtn.innerHTML = originalText;
+            fetchStatus();
+        }
+    }
+
+    function refreshChartImage(sensor, url) {
+        const imgElement = document.getElementById(`${sensor}_chart`);
+        const downloadLink = document.getElementById(`download-${sensor}`);
+        if (imgElement) {
+            imgElement.src = `${url}?t=${new Date().getTime()}`;
+        }
+        imgElement.onload = () => { downloadLink.classList.remove('hidden'); };
+        imgElement.onerror = () => {
+            downloadLink.classList.add('hidden');
+            imgElement.src = 'https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated';
+        };
+    }
+
+    // — System Control & Modal Logic —
+    async function systemControl(action) {
+        const isConfirmed = await new Promise(resolve => {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
+            modal.innerHTML = `<div class="card p-6 w-11/12 max-w-sm"> <h3 class="text-xl font-bold text-red-500 mb-4">CONFIRM SYSTEM ACTION</h3> <p class="text-gray-300 mb-6">Are you absolutely sure you want to <strong>${action.toUpperCase()}</strong> Kabot-1? This will interrupt operations and disconnect the dashboard.</p> <div class="flex justify-end space-x-3"> <button id="cancel-btn" class="btn px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancel</button> <button id="confirm-btn" class="btn px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded">${action.toUpperCase()}</button> </div> </div>`;
+            document.body.appendChild(modal);
+            document.getElementById('cancel-btn').onclick = () => { modal.remove(); resolve(false); };
+            document.getElementById('confirm-btn').onclick = () => { modal.remove(); resolve(true); };
+        });
+
+        if (!isConfirmed) {
+            openSystemControlModal();
+            return;
+        }
+
+        document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+        try {
+            const response = await fetch(`/api/control/${action}`, { method: 'POST' });
+            const result = await response.json();
+            if (result.success) {
+                showAlert(`${result.message}`, 'info');
+                document.body.innerHTML = `<div class="text-center mt-20 text-3xl font-bold text-red-500 p-8">${result.message}</div><div class="text-center text-gray-400">The connection will be lost. Please wait for the system to restart.</div>`;
+            } else {
+                showAlert(`System control failed: ${result.message}`, 'error');
+                document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+            }
+        } catch (error) {
+            showAlert(`Network error: Failed to send ${action} command.`, 'error');
+            document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+        }
+    }
+
+    function openSystemControlModal() {
+        document.getElementById('system-control-modal').classList.remove('hidden');
+    }
+
+    function closeSystemControlModal() {
+        document.getElementById('system-control-modal').classList.add('hidden');
+    }
+
+    function handleModalSystemControl(action) {
+        closeSystemControlModal();
+        systemControl(action);
+    }
+
+    // — Initialization —
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchStatus();
+        statusIntervalId = setInterval(fetchStatus, POLLING_INTERVAL_MS);
+        monitorIntervalId = setInterval(monitorConnection, 1000);
+    });
 </script>
+
 </body>
 </html>
-
