@@ -3,8 +3,9 @@
 # =========================================================================
 # FIX 1: Refactored start_buzzer_countdown to acquire PROCESS_LOCK only for
 # state checking and decision making, preventing deadlock and race conditions.
-# FIX 2: Ensured 100% consistent 4-space indentation throughout the file 
-# to resolve the TabError reported in the user's environment.
+# FIX 2: Ensured 100% consistent 4-space indentation throughout the file.
+# FIX 3: Implemented BUZZER.close() in the exit handler for robust GPIO cleanup
+#        to prevent the '[Errno 16] Device or resource busy' error on startup.
 # =========================================================================
 
 import subprocess
@@ -24,6 +25,7 @@ except ImportError:
     print("[WARNING] gpiozero or RPi.GPIO not available. Buzzer feature disabled.")
     BUZZER_AVAILABLE = False
 except Exception as e:
+    # This catches the 'Device or resource busy' error
     print(f"[WARNING] Could not initialize Buzzer on GPIO 21: {e}. Buzzer feature disabled.")
     BUZZER_AVAILABLE = False
 
@@ -458,7 +460,9 @@ if __name__ == "__main__":
     
     def exit_handler(signum, frame):
         if BUZZER_AVAILABLE:
-            BUZZER.off()
+            # Use .close() to ensure the GPIO pin is properly released 
+            # and prevents 'Device or resource busy' errors on next startup.
+            BUZZER.close()
         BUZZER_THREAD_STOP.set()
         print("\n[CLEANUP] Buzzer and countdown thread stopped.")
         sys.exit(0)
