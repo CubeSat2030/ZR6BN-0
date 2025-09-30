@@ -211,7 +211,7 @@ def run_plotter(name):
             [sys.executable, script_path],
             capture_output=True,
             text=True,
-            check=False,
+            check=True,
             timeout=45, 
             cwd=str(BASE_DIR) 
         )
@@ -241,7 +241,7 @@ def reset_auto_start_timer():
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
 
-def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # 10.0s total pulse time
+def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # 10.0s total pulse  pause interval
     """Executes the two rapid beeps and waits for the remaining duration."""
     if not BUZZER_AVAILABLE:
         time.sleep(total_duration)
@@ -292,8 +292,8 @@ def start_buzzer_countdown():
             print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
             
             if BUZZER_AVAILABLE:
-                BUZZER.on() # Solid beep ON
-                time.sleep(3.0) # Wait for 3 seconds
+               # BUZZER.on() # Solid beep ON
+               # time.sleep(3.0) # Wait for 3 seconds
                 BUZZER.off() # Solid beep OFF
             
             # The start_script call is now thread-safe
@@ -309,28 +309,46 @@ def start_buzzer_countdown():
         elif time_remaining < AUTO_START_TIMEOUT - 5: 
             # --- COUNTDOWN BEEPING ---
             
-            if time_remaining <= 10:
-                # FAST BEEP
-                delay = 0.2
+            if time_remaining <= 5:
+                # SUPER SUPER FAST BEEP
+                delay = 0.0625
+                if BUZZER_AVAILABLE: BUZZER.off()
+                time.sleep(delay)
                 if BUZZER_AVAILABLE: BUZZER.on()
                 time.sleep(delay)
+     
+            
+            if time_remaining <= 10:
+                # SUPER FAST BEEP
+                delay = 0.125
                 if BUZZER_AVAILABLE: BUZZER.off()
+                time.sleep(delay)
+                if BUZZER_AVAILABLE: BUZZER.on()
+                time.sleep(delay)
+     
+            
+            if time_remaining <= 20:
+                # FAST BEEP
+                delay = 0.25
+                if BUZZER_AVAILABLE: BUZZER.off()
+                time.sleep(delay)
+                if BUZZER_AVAILABLE: BUZZER.on()
                 time.sleep(delay)
                 
             elif time_remaining <= 30:
                 # MEDIUM BEEP
                 delay = 0.5
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
                 if BUZZER_AVAILABLE: BUZZER.off()
+                time.sleep(delay)
+                if BUZZER_AVAILABLE: BUZZER.on()
                 time.sleep(delay)
 
             else:
                 # SLOW BEEP
                 delay = 1.0 
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(0.1) 
                 if BUZZER_AVAILABLE: BUZZER.off()
+                time.sleep(0.1) 
+                if BUZZER_AVAILABLE: BUZZER.on()
                 time.sleep(delay - 0.1)
             
         else: 
@@ -404,10 +422,10 @@ def download_chart(filename):
 def api_system_control(action):
     if action == 'reboot':
         cmd = ["sudo", "reboot"]
-        message = "System will reboot momentarily."
+        message = "Kabot-1 will reboot momentarily."
     elif action == 'shutdown':
         cmd = ["sudo", "shutdown", "now"]
-        message = "System will shut down momentarily."
+        message = "Kabot-1 will shut down momentarily."
     else:
         return jsonify({"success": False, "message": "Invalid control action."}), 400
 
