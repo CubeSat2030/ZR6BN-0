@@ -87,19 +87,9 @@ body {
 <body class="p-4 sm:p-6 lg:p-8">
 <div id="alert-container" class="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full"></div>
 <div class="max-w-7xl mx-auto">
-<header class="mb-8 flex justify-between items-start">
-    <div>
-        <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control Dashboard</h1>
-        <p class="text-gray-300">Manage scripts, generate charts, and control the Kabot-1 payload.</p>
-    </div>
-    <!-- NEW: Power Button Icon -->
-    <button onclick="openPowerControlModal()" 
-            class="p-3 mt-1 rounded-full bg-red-700 hover:bg-red-800 text-white shadow-lg focus:outline-none focus:ring-4 focus:ring-red-500/50 transition duration-150 ease-in-out"
-            aria-label="System Control">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1v3M4.2 19.8l1.4-1.4M2 12h3m13-7l1.4 1.4M12 21a9 9 0 100-18 9 9 0 000 18z" />
-        </svg>
-    </button>
+<header class="mb-8">
+<h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control Dashboard</h1>
+<p class="text-gray-300">Manage scripts, generate charts, and control the Kabot-1 payload.</p>
 </header>
 
 <section class="card p-6 mb-8" id="main-controller-card">
@@ -188,6 +178,19 @@ body {
   </div>
 </section>
 
+<section class="card p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Kabot-1 System Control</h2>
+    <div class="flex flex-wrap gap-4 items-center">
+        <button onclick="systemControl('reboot')" class="btn bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md">
+            Reboot Kabot-1
+        </button>
+        <button onclick="systemControl('shutdown')" class="btn bg-red-800 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-md">
+            Shutdown Kabot-1
+        </button>
+    </div>
+</section>
+
+
 <section class="card p-6">
   <h2 class="text-xl font-semibold mb-4 text-white">Generated Charts Preview</h2>
   <div id="charts-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -204,81 +207,10 @@ body {
 </section>
 
 </div>
-
-<!-- NEW: System Control Modal (Full Screen Overlay) -->
-<div id="powerControlModal" 
-     class="fixed inset-0 bg-gray-900 bg-opacity-95 z-[100] hidden flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
-    
-    <div class="card p-8 w-full max-w-lg mx-auto relative transform transition-transform duration-300 scale-95 opacity-0" 
-         id="modalContent">
-        
-        <!-- Close Button (X Icon) in top right -->
-        <button onclick="closePowerControlModal()" 
-                class="absolute top-4 right-4 p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition"
-                aria-label="Close System Control">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-        </button>
-
-        <h2 class="text-3xl font-bold mb-6 text-red-500 border-b border-gray-700 pb-2">Kabot-1 System Control</h2>
-        <p class="text-gray-300 mb-8">
-            Select an action below. **Warning**: These actions will cause the Kabot-1 system to lose connection and interrupt any ongoing operations.
-        </p>
-
-        <div class="flex flex-col space-y-6">
-            <!-- Reboot Button -->
-            <button onclick="executeSystemAction('reboot')" 
-                    class="w-full btn bg-orange-600 hover:bg-orange-700 text-white font-extrabold py-4 px-6 rounded-lg text-xl shadow-xl transition transform hover:scale-[1.02] focus:ring-4 focus:ring-orange-500/50 flex items-center justify-center">
-                <svg class="w-6 h-6 inline-block mr-3 align-middle" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 0012 4M12 20a8.001 8.001 0 007.072-4h-.582m-15.356 2A8.001 8.001 0 0112 20m7.788-2.618L21 21"></path>
-                </svg>
-                Reboot Kabot-1
-            </button>
-
-            <!-- Shutdown Button -->
-            <button onclick="executeSystemAction('shutdown')" 
-                    class="w-full btn bg-red-800 hover:bg-900 text-white font-extrabold py-4 px-6 rounded-lg text-xl shadow-xl transition transform hover:scale-[1.02] focus:ring-4 focus:ring-red-500/50 flex items-center justify-center">
-                <svg class="w-6 h-6 inline-block mr-3 align-middle" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1v3M4.2 19.8l1.4-1.4M2 12h3m13-7l1.4 1.4M12 21a9 9 0 100-18 9 9 0 000 18z" />
-                </svg>
-                Shutdown Kabot-1
-            </button>
-        </div>
-    </div>
-</div>
-
 <script>
 const statusOutput = document.getElementById('status_output');
 // CORRECTED: The scripts_config variable is now properly initialized from Jinja
 const SCRIPTS_CONFIG = {{ scripts_config | tojson }};
-
-// --- Power Control Modal Logic (NEW) ---
-const powerControlModal = document.getElementById('powerControlModal');
-const modalContent = document.getElementById('modalContent');
-
-function openPowerControlModal() {
-    powerControlModal.classList.remove('hidden');
-    // Force reflow and apply opacity/scale transitions
-    void powerControlModal.offsetWidth; 
-    powerControlModal.classList.add('opacity-100');
-    modalContent.classList.remove('scale-95', 'opacity-0');
-    modalContent.classList.add('scale-100', 'opacity-100');
-}
-
-function closePowerControlModal() {
-    modalContent.classList.remove('scale-100', 'opacity-100');
-    modalContent.classList.add('scale-95', 'opacity-0');
-    powerControlModal.classList.remove('opacity-100');
-    powerControlModal.classList.add('opacity-0');
-    
-    // Hide the modal after transition completes
-    setTimeout(() => {
-        powerControlModal.classList.add('hidden');
-    }, 300); 
-}
-// --- END Power Control Modal Logic ---
-
 
 // --- Utility Functions ---
 
@@ -301,21 +233,6 @@ function showAlert(message, type = 'success') {
     }, 5000);
 }
 
-// =========================================================================
-// Buzzer Control Logic (Now purely informational, manual beep removed)
-// =========================================================================
-
-/**
- * Triggers a beep on the Kabot server via the API.
- * This function is now stubbed out as the manual beep has been removed.
- * It is kept for reference but is not called for the Start Flight button.
- */
-async function triggerBeep(duration) {
-    console.warn(`Manual beep requested for ${duration}s, but is disabled.`);
-    return true; // Always return true to avoid blocking the launch sequence
-}
-
-
 // --- Main Controller Control ---
 
 async function controlMainController(action) {
@@ -330,36 +247,21 @@ async function controlMainController(action) {
     const targetBtn = (action === 'start') ? startBtn : stopBtn;
     targetBtn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
 
-    let finalMessage = "";
-    let finalSuccess = false;
-    
-    // 1. If action is 'start', show informative message only (NO MANUAL BEEP CALL)
-    if (action === 'start') {
-        showAlert('Flight Controller start requested.', 'info');
-    }
-
-    // 2. Start/Stop the actual script
     try {
+        // *** PATCH APPLIED HERE: Reverting to generic script control route for main.py ***
         // Backend's api_script_control function now handles 'main_controller'
         const response = await fetch(`/api/script/main_controller/${action}`, { method: 'POST' });
         const result = await response.json();
         
-        finalSuccess = result.success;
-        if (finalSuccess) {
-            finalMessage = result.message;
+        // Success check includes the possibility of status code 403 (Forbidden) if main.py is active
+        if (result.success) {
+            showAlert(`${result.message}`, 'success');
         } else {
-            finalMessage = `Error: ${result.message}`;
+            showAlert(`Error: ${result.message}`, 'error');
         }
     } catch (error) {
-        finalMessage = `Network error: Could not contact server for ${action}.`;
-        finalSuccess = false;
+        showAlert(`Network error: Could not contact server for ${action}.`, 'error');
     } finally {
-        if (finalSuccess) {
-            showAlert(`${finalMessage}`, 'success');
-        } else {
-            showAlert(`${finalMessage}`, 'error');
-        }
-        
         startBtn.innerHTML = originalStartText;
         stopBtn.innerHTML = 'Stop Flight';
         fetchStatus(); // Refresh status to update button states
@@ -580,14 +482,37 @@ function refreshChartImage(sensor, url) {
   };
 }
 
-// --- System Control (Now executed directly from modal buttons) ---
+// --- System Control ---
 
-async function executeSystemAction(action) {
-    
-    closePowerControlModal(); // Close the modal immediately after selection
+async function systemControl(action) {
+    // Custom replacement for window.confirm
+    const isConfirmed = await new Promise(resolve => {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
+        modal.innerHTML = `
+            <div class="card p-6 w-11/12 max-w-sm">
+                <h3 class="text-xl font-bold text-red-500 mb-4">CONFIRM SYSTEM ACTION</h3>
+                <p class="text-gray-300 mb-6">Are you absolutely sure you want to <strong>${action.toUpperCase()}</strong> the Raspberry Pi? This will interrupt operations and disconnect the dashboard.</p>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancel-btn" class="btn px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancel</button>
+                    <button id="confirm-btn" class="btn px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded">
+                        ${action.toUpperCase()}
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
 
-    const allButtons = document.querySelectorAll('.btn');
-    allButtons.forEach(b => b.disabled = true);
+        document.getElementById('cancel-btn').onclick = () => { modal.remove(); resolve(false); };
+        document.getElementById('confirm-btn').onclick = () => { modal.remove(); resolve(true); };
+    });
+
+    if (!isConfirmed) {
+        return;
+    }
+
+    const buttons = document.querySelectorAll('.btn');
+    buttons.forEach(b => b.disabled = true);
 
     try {
         const response = await fetch(`/api/control/${action}`, { method: 'POST' });
@@ -595,25 +520,15 @@ async function executeSystemAction(action) {
         
         if (result.success) {
             showAlert(`${result.message}`, 'info');
-            // Display success message prominently as the connection will be lost
-            document.body.innerHTML = `
-                <div class="text-center mt-20 text-3xl font-bold text-red-500 p-8">
-                    ${result.message}
-                </div>
-                <div class="text-center text-gray-400">
-                    The connection will be lost. Please wait for the system to restart or shutdown.
-                </div>
-            `;
+            // Display success message prominently
+            document.body.innerHTML = `<div class="text-center mt-20 text-3xl font-bold text-red-500 p-8">${result.message}</div><div class="text-center text-gray-400">The connection will be lost. Please wait for the system to restart.</div>`;
         } else {
             showAlert(`System control failed: ${result.message}`, 'error');
         }
     } catch (error) {
         showAlert(`Network error: Failed to send ${action} command.`, 'error');
     } finally {
-        // Only re-enable buttons if the page content wasn't overwritten
-        if (document.getElementById('powerControlModal')) {
-            allButtons.forEach(b => b.disabled = false);
-        }
+        buttons.forEach(b => b.disabled = false);
     }
 }
 
@@ -629,4 +544,3 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
-
