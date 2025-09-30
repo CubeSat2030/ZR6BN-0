@@ -241,7 +241,7 @@ def reset_auto_start_timer():
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
 
-def buzzer_double_beep(delay_between_beeps=0.1, total_duration=3.0):
+def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # <-- MODIFIED: total_duration set to 10.0
     """Executes the two rapid beeps and waits for the remaining duration."""
     if not BUZZER_AVAILABLE:
         time.sleep(total_duration)
@@ -332,7 +332,7 @@ def start_buzzer_countdown():
             
         else: 
             # --- CONNECTION STANDBY HEARTBEAT ---
-            buzzer_double_beep(delay_between_beeps=0.1, total_duration=3.0)
+            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0) # <-- MODIFIED: total_duration set to 10.0
 
 
 @app.before_request
@@ -440,7 +440,8 @@ if __name__ == "__main__":
     print(f"Auto-Start Timeout: {AUTO_START_TIMEOUT} seconds.")
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
-        print("Status: Standby Heartbeat (2 quick beeps/3s) while connected.")
+        # Note the change in the print statement to reflect the new duration
+        print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.") 
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
