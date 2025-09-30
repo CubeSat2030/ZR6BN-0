@@ -3,6 +3,8 @@
 # =========================================================================
 # FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
 # dictionary to prevent Internal Server Errors (500) due to race conditions.
+#
+# NEW FEATURE: Single-Client WebUI Access Control
 # =========================================================================
 
 import subprocess
@@ -12,7 +14,7 @@ import time
 import signal
 import os
 import threading
-from flask import Flask, render_template, jsonify, send_from_directory, abort
+from flask import Flask, render_template, jsonify, send_from_directory, abort, request, redirect, url_for
 
 try:
     from gpiozero import Buzzer
@@ -32,7 +34,7 @@ MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 
 SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger"
-PLOT_DIR = SRC_DIR / "plotter"
+PLOT_DIR = PLOT_DIR / "plotter"
 CHARTS_DIR = PLOT_DIR / "charts"
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
@@ -42,6 +44,11 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 AUTO_START_TIMEOUT = 60 # Seconds
 LAST_CONNECTION_TIME = time.time()
 BUZZER_THREAD_STOP = threading.Event()
+
+# --- SINGLE-CLIENT ACCESS CONTROL VARIABLES ---
+AUTHORIZED_CLIENT_IP = None
+LAST_ACTIVE_IP = None # Used to display which IP currently has control
+# ----------------------------------------------
 
 # --- Flask App Initialization ---
 app = Flask(__name__, template_folder=str(TEMPLATES_DIR))
@@ -241,7 +248,7 @@ def reset_auto_start_timer():
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time() 
 
-def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # MODIFIED: 10.0s total pulse time
+def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0):
     """Executes the two rapid beeps and waits for the remaining duration."""
     if not BUZZER_AVAILABLE:
         time.sleep(total_duration)
@@ -267,7 +274,7 @@ def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # MODIFIED
     if remaining_wait > 0:
         time.sleep(remaining_wait)
 
-def solid_beep(duration=3.0): # NEW FUNCTION for solid beep
+def solid_beep(duration=3.0):
     """Executes a single, solid beep for the specified duration."""
     if not BUZZER_AVAILABLE:
         print(f"[BUZZER] Solid beep of {duration}s requested but unavailable.")
@@ -347,18 +354,90 @@ def start_buzzer_countdown():
             
         else: 
             # --- CONNECTION STANDBY HEARTBEAT ---
-            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0) # MODIFIED: 10.0s pulse
+            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
 
 
 @app.before_request
 def update_last_connection_time():
     """Hook runs before every request to reset the auto-start timer."""
-    reset_auto_start_timer()
+    # We only reset the timer if the request is from the currently authorized client
+    global AUTHORIZED_CLIENT_IP
+    if AUTHORIZED_CLIENT_IP == request.remote_addr:
+        reset_auto_start_timer()
 
+
+# =========================================================================
+# ACCESS CONTROL LOGIC
+# =========================================================================
+
+@app.before_request
+def before_request_access_check():
+    """
+    Enforces single-client access. The first client to access the root page 
+    becomes the AUTHORIZED_CLIENT_IP. Subsequent non-authorized clients are 
+    redirected to a lockout page.
+    """
+    global AUTHORIZED_CLIENT_IP
+    global LAST_ACTIVE_IP
+    
+    current_ip = request.remote_addr
+
+    # If the user is trying to access the lock page, let them through
+    if request.path == url_for('lockout'):
+        return None # Proceed to the lockout page
+
+    # 1. Authorize on first access to the dashboard page ("/")
+    if request.path == url_for('index'):
+        if AUTHORIZED_CLIENT_IP is None:
+            AUTHORIZED_CLIENT_IP = current_ip
+            LAST_ACTIVE_IP = current_ip
+            print(f"[ACCESS CONTROL] Authorized initial client: {current_ip}")
+            return None # Proceed to the dashboard
+        
+        elif current_ip == AUTHORIZED_CLIENT_IP:
+            LAST_ACTIVE_IP = current_ip # Update active IP
+            return None # Proceed to the dashboard
+            
+        else:
+            # Block unauthorized client attempting to access the dashboard
+            print(f"[ACCESS CONTROL] Unauthorized client {current_ip} blocked from index.")
+            return redirect(url_for('lockout'))
+
+    # 2. Block all API/resource access if the current IP is not the authorized one
+    # Note: Requests for charts or API status will fail here if unauthorized
+    if AUTHORIZED_CLIENT_IP is not None and current_ip != AUTHORIZED_CLIENT_IP:
+        # Allow unauthorized users to see charts and API status ONLY if Flight Controller is running.
+        # This keeps the telemetry visible to observers.
+        if is_main_controller_active():
+            print(f"[ACCESS CONTROL] Unauthorized client {current_ip} permitted viewing (Flight Active).")
+            return None 
+            
+        # Block control actions or sensitive requests if not authorized.
+        if request.method == 'POST' or request.path.startswith('/api'):
+            print(f"[ACCESS CONTROL] Unauthorized client {current_ip} blocked from API/POST.")
+            # For API calls, return a 403 response instead of a redirect
+            if request.path.startswith('/api'):
+                return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
+            else:
+                return redirect(url_for('lockout'))
+                
+        # Allow GET access to charts for general viewing
+        if request.path.startswith('/chart'):
+            return None
+
+    # If authorized or the path is not the index/lockout, proceed
+    return None
 
 # =========================================================================
 # FLASK API ROUTES
 # =========================================================================
+
+@app.route("/lockout")
+def lockout():
+    """Page displayed when a client attempts to access the UI while another client is authorized."""
+    # Note: We use LAST_ACTIVE_IP here as AUTHORIZED_CLIENT_IP might be None
+    controller_ip = LAST_ACTIVE_IP if LAST_ACTIVE_IP else "N/A (First client to load will take control)"
+    return render_template("lockout.html", controller_ip=controller_ip), 403
 
 @app.route("/")
 def index():
@@ -377,6 +456,11 @@ def api_status():
 
 @app.route('/api/script/<name>/<action>', methods=['POST'])
 def api_script_control(name, action):
+    # This check is technically redundant due to before_request_access_check,
+    # but kept as a redundant safety measure for control actions.
+    if AUTHORIZED_CLIENT_IP != request.remote_addr:
+        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
+        
     if name == 'main_controller':
         name = 'main'
         
@@ -394,14 +478,22 @@ def api_script_control(name, action):
 
 @app.route('/api/chart/<name>', methods=['POST'])
 def api_chart_generate(name):
+    # This check is technically redundant due to before_request_access_check
+    if AUTHORIZED_CLIENT_IP != request.remote_addr:
+        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
+
     if is_main_controller_active():
         return jsonify({"success": False, "message": "Flight Controller is active. Cannot generate charts."}), 403
         
     success, message = run_plotter(name)
     return jsonify({"success": success, "message": message})
 
-@app.route('/api/beep/<float:duration>', methods=['POST']) # NEW ROUTE for immediate beep
+@app.route('/api/beep/<float:duration>', methods=['POST'])
 def api_trigger_beep(duration):
+    # This check is technically redundant due to before_request_access_check
+    if AUTHORIZED_CLIENT_IP != request.remote_addr:
+        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
+
     if not BUZZER_AVAILABLE:
         return jsonify({"success": False, "message": "Buzzer hardware is not available."}), 503
     
@@ -424,6 +516,10 @@ def download_chart(filename):
     
 @app.route('/api/control/<action>', methods=['POST'])
 def api_system_control(action):
+    # This check is technically redundant due to before_request_access_check
+    if AUTHORIZED_CLIENT_IP != request.remote_addr:
+        return jsonify({"success": False, "message": f"Access denied. WebUI is currently controlled by {AUTHORIZED_CLIENT_IP}."}), 403
+        
     if action == 'reboot':
         cmd = ["sudo", "reboot"]
         message = "System will reboot momentarily."
