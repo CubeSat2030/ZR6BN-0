@@ -12,6 +12,7 @@ import time
 import signal
 import os
 import threading
+import shutil # <--- ADDED for data wipe
 from flask import Flask, render_template, jsonify, send_from_directory, abort
 
 try:
@@ -31,9 +32,9 @@ BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 
 SRC_DIR = BASE_DIR / "src"
-LOG_DIR = SRC_DIR / "logger"
+LOG_DIR = SRC_DIR / "logger" # Data folder location: src/logger/
 PLOT_DIR = SRC_DIR / "plotter"
-CHARTS_DIR = PLOT_DIR / "charts"
+CHARTS_DIR = PLOT_DIR / "charts" # Charts folder location: src/plotter/charts/
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -226,6 +227,50 @@ def run_plotter(name):
         return False, f"Plotter {name} timed out after 45 seconds."
     except Exception as e:
         return False, f"Failed to run plotter {name}: {str(e)}"
+
+def wipe_data_and_charts():
+    """Deletes all .txt files in LOG_DIR and the entire CHARTS_DIR."""
+    if is_main_controller_active():
+        return False, "Flight Controller (main.py) is running. Data wipe is disabled."
+
+    log_success = True
+    chart_success = True
+    
+    # 1. Delete all .txt files in the log directory (src/logger/)
+    log_file_count = 0
+    try:
+        for file in LOG_DIR.glob("*.txt"):
+            if file.is_file():
+                os.remove(file)
+                log_file_count += 1
+        print(f"[DATA WIPE] Deleted {log_file_count} log files from {LOG_DIR}")
+    except Exception as e:
+        log_success = False
+        print(f"[DATA WIPE ERROR] Failed to delete log files: {e}")
+
+    # 2. Delete the entire charts directory (src/plotter/charts/) and recreate it
+    chart_file_count = 0
+    try:
+        if CHARTS_DIR.exists():
+            # Count files before deletion (approximate)
+            chart_file_count = len(list(CHARTS_DIR.glob("*.svg")))
+            shutil.rmtree(CHARTS_DIR)
+            print(f"[DATA WIPE] Deleted {chart_file_count} charts and the directory {CHARTS_DIR}")
+        
+        # Always attempt to recreate the directory for future plotting
+        CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+        
+    except Exception as e:
+        chart_success = False
+        print(f"[DATA WIPE ERROR] Failed to delete/recreate charts directory: {e}")
+        
+    if log_success and chart_success:
+        return True, f"Successfully wiped {log_file_count} log files and {chart_file_count} chart files."
+    else:
+        msg = "Partial success/failure during wipe: "
+        if not log_success: msg += "Failed to clean log files. "
+        if not chart_success: msg += "Failed to clean charts folder. "
+        return False, msg.strip()
 
 
 # =========================================================================
@@ -439,6 +484,19 @@ def api_system_control(action):
         return jsonify({"success": True, "message": message})
     except Exception as e:
         return jsonify({"success": False, "message": f"Failed to execute command: {str(e)}"}), 500
+
+@app.route('/api/control/wipe_data', methods=['POST'])
+def api_wipe_data(): # <--- NEW ROUTE for data wipe
+    """API endpoint to wipe all logged data and generated charts."""
+    success, message = wipe_data_and_charts()
+    if success:
+        return jsonify({"success": True, "message": message}), 200
+    else:
+        # Use 403 Forbidden if the main controller is running
+        if "Flight Controller" in message:
+            return jsonify({"success": False, "message": message}), 403
+        else:
+            return jsonify({"success": False, "message": message}), 500
 
 
 if __name__ == "__main__":
