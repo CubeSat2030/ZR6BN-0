@@ -177,6 +177,10 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-0.5 -4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 15.5 2m0.5 4v-4h-4"></path></svg>
                     <span>Reboot Kabot-1</span>
                 </button>
+                <button onclick="handleModalSystemControl('wipe_data')" class="btn w-full bg-yellow-700 hover:bg-yellow-800 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M4 7l16 0"></path><path d="M10 11l0 6"></path><path d="M14 11l0 6"></path><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"></path><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"></path></svg>
+                    <span>Wipe All Log Data</span>
+                </button>
             </div>
         </div>
     </div>
@@ -382,26 +386,61 @@
             imgElement.src = 'https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated';
         };
     }
+    
+    // --- MODIFIED systemControl function to handle wipe_data action ---
     async function systemControl(action) {
+        let confirmationMessage = '';
+        if (action === 'shutdown') {
+            confirmationMessage = 'Are you absolutely sure you want to <strong>SHUTDOWN</strong> Kabot-1?';
+        } else if (action === 'reboot') {
+            confirmationMessage = 'Are you absolutely sure you want to <strong>REBOOT</strong> Kabot-1?';
+        } else if (action === 'wipe_data') { // <--- NEW WIPE DATA LOGIC
+            confirmationMessage = 'Are you absolutely sure you want to <strong>PERMANENTLY DELETE</strong> all log (.txt) and chart (.svg) data? This cannot be undone.';
+        } else {
+            openSystemControlModal(); 
+            return;
+        }
+
         const isConfirmed = await new Promise(resolve => {
             const modal = document.createElement('div');
             modal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
-            modal.innerHTML = `<div class="card p-6 w-11/12 max-w-sm"> <h3 class="text-xl font-bold text-red-500 mb-4">CONFIRM SYSTEM ACTION</h3> <p class="text-gray-300 mb-6">Are you absolutely sure you want to <strong>${action.toUpperCase()}</strong> Kabot-1?</p> <div class="flex justify-end space-x-3"> <button id="cancel-btn" class="btn px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancel</button> <button id="confirm-btn" class="btn px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded">${action.toUpperCase()}</button> </div> </div>`;
+            modal.innerHTML = `<div class="card p-6 w-11/12 max-w-sm"> <h3 class="text-xl font-bold text-red-500 mb-4">CONFIRM SYSTEM ACTION</h3> <p class="text-gray-300 mb-6">${confirmationMessage}</p> <div class="flex justify-end space-x-3"> <button id="cancel-btn" class="btn px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancel</button> <button id="confirm-btn" class="btn px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded">${action.toUpperCase().replace('_', ' ')}</button> </div> </div>`;
             document.body.appendChild(modal);
             document.getElementById('cancel-btn').onclick = () => { modal.remove(); resolve(false); };
             document.getElementById('confirm-btn').onclick = () => { modal.remove(); resolve(true); };
         });
+
         if (!isConfirmed) { openSystemControlModal(); return; }
+        
         document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+        
         try {
             const response = await fetch(`/api/control/${action}`, { method: 'POST' });
             const result = await response.json();
+
             if (result.success) {
-                showAlert(`${result.message}`, 'info');
-                document.body.innerHTML = `<div class="text-center mt-20 text-3xl font-bold text-red-500 p-8">${result.message}</div><div class="text-center text-gray-400">The connection will be lost.</div>`;
-            } else { showAlert(`System control failed: ${result.message}`, 'error'); document.querySelectorAll('.btn').forEach(b => b.disabled = false); }
-        } catch (error) { showAlert(`Network error: Failed to send ${action} command.`, 'error'); document.querySelectorAll('.btn').forEach(b => b.disabled = false); }
+                showAlert(`${result.message}`, action === 'wipe_data' ? 'info' : 'success');
+                
+                if (action !== 'wipe_data') {
+                     // Shutdown/Reboot: lock dashboard and display final message
+                     document.body.innerHTML = `<div class="text-center mt-20 text-3xl font-bold text-red-500 p-8">${result.message}</div><div class="text-center text-gray-400">The connection will be lost.</div>`;
+                } else {
+                    // Data Wipe: re-enable buttons and fetch status to update charts
+                    document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+                    fetchStatus(); 
+                }
+            } else { 
+                showAlert(`System control failed: ${result.message}`, 'error'); 
+                document.querySelectorAll('.btn').forEach(b => b.disabled = false); 
+            }
+        } catch (error) { 
+            showAlert(`Network error: Failed to send ${action} command.`, 'error'); 
+            document.querySelectorAll('.btn').forEach(b => b.disabled = false); 
+        }
     }
+    // --- END MODIFIED systemControl function ---
+
+
     function openSystemControlModal() { document.getElementById('system-control-modal').classList.remove('hidden'); }
     function closeSystemControlModal() { document.getElementById('system-control-modal').classList.add('hidden'); }
     function handleModalSystemControl(action) { closeSystemControlModal(); systemControl(action); }
