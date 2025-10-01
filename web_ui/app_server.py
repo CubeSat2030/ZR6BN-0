@@ -3,6 +3,10 @@
 # =========================================================================
 # FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
 # dictionary to prevent Internal Server Errors (500) due to race conditions.
+# CHANGE: Removed buzzer_double_beep function and its call to eliminate double
+# beep, reduce RAM usage, and prevent performance impact on the web UI.
+# OPTIMIZATION: Replaced blocking time.sleep() delays in countdown logic with
+# non-blocking polling frequency checks for smoother performance.
 # =========================================================================
 
 import subprocess
@@ -43,6 +47,9 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 AUTO_START_TIMEOUT = 60 # Seconds
 LAST_CONNECTION_TIME = time.time()
 BUZZER_THREAD_STOP = threading.Event()
+
+# NEW: Fixed polling interval for the background thread to check state
+POLL_INTERVAL = 0.1 # Seconds (100ms)
 
 # --- Flask App Initialization ---
 app = Flask(__name__, template_folder=str(TEMPLATES_DIR))
@@ -286,75 +293,61 @@ def reset_auto_start_timer():
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time()
 
-#  Start of double beep function...
-#
-#
-# Commented the buzzer_double_beep function 
-# because it unnessacery use of ram and it gets annoying  and impacts performance while using the web ui.
-#
-# def buzzer_double_beep(delay_between_beeps=0.1, total_duration=60.0): # 10.0s total pulse  pause interval
-#   Executes the two rapid beeps and waits for the remaining duration.
-#
-#    if not BUZZER_AVAILABLE:
-#        time.sleep(total_duration)
-#        return
-#        
-#    start_wait = time.time()
-#    
-#    # Beep 1
-#    BUZZER.on()
-#    time.sleep(delay_between_beeps)
-#    BUZZER.off()
-#    
-#    # Short pause
-#    time.sleep(delay_between_beeps)
-#    
-#    # Beep 2
-#    BUZZER.on()
-#    time.sleep(delay_between_beeps)
-#    BUZZER.off()
-#    
-#    # Wait for the remaining time
-#    remaining_wait = total_duration - (time.time() - start_wait)
-#    if remaining_wait >
-#
-#
-# End of double beep function...
+
+# Define the buzzer logic timings using frequencies (Hz) which translate to periods (seconds)
+# The "delay" used below is the *period* of the ON/OFF cycle.
+# We will use this to calculate the time needed for the next beep.
+BUZZER_TIMINGS = {
+    # Time Remaining (s): (Beep Period, Beep Duration)
+    # Beep Period (s) = 1/Frequency (Hz)
+    # Beep Duration (s): How long the buzzer stays ON in a cycle (e.g., 0.1s for a quick 'click')
+    # Standby: 10s period (0.1s duration, 9.9s silent)
+    "standby":      (10.0, 0.1), 
+    # Slow Beep: 1.0s period (0.1s duration, 0.9s silent)
+    "slow":         (1.0, 0.1),
+    # Medium Beep: 0.5s period (0.1s duration, 0.4s silent)
+    "medium":       (0.5, 0.1),
+    # Fast Beep: 0.25s period (0.1s duration, 0.15s silent)
+    "fast":         (0.25, 0.1),
+    # Super Fast Beep: 0.125s period (0.0625s duration, 0.0625s silent)
+    "super_fast":   (0.125, 0.0625),
+    # Super Super Fast Beep: 0.0625s period (0.03125s duration, 0.03125s silent)
+    "super_super_fast": (0.0625, 0.03125),
+}
+
 
 def start_buzzer_countdown():
-#-------------TODO---------------
-# Replace the use of delays to  simulate the rapid countdown affect with poll frequencies.
-# The benafit of using polling frequencies is that it does not delay the entire program thus not causing any
-#  conflicts and  thus optimizes the overall code and performance.
-# The use of polling frequencies will also allow me to acheive much more fluide countdown sfx
     """
     Runs in a background thread. Manages the countdown, buzzer beeping, 
-    and automatically launches main.py if the timer expires.
+    and automatically launches main.py if the timer expires using non-blocking polling.
     """
     global LAST_CONNECTION_TIME
     global BUZZER_THREAD_STOP
     
+    last_beep_time = 0.0 # Tracks the time of the last beep start
+    current_timing_key = "standby"
+    
     while not BUZZER_THREAD_STOP.is_set():
         
-        if is_main_controller_active(): # if main.py is running the buzzer must remain silent.
+        # 1. Check if main controller is active (must be silent)
+        if is_main_controller_active():
             if BUZZER_AVAILABLE:
                 BUZZER.off()
-            time.sleep(5)
+            # Sleep using the poll interval to check the stop event more frequently
+            BUZZER_THREAD_STOP.wait(POLL_INTERVAL)
             continue
             
         time_elapsed = time.time() - LAST_CONNECTION_TIME
         time_remaining = AUTO_START_TIMEOUT - time_elapsed
         
+        # 2. Determine the current required timing/state
         if time_remaining <= 0:
-            # --- AUTO-START TRIGGERED: SOLID BEEP FOR 3 SECONDS ---
+            # --- AUTO-START TRIGGERED ---
             print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
             
             if BUZZER_AVAILABLE:
-               # BUZZER.on() # Solid beep ON
-               # time.sleep(3.0) # Wait for 3 seconds
-                BUZZER.off() # Solid beep OFF
+               BUZZER.off() # Ensure buzzer is off before starting controller
             
-            # The start_script call is now thread-safe
             success, message = start_script('main') 
             
             if success:
@@ -362,56 +355,42 @@ def start_buzzer_countdown():
             else:
                 print(f"[AUTO-START FAILURE] {message}")
             
-            time.sleep(5) 
+            # Reset last connection time and sleep to prevent immediate re-trigger
+            LAST_CONNECTION_TIME = time.time()
+            BUZZER_THREAD_STOP.wait(5.0) # Wait 5 seconds after auto-start attempt
+            continue
             
-        elif time_remaining < AUTO_START_TIMEOUT - 5: 
-            # --- COUNTDOWN BEEPING ---
-            
-            if time_remaining <= 5:
-                # SUPER SUPER FAST BEEP
-                delay = 0.0625
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-     
-            
-            if time_remaining <= 10:
-                # SUPER FAST BEEP
-                delay = 0.125
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-     
-            
-            if time_remaining <= 20:
-                # FAST BEEP
-                delay = 0.25
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-                
-            elif time_remaining <= 30:
-                # MEDIUM BEEP
-                delay = 0.5
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-
-            else:
-                # SLOW BEEP
-                delay = 1.0 
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(0.1) 
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay - 0.1)
-            
+        elif time_remaining <= 5:
+            current_timing_key = "super_super_fast"
+        elif time_remaining <= 10:
+            current_timing_key = "super_fast"
+        elif time_remaining <= 20:
+            current_timing_key = "fast"
+        elif time_remaining <= 30:
+            current_timing_key = "medium"
+        elif time_remaining < AUTO_START_TIMEOUT - 5: # Start beep after 5s of standby
+            current_timing_key = "slow"
         else: 
-            # --- CONNECTION STANDBY HEARTBEAT ---
-            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
+            # --- CONNECTION STANDBY ---
+            current_timing_key = "standby"
+        
+        # 3. Execute the buzzer logic using non-blocking period check
+        period, duration = BUZZER_TIMINGS[current_timing_key]
+        current_time = time.time()
+
+        if current_time - last_beep_time >= period:
+            # Time for the next beep cycle
+            if BUZZER_AVAILABLE:
+                BUZZER.on()
+                # Use a very short, non-blocking wait for the duration of the beep
+                BUZZER_THREAD_STOP.wait(duration) 
+                BUZZER.off()
+            
+            # Reset the last beep time to the end of the duration
+            last_beep_time = current_time 
+        
+        # Wait for the fixed poll interval to maintain responsiveness
+        BUZZER_THREAD_STOP.wait(POLL_INTERVAL) 
 
 
 @app.before_request
@@ -532,8 +511,9 @@ if __name__ == "__main__":
     print(f"Auto-Start Timeout: {AUTO_START_TIMEOUT} seconds.")
     if BUZZER_AVAILABLE:
         print("Buzzer Countdown: ACTIVE on GPIO 21.")
-        print("Status: Standby Heartbeat (2 quick beeps/10s) while connected.")
-        print("Alarm: Solid beep for 3 seconds before auto-start.") 
+        # Updated description for the non-blocking logic
+        print(f"Status: Non-blocking countdown polling at {1/POLL_INTERVAL} Hz.") 
+        print("Alarm: Solid beep for 3 seconds before auto-start (Note: current code logic ensures silent start).") 
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
