@@ -284,36 +284,49 @@ def reset_auto_start_timer():
         BUZZER.off() 
     
     if not is_main_controller_active():
-        LAST_CONNECTION_TIME = time.time() 
+        LAST_CONNECTION_TIME = time.time()
 
-def buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0): # 10.0s total pulse  pause interval
-    """Executes the two rapid beeps and waits for the remaining duration."""
-    if not BUZZER_AVAILABLE:
-        time.sleep(total_duration)
-        return
-        
-    start_wait = time.time()
-    
-    # Beep 1
-    BUZZER.on()
-    time.sleep(delay_between_beeps)
-    BUZZER.off()
-    
-    # Short pause
-    time.sleep(delay_between_beeps)
-    
-    # Beep 2
-    BUZZER.on()
-    time.sleep(delay_between_beeps)
-    BUZZER.off()
-    
-    # Wait for the remaining time
-    remaining_wait = total_duration - (time.time() - start_wait)
-    if remaining_wait > 0:
-        time.sleep(remaining_wait)
-
+#  Start of double beep function...
+#
+#
+# Commented the buzzer_double_beep function 
+# because it unnessacery use of ram and it gets annoying  and impacts performance while using the web ui.
+#
+# def buzzer_double_beep(delay_between_beeps=0.1, total_duration=60.0): # 10.0s total pulse  pause interval
+#   Executes the two rapid beeps and waits for the remaining duration.
+#
+#    if not BUZZER_AVAILABLE:
+#        time.sleep(total_duration)
+#        return
+#        
+#    start_wait = time.time()
+#    
+#    # Beep 1
+#    BUZZER.on()
+#    time.sleep(delay_between_beeps)
+#    BUZZER.off()
+#    
+#    # Short pause
+#    time.sleep(delay_between_beeps)
+#    
+#    # Beep 2
+#    BUZZER.on()
+#    time.sleep(delay_between_beeps)
+#    BUZZER.off()
+#    
+#    # Wait for the remaining time
+#    remaining_wait = total_duration - (time.time() - start_wait)
+#    if remaining_wait >
+#
+#
+# End of double beep function...
 
 def start_buzzer_countdown():
+#-------------TODO---------------
+# Replace the use of delays to  simulate the rapid countdown affect with poll frequencies.
+# The benafit of using polling frequencies is that it does not delay the entire program thus not causing any
+#  conflicts and  thus optimizes the overall code and performance.
+# The use of polling frequencies will also allow me to acheive much more fluide countdown sfx
     """
     Runs in a background thread. Manages the countdown, buzzer beeping, 
     and automatically launches main.py if the timer expires.
@@ -323,7 +336,7 @@ def start_buzzer_countdown():
     
     while not BUZZER_THREAD_STOP.is_set():
         
-        if is_main_controller_active():
+        if is_main_controller_active(): # if main.py is running the buzzer must remain silent.
             if BUZZER_AVAILABLE:
                 BUZZER.off()
             time.sleep(5)
