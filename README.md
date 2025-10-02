@@ -14,26 +14,27 @@ sudo reboot
 sudo raspi-config
 ~~~
 
-Perfect 👍 — here’s the expanded INSTALLATION.md including the Bluetooth PAN (Personal Area Network) setup on Raspberry Pi OS Lite (headless).
-
-You can drop this straight into your repo:
-
-⸻
-
-🚀 Kabot-1 Mission Control – Installation & Setup Guide
-
-This guide covers installing all dependencies and setting up the Mission Control Dashboard on a Raspberry Pi Zero W v1.2 running Raspberry Pi OS Lite.
-
-The dashboard runs only over Bluetooth PAN at http://192.168.50.1:5000/, while Wi-Fi remains available for telemetry or uplink.
+Got it ✅ — here’s the full installation & setup guide with the Bluetooth PAN network diagram included all in one Markdown file.
+You can save this as INSTALLATION.md in your repo.
 
 ⸻
 
-1️⃣ System Preparation
+
+# 🚀 Kabot-1 Mission Control – Installation & Setup Guide
+
+This guide covers installing all dependencies and setting up the **Mission Control Dashboard** on a **Raspberry Pi Zero W v1.2** running **Raspberry Pi OS Lite**.  
+
+The dashboard runs **only over Bluetooth PAN** at `http://192.168.50.1:5000/`, while Wi-Fi remains available for telemetry or uplink.  
+
+---
+
+## 1️⃣ System Preparation
 
 Update and install core tools:
 
+```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git git-lfs python3 python3-venv python3-pip bluez bluez-tools
+sudo apt install -y git git-lfs python3 python3-venv python3-pip bluez bluez-tools bridge-utils
 
 
 ⸻
@@ -93,20 +94,14 @@ After cloning, you should see:
 ⸻
 
 5️⃣ Configure Bluetooth PAN (Personal Area Network)
-	1.	Enable Bluetooth daemon (already enabled by default on Pi OS Lite):
+	1.	Enable Bluetooth daemon:
 
 sudo systemctl enable bluetooth
 sudo systemctl start bluetooth
 
-	2.	Set up a PAN network:
+	2.	Assign a static IP for PAN:
 
-Install bridge-utils (if not already present):
-
-sudo apt install -y bridge-utils
-
-	3.	Assign a static IP for PAN:
-
-Create a PAN interface config at:
+Create a PAN config:
 
 sudo nano /etc/network/interfaces.d/bnep0
 
@@ -117,9 +112,9 @@ iface bnep0 inet static
     address 192.168.50.1
     netmask 255.255.255.0
 
-	4.	Enable PAN role (NAP – Network Access Point):
+	3.	Start PAN service:
 
-Run in bluetoothctl:
+In bluetoothctl:
 
 bluetoothctl
 power on
@@ -128,15 +123,10 @@ default-agent
 discoverable on
 pairable on
 
-Then trust and pair your ground station device.
-
-Finally, run:
+Trust and pair your ground station device, then run:
 
 sudo bt-network -s nap bnep0
 
-This attaches the PAN to bnep0.
-
-Your Pi is now hosting a small Bluetooth network at 192.168.50.1.
 
 ⸻
 
@@ -198,6 +188,29 @@ sudo systemctl start webui
 
 ⸻
 
+9️⃣ Network Architecture
+
+                  ┌────────────────────────────┐
+                  │   Ground Station Device    │
+                  │ (Laptop / Tablet / Phone)  │
+                  │   Browser → Web UI         │
+                  └──────────────┬─────────────┘
+                                 │
+                        Bluetooth PAN Link
+                        (192.168.50.x subnet)
+                                 │
+                  ┌──────────────┴─────────────┐
+                  │ Raspberry Pi Zero W v1.2   │
+                  │   • web_ui/app_server.py   │
+                  │   • IP: 192.168.50.1       │
+                  │                            │
+                  │ Wi-Fi → Internet / Telemetry│
+                  │ (independent of PAN)        │
+                  └────────────────────────────┘
+
+
+⸻
+
 ✅ At this stage you have:
 	•	Git & Git LFS installed
 	•	Python venv set up
@@ -205,13 +218,9 @@ sudo systemctl start webui
 	•	Bluetooth PAN configured
 	•	Data logging & wipe functions operational
 
-⸻
+---
 
-Would you like me to also add a diagram of the network architecture (Pi ↔ Bluetooth PAN ↔ Ground Station) into the Markdown file so it’s visual and easier for new contributors?
-
-
-
-
+Do you also want me to add a **second diagram showing the data pipeline** (Sensors → Logger → JSON → Flask Dashboard → Ground Station), or is the network architecture diagram enough?
 ~~~
 
 ├── .gitattributes
