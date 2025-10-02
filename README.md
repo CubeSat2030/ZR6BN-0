@@ -1,3 +1,24 @@
+~~~ bash
+sudo apt update
+~~~
+
+~~~ bash
+sudo apt upgrade -y
+~~~
+
+~~~ bash
+sudo reboot
+~~~
+
+~~~ bash
+sudo raspi-config
+~~~
+
+
+
+
+
+
 ~~~
 
 ├── .gitattributes
