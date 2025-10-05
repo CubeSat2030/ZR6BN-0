@@ -1,3 +1,11 @@
+src/logger/utils.py
+src/network/{net_utils.py,email_notifier.py,sim7600_mail.py,downlink.py,upload_utils.py}
+src/photography/image_capture.py
+src/mission/{launch_detector.py,touchdown_detector.py,mission_orchestrator.py}
+src/web_ui/app_server.py
+main.py
+
+
 ~~~ bash
 sudo apt update
 ~~~
