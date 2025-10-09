@@ -1,3 +1,0 @@
-# downlink.py
-
-# This script wiil manage all scripts as subproccess located under its subfolder called event_listeners...
