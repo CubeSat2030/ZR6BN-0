@@ -1,6 +1,8 @@
 # =========================================================================
-# The Kabot-1 Mission: High-Altitude Environmental Data Logger
-# (Flight-Ready Version - Optimized for Low RAM/CPU)
+# The Kabot-1 Mission: CPU Temperature Logger (Flight-Ready)
+# =========================================================================
+# Logs CPU temperature to CSV and JSON, and emits a heartbeat file so the
+# master launcher can detect both crashes and stalls.
 # =========================================================================
 
 import time
@@ -11,15 +13,19 @@ import json
 # --- Configuration Settings ---
 FLIGHT_MODE = True  # Silence terminal output during flight
 
-# Directory for data files (Relative to src/logger/)
+# Data directories
 DATA_DIR = os.path.join("src", "logger", "data")
 DATA_FILE = os.path.join(DATA_DIR, "CPU_TEMP.txt")
-
-# Central file for real-time monitoring dashboard
 LIVE_DATA_FILE = os.path.join(DATA_DIR, "LATEST_SENSOR_DATA.json")
 
-# Store the start time of the script to calculate total runtime
+# Heartbeat directory
+HEARTBEAT_DIR = os.path.join("src", "logger", "heartbeats")
+HEARTBEAT_FILE = os.path.join(HEARTBEAT_DIR, "cpu_logger.json")
+
+# Store the start time of the script
 SCRIPT_START_TIME = datetime.now()
+
+# --- Utility Functions ---
 
 def read_cpu_temp():
     """Reads CPU temperature from system file (in °C)."""
@@ -52,6 +58,18 @@ def write_live_data(data):
         if not FLIGHT_MODE:
             print(f"Error writing live data JSON: {e}")
 
+def write_heartbeat():
+    """Write a heartbeat JSON file with the current timestamp."""
+    os.makedirs(HEARTBEAT_DIR, exist_ok=True)
+    try:
+        with open(HEARTBEAT_FILE, "w") as f:
+            json.dump({"last_heartbeat": datetime.now().isoformat()}, f)
+    except Exception:
+        # Fail silently in flight mode
+        pass
+
+# --- Main Functions ---
+
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -83,6 +101,9 @@ def main_loop():
                     "cpu_temp": round(temperature, 1)
                 }
                 write_live_data(data_point)
+
+                # --- Heartbeat update ---
+                write_heartbeat()
 
                 if not FLIGHT_MODE:
                     print(f"\rLogged: {timestamp} | CPU Temp: {temperature:.1f}°C", end="", flush=True)
