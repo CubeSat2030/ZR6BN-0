@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 import os
 import json
+from heartbeat import write_heartbeat
 # import sounddevice or microphone library as needed
 
 FLIGHT_MODE = True
@@ -13,9 +14,6 @@ FLIGHT_MODE = True
 DATA_DIR = os.path.join("src", "logger", "data")
 DATA_FILE = os.path.join(DATA_DIR, "SOUND.txt")
 LIVE_DATA_FILE = os.path.join(DATA_DIR, "LATEST_SENSOR_DATA.json")
-
-HEARTBEAT_DIR = os.path.join("src", "logger", "heartbeats")
-HEARTBEAT_FILE = os.path.join(HEARTBEAT_DIR, "sound_logger.json")
 
 SCRIPT_START_TIME = datetime.now()
 
@@ -31,14 +29,6 @@ def write_live_data(data):
     try:
         with open(LIVE_DATA_FILE, 'w') as f:
             json.dump(full_data, f, indent=4)
-    except:
-        pass
-
-def write_heartbeat():
-    os.makedirs(HEARTBEAT_DIR, exist_ok=True)
-    try:
-        with open(HEARTBEAT_FILE, "w") as f:
-            json.dump({"last_heartbeat": datetime.now().isoformat()}, f)
     except:
         pass
 
@@ -59,16 +49,12 @@ def main_loop():
             sound_level = 0.0
 
             timestamp = datetime.now().strftime("%H:%M:%S")
-            data_line = f"{timestamp},{sound_level}\n"
             with open(DATA_FILE, "a") as f:
-                f.write(data_line)
+                f.write(f"{timestamp},{sound_level}\n")
 
-            data_point = {
-                "timestamp": timestamp,
-                "sound_level": sound_level
-            }
+            data_point = {"timestamp": timestamp, "sound_level": sound_level}
             write_live_data(data_point)
-            write_heartbeat()
+            write_heartbeat("sound_logger.json")
 
             if not FLIGHT_MODE:
                 print(f"\rLogged Sound at {timestamp}", end="", flush=True)
