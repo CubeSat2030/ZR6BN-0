@@ -1,134 +1,83 @@
-import os
+# =========================================================================
+# Kabot-1 Mission: Sound Logger (Flight-Ready with Heartbeat)
+# =========================================================================
+
 import time
-import gpiozero
 from datetime import datetime
-import shutil
-import sys
+import os
+import json
+# import sounddevice or microphone library as needed
 
-# --- Hardware Pins (BCM Numbering) ---
-SOUND_DETECTOR_PIN = 14
-BUZZER_PIN = 21
+FLIGHT_MODE = True
 
-# --- File Paths ---
-# CHANGE 1: Define a directory for data files
-# PATCH: Corrected the syntax for defining DATA_DIR as a path string.
-DATA_DIR = os.path.join("src", "logger", "data") # Use os.path.join for platform independence
-DATA_FILE = os.path.join(DATA_DIR, "sound_data_D0.txt")
-DATA_BACKUP_FILE = os.path.join(DATA_DIR, "sound_data_D0_backup.txt")
+DATA_DIR = os.path.join("src", "logger", "data")
+DATA_FILE = os.path.join(DATA_DIR, "SOUND.txt")
+LIVE_DATA_FILE = os.path.join(DATA_DIR, "LATEST_SENSOR_DATA.json")
 
-# --- Configuration ---
-# Define your desired buzzer frequency (e.g., 440 Hz for an A note)
-BUZZER_FREQUENCY_HZ = 440
+HEARTBEAT_DIR = os.path.join("src", "logger", "heartbeats")
+HEARTBEAT_FILE = os.path.join(HEARTBEAT_DIR, "sound_logger.json")
 
-# --- Global gpiozero objects ---
-buzzer = None
-sound_sensor = None
+SCRIPT_START_TIME = datetime.now()
 
-def log_sound_data():
-    """Initializes hardware, performs sound tests, and logs data robustly."""
-    global buzzer, sound_sensor
-
-    # CHANGE 2: Ensure the data directory exists before doing anything else
+def write_live_data(data):
+    full_data = {}
+    if os.path.exists(LIVE_DATA_FILE):
+        try:
+            with open(LIVE_DATA_FILE, 'r') as f:
+                full_data = json.load(f)
+        except Exception:
+            pass
+    full_data.update(data)
     try:
-        if not os.path.exists(DATA_DIR):
-            os.makedirs(DATA_DIR)
-            print(f"Created data directory: {DATA_DIR}")
-    except Exception as e:
-        print(f"FATAL: Could not create data directory: {e}", file=sys.stderr)
-        return False
+        with open(LIVE_DATA_FILE, 'w') as f:
+            json.dump(full_data, f, indent=4)
+    except:
+        pass
 
-    # --- Critical file existence and creation check ---
+def write_heartbeat():
+    os.makedirs(HEARTBEAT_DIR, exist_ok=True)
+    try:
+        with open(HEARTBEAT_FILE, "w") as f:
+            json.dump({"last_heartbeat": datetime.now().isoformat()}, f)
+    except:
+        pass
+
+def main():
+    os.makedirs(DATA_DIR, exist_ok=True)
     if not os.path.exists(DATA_FILE):
-        print(f"Data file not found. Creating {DATA_FILE}...")
-        try:
-            with open(DATA_FILE, "w") as f:
-                # Adding system_uptime_s for reliable time measurement
-                f.write("timestamp_utc,system_uptime_s,sound_detected,is_buzzer_on\n")
-        except Exception as e:
-            print(f"Error creating file: {e}", file=sys.stderr)
-            return False
+        with open(DATA_FILE, "w") as f:
+            f.write("timestamp,sound_level\n")
 
-    # --- Backup data file before adding new data ---
+    if not FLIGHT_MODE:
+        print(f"Sound Logger active. Logging to {DATA_FILE}.")
+    main_loop()
+
+def main_loop():
     try:
-        if os.path.exists(DATA_FILE):
-            shutil.copyfile(DATA_FILE, DATA_BACKUP_FILE)
-    except Exception as e:
-        print(f"Warning: Could not create data backup: {e}", file=sys.stderr)
-
-    # --- GPIO Setup (Only runs once) ---
-    if buzzer is None or sound_sensor is None:
-        try:
-            # Instantiate buzzer as PWMOutputDevice to control frequency
-            buzzer = gpiozero.PWMOutputDevice(BUZZER_PIN, frequency=BUZZER_FREQUENCY_HZ)
-            # Use Button for the digital sound sensor D0 pin
-            sound_sensor = gpiozero.Button(SOUND_DETECTOR_PIN, pull_up=False)
-        except Exception as e:
-            print(f"FATAL: Error setting up gpiozero devices: {e}", file=sys.stderr)
-            if buzzer: buzzer.close()
-            if sound_sensor: sound_sensor.close()
-            return False
-
-    # --- Test 1: Buzzer ON (5 seconds of logging) ---
-    print("Starting Test 1: Buzzer ON")
-    if isinstance(buzzer, gpiozero.PWMOutputDevice):
-        buzzer.frequency = BUZZER_FREQUENCY_HZ
-    buzzer.on()  # Turn the buzzer on
-
-    for _ in range(5):
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        system_uptime = time.monotonic()
-        sound_detected = 1 if sound_sensor.is_pressed else 0
-
-        with open(DATA_FILE, "a") as f:
-            f.write(f"{timestamp},{system_uptime:.2f},{sound_detected},1\n")
-        time.sleep(1)
-
-    buzzer.off()  # Turn the buzzer off
-    print("Finished Test 1.")
-
-    # A brief pause between tests
-    time.sleep(1)
-
-    # --- Test 2: Ambient Sound (Buzzer OFF - 5 seconds of logging) ---
-    print("Starting Test 2: Ambient Sound")
-    for _ in range(5):
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        system_uptime = time.monotonic()
-        sound_detected = 1 if sound_sensor.is_pressed else 0
-
-        with open(DATA_FILE, "a") as f:
-            f.write(f"{timestamp},{system_uptime:.2f},{sound_detected},0\n")
-        time.sleep(1)
-    print("Finished Test 2.")
-    
-    return True
-
-if __name__ == "__main__":
-    print(f"Starting HAB Payload Logger...")
-    print(f"Buzzer frequency set to: {BUZZER_FREQUENCY_HZ} Hz")
-
-    try:
-        # Initial call to set up devices and log the first data point
-        if not log_sound_data():
-            print("Initial hardware setup failed. Exiting.")
-            sys.exit(1)
-
         while True:
-            print(f"Cycle finished. Waiting 20 minutes (1200 seconds)...")
-            time.sleep(1200)
-            
-            if not log_sound_data():
-                print("Logging cycle failed. Retrying after 20 minutes.")
+            # Replace with actual microphone read
+            sound_level = 0.0
+
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            data_line = f"{timestamp},{sound_level}\n"
+            with open(DATA_FILE, "a") as f:
+                f.write(data_line)
+
+            data_point = {
+                "timestamp": timestamp,
+                "sound_level": sound_level
+            }
+            write_live_data(data_point)
+            write_heartbeat()
+
+            if not FLIGHT_MODE:
+                print(f"\rLogged Sound at {timestamp}", end="", flush=True)
+
+            time.sleep(1)  # adjust sampling rate
 
     except KeyboardInterrupt:
-        print("\nApplication stopped by user (KeyboardInterrupt).")
-    except Exception as e:
-        print(f"\nFATAL UNHANDLED EXCEPTION: {e}", file=sys.stderr)
-    finally:
-        # Clean up GPIO pins to prevent issues on next boot
-        print("Cleaning up GPIO pins...")
-        if buzzer:
-            buzzer.close()
-        if sound_sensor:
-            sound_sensor.close()
-        print("Application terminated.")
+        if not FLIGHT_MODE:
+            print("\nSound logging terminated.")
+
+if __name__ == "__main__":
+    main()
