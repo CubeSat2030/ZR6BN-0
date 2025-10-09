@@ -1,8 +1,9 @@
 # =========================================================================
-# Kabot-1 Mission: Sound Logger (Flight-Ready with Heartbeat + ADS1115 + RMS + dB SPL)
+# Kabot-1 Mission: Sound Logger
 # =========================================================================
-# Logs RMS sound levels from a microphone connected to the Gravity 16-bit ADC.
-# Outputs to CSV, updates central JSON, and emits a heartbeat file.
+# Modes:
+#   --calibrate : Run calibration with known SPL tone (e.g. 94 dB @ 1 kHz).
+#   default     : Log RMS sound levels (volts + dB SPL) with heartbeat.
 # =========================================================================
 
 import time
@@ -10,6 +11,7 @@ from datetime import datetime
 import os
 import json
 import math
+import sys
 import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
@@ -25,7 +27,7 @@ LIVE_DATA_FILE = os.path.join(DATA_DIR, "LATEST_SENSOR_DATA.json")
 
 SCRIPT_START_TIME = datetime.now()
 
-# Reference voltage for dB SPL conversion (adjust after calibration)
+# Default reference voltage (will be updated after calibration)
 V_REF = 1.0  # volts RMS
 
 # --- Initialize I2C and ADC ---
@@ -52,7 +54,35 @@ def write_live_data(data):
     except:
         pass
 
-# --- Main Functions ---
+def compute_rms(samples):
+    """Compute RMS from a list of voltage samples."""
+    if not samples:
+        return 0.0
+    squares = [v**2 for v in samples]
+    return math.sqrt(sum(squares) / len(squares))
+
+# --- Calibration Mode ---
+
+def calibrate(spl_ref=94.0, sample_rate=100, window_sec=2):
+    """Calibrate V_REF using a known SPL tone."""
+    N = sample_rate * window_sec
+    print(f"Collecting {N} samples for calibration...")
+
+    samples = []
+    for _ in range(N):
+        samples.append(chan.voltage)
+        time.sleep(1.0 / sample_rate)
+
+    rms = compute_rms(samples)
+    v_ref = rms / (10 ** (spl_ref / 20))
+
+    print(f"\nCalibration Results:")
+    print(f"  Measured RMS Voltage: {rms:.6f} V")
+    print(f"  Calibration SPL: {spl_ref} dB")
+    print(f"  Computed V_REF: {v_ref:.9f} V")
+    print("\nUpdate V_REF in this script with the computed value for accurate dB SPL logging.")
+
+# --- Logging Mode ---
 
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -76,15 +106,13 @@ def main_loop():
                 samples.append(chan.voltage)
                 time.sleep(1.0 / SAMPLE_RATE)
 
-            # Compute RMS
-            squares = [v**2 for v in samples]
-            rms = math.sqrt(sum(squares) / len(squares))
+            rms = compute_rms(samples)
 
-            # Compute dB SPL (relative to V_REF)
-            if rms > 0:
+            # Compute dB SPL (relative to calibrated V_REF)
+            if rms > 0 and V_REF > 0:
                 db_spl = 20 * math.log10(rms / V_REF)
             else:
-                db_spl = -math.inf  # silence
+                db_spl = -math.inf
 
             timestamp = datetime.now().strftime("%H:%M:%S")
             with open(DATA_FILE, "a") as f:
@@ -105,5 +133,10 @@ def main_loop():
         if not FLIGHT_MODE:
             print("\nSound logging terminated.")
 
+# --- Entry Point ---
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--calibrate":
+        calibrate()
+    else:
+        main()
