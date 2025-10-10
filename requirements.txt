@@ -1,4 +1,35 @@
 # Note: gpiozero is required for the buzzer functionality and only works on a Raspberry Pi.
 # If running the server on a non-Pi device, you can comment out 'gpiozero'.
-Flask
+# Web UI / dashboard
+Flask==3.0.0
+Werkzeug==3.0.1
+Jinja2==3.1.4
+itsdangerous==2.2.0
+click==8.1.7
+
+# Camera (Picamera2 stack)
+picamera2==0.3.12
+# libcamera and kernel drivers must be installed via apt:
+#   sudo apt install -y libcamera0 libcamera-apps python3-libcamera
+
+# Audio logging
+sounddevice==0.4.6
+numpy==1.26.4
+# If you prefer PyAudio instead of sounddevice:
+# pyaudio==0.2.13
+
+# System monitoring
+psutil==5.9.8
+
+# GPIO (for optional hardware heartbeat/indicators)
+gpiozero==2.0.1
+RPi.GPIO==0.7.1
+
+# Serial (optional, if you ever add UART telemetry)
+pyserial==3.5
+
+# JSON schema validation (optional, for robust logger outputs)
+jsonschema==4.23.0
+
 gpiozero
+adafruit-blinka
