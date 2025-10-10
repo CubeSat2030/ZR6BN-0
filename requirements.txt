@@ -1,0 +1,4 @@
+# Note: gpiozero is required for the buzzer functionality and only works on a Raspberry Pi.
+# If running the server on a non-Pi device, you can comment out 'gpiozero'.
+Flask
+gpiozero
