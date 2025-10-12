@@ -1,2 +1,0 @@
-timestamp,cpu_temp
-17:02:18,47.6
