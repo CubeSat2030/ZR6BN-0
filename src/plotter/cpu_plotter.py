@@ -30,18 +30,28 @@ def generate_chart():
                 lines = lines[1:]
             for line in lines:
                 try:
-                    timestamp_str, temp_str = line.strip().split(',')
-
+                    # FIX: The data has 3 fields (timestamp, temp, humidity), but we only need two.
+                    # We unpack to three variables, using '_' for the unwanted humidity field.
+                    timestamp_full_str, temp_str, _ = line.strip().split(',')
+                    
+                    # FIX: The timestamp includes fractional seconds (e.g., 08:00:00.000000000), 
+                    # which breaks the original parsing. We strip the fractional part.
+                    timestamp_str = timestamp_full_str.split('.')[0]
+                    
                     # --- Robust Timestamp Parsing ---
+                    dt_obj = None
                     try:
+                        # Attempt to parse with date (original logic)
                         dt_obj = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
                     except ValueError:
+                        # Fallback for time-only format (matches the provided data)
                         time_obj = datetime.strptime(timestamp_str, "%H:%M:%S")
+                        # Combine the time with today's date
                         dt_obj = datetime.combine(datetime.now().date(), time_obj.time())
 
                     dates.append(dt_obj)
                     temps.append(float(temp_str))
-                except (ValueError, IndexError):
+                except Exception: # Catch errors from split/unpack/conversion
                     continue
     except Exception as e:
         print(f"Error reading data file: {e}", file=sys.stderr)
