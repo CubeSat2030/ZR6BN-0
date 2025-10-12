@@ -58,9 +58,9 @@ SCRIPTS_CONFIG = {
     },
     "dht": {
         "title": "DHT Sensor Logger",
-        "log_script": LOG_DIR / "dht_logger.py",
-        "plot_script": PLOT_DIR / "dht_plotter.py",
-        "chart_file": "dht_chart.svg"
+        "log_script": LOG_DIR / "cpu_logger.py",
+        "plot_script": PLOT_DIR / "cpu_plotter.py",
+        "chart_file": "cpu_chart.svg"
     },
     "mpu": {
         "title": "MPU-6050 Logger",
