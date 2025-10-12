@@ -57,7 +57,7 @@ SCRIPTS_CONFIG = {
         "is_main_controller": True
     },
     "dht": {
-        "title": "DHT Sensor Logger",
+        "title": "CPU temp Logger",
         "log_script": LOG_DIR / "cpu_logger.py",
         "plot_script": PLOT_DIR / "cpu_plotter.py",
         "chart_file": "cpu_chart.svg"
