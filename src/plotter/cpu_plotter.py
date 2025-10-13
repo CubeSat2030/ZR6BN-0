@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime
 import os, sys
+import numpy as np # Import numpy for data processing functions
 
 # Optional smoothing filter
 try:
@@ -79,37 +80,116 @@ def generate_chart():
         print("No data to plot.", file=sys.stderr)
         sys.exit(2)
 
-    # Use the now-absolute CHARTS_DIR
+    # Convert temps to numpy array for easier calculation
+    temps_np = np.array(temps)
+    
+    # Ensure charts dir
     os.makedirs(CHARTS_DIR, exist_ok=True)
 
-    plt.style.use('ggplot')
-    plt.rcParams.update({'font.size': 12, 'axes.labelsize': 14, 'axes.titlesize': 16})
+    # ======================================================================
+    # SCIENTIFIC/ACCURATE DARK THEME CHANGES START HERE
+    # ======================================================================
+
+    # 1. Define Professional/Minimal Colors
+    FIGURE_BG = '#0F0F0F'   
+    AXES_BG = '#1A1A1A'     
+    TEXT_COLOR = '#F0F0F0'  
+    BORDER_COLOR = '#404040' 
+    GRID_COLOR = '#2A2A2A'  
+    
+    # 2. Primary data color (Warm orange/red is good for heat/temp)
+    TEMP_COLOR = '#FF9800' # Muted Orange
+    
+    # 3. Apply Minimalist rcParams
+    plt.style.use("default") 
+    plt.rcParams.update({
+        "font.size": 10, 
+        "axes.labelsize": 12, 
+        "axes.titlesize": 14,
+        
+        # Color settings
+        "text.color": TEXT_COLOR,
+        "axes.labelcolor": TEXT_COLOR,
+        "xtick.color": TEXT_COLOR,
+        "ytick.color": TEXT_COLOR,
+        "figure.facecolor": FIGURE_BG,
+        "axes.facecolor": AXES_BG,
+        "savefig.facecolor": FIGURE_BG,
+        
+        # Grid settings (Only horizontal grid lines for Y-axis reference)
+        "grid.color": GRID_COLOR,
+        "grid.linestyle": "-", 
+        "grid.alpha": 1.0, 
+        "axes.grid": True, 
+        "axes.grid.axis": "y", 
+        
+        # Axes line/tick settings (Minimalist and thin)
+        "axes.edgecolor": BORDER_COLOR,
+        "axes.linewidth": 0.8,
+        "xtick.major.width": 0.8,
+        "ytick.major.width": 0.8,
+    })
+
     fig, ax = plt.subplots(figsize=(12, 7))
 
     start_time, end_time = dates[0], dates[-1]
     duration = end_time - start_time
     duration_str = f"{int(duration.total_seconds()//3600):02d}h {(int(duration.total_seconds())%3600)//60:02d}m {int(duration.total_seconds()%60):02d}s"
 
+    # Set title with explicit color
     ax.set_title(
-        f"Kabot I CPU Temperature | Duration: {duration_str}\n"
-        f"Start: {start_time.strftime('%Y-%m-%d %H:%M:%S')} | End: {end_time.strftime('%Y-%m-%d %H:%M:%S')}"
+        f"Kabot I CPU Temperature Analysis | Duration: {duration_str}\n"
+        f"Start: {start_time.strftime('%Y-%m-%d %H:%M:%S')} | End: {end_time.strftime('%Y-%m-%d %H:%M:%S')}",
+        color=TEXT_COLOR
     )
 
     ax.set_xlabel('Time')
-    ax.set_ylabel('CPU Temp (°C)', color='tab:red')
-    ax.plot(dates, temps, color='tab:red', linewidth=1.2, alpha=0.8, label='CPU Temp (Raw)')
-    if HAS_SAVGOL and len(temps) >= 11:
-        temp_smooth = savgol_filter(temps, 11, 3)
-        ax.plot(dates, temp_smooth, color='darkred', linestyle='--', linewidth=2, label='Smoothed CPU Temp')
-    ax.tick_params(axis='y', labelcolor='tab:red')
+    
+    # Set Y-axis label with primary color
+    ax.set_ylabel('CPU Temp (°C)', color=TEMP_COLOR)
+    
+    # Raw data: Very low opacity to show noise background
+    ax.plot(dates, temps_np, color=TEMP_COLOR, linewidth=0.7, alpha=0.10, label='Raw Temp')
+    
+    if HAS_SAVGOL and len(temps_np) >= 11:
+        # Smoothed data: Primary line, full opacity
+        temp_smooth = savgol_filter(temps_np, 11, 3)
+        ax.plot(dates, temp_smooth, color=TEMP_COLOR, linestyle='-', linewidth=2.5, label='Smoothed Trend')
+        
+    ax.tick_params(axis='y', labelcolor=TEMP_COLOR)
 
+    # SCIENTIFIC ACCURACY: Add a marker for the average temperature (useful context)
+    avg_temp = np.nanmean(temps_np)
+    ax.axhline(avg_temp, color=TEMP_COLOR, linestyle=':', linewidth=1.0, alpha=0.7, label=f'Average Temp ({avg_temp:.1f}°C)')
+
+    # SCIENTIFIC ACCURACY: Use ceiling and floor to ensure min/max are shown cleanly
+    min_temp, max_temp = np.nanmin(temps_np), np.nanmax(temps_np)
+    # Set Y-limit to show range clearly, plus a small buffer
+    ax.set_ylim(np.floor(min_temp) - 2, np.ceil(max_temp) + 2) 
+
+    # Clean up spines (the box around the plot)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
     ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-    ax.xaxis.set_minor_locator(mdates.MinuteLocator(interval=2))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    
+    # Minor ticks only on Y-axis (less clutter)
+    ax.yaxis.set_minor_locator(plt.MaxNLocator(20)) # Ensure dense ticks for accuracy
+    ax.grid(True, axis='y', which='major', linestyle='-', linewidth=0.8, alpha=0.4, color=GRID_COLOR)
+    ax.grid(True, axis='y', which='minor', linestyle=':', linewidth=0.4, alpha=0.2, color=GRID_COLOR)
+
     fig.autofmt_xdate(rotation=45)
 
-    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.6)
-    ax.legend(loc='upper left')
+    # Legend: Minimalist styling with professional color focus
+    ax.legend(loc='upper left', facecolor=AXES_BG, frameon=True, 
+              edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR, title="Temperature Data")
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96]) # Adjust for suptitle
+    
+    # ======================================================================
+    # SCIENTIFIC/ACCURATE DARK THEME CHANGES END HERE
+    # ======================================================================
 
     # Use the now-absolute CHART_FILE and CHART_BACKUP_FILE
     if os.path.exists(CHART_FILE):
