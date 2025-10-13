@@ -140,21 +140,22 @@ def generate_mpu_chart():
     duration_str = f"{total_hours:02d}h {total_minutes:02d}m {total_seconds:02d}s"
 
     # ======================================================================
-    # PROFESSIONAL DARK THEME CHANGES START HERE
+    # SCIENTIFIC/ACCURATE THEME CHANGES START HERE
     # ======================================================================
 
     # 1. Define Professional/Minimal Colors
-    FIGURE_BG = '#0F0F0F'   # Near-black for a strong contrast border
-    AXES_BG = '#1A1A1A'     # Plot area background (slight contrast to figure)
-    TEXT_COLOR = '#F0F0F0'  # Bright white/light gray text
-    BORDER_COLOR = '#404040' # Soft gray for axes and minor lines
-    GRID_COLOR = '#2A2A2A'  # Subtle grid lines (darker than border)
+    FIGURE_BG = '#0F0F0F'   
+    AXES_BG = '#1A1A1A'     
+    TEXT_COLOR = '#F0F0F0'  
+    BORDER_COLOR = '#404040' 
+    GRID_COLOR = '#2A2A2A'  
+    ZERO_LINE_COLOR = '#888888' # Explicit color for the zero line
     
-    # 2. Refined Muted Color Palette (High contrast against the dark background)
+    # 2. Refined Muted Color Palette
     colors = {
-        "x": "#EF5350", # Material Red (for X)
-        "y": "#66BB6A", # Material Green (for Y)
-        "z": "#42A5F5"  # Material Blue (for Z)
+        "x": "#EF5350", 
+        "y": "#66BB6A", 
+        "z": "#42A5F5"  
     }
 
     # 3. Apply Minimalist rcParams
@@ -173,14 +174,14 @@ def generate_mpu_chart():
         "axes.facecolor": AXES_BG,
         "savefig.facecolor": FIGURE_BG,
         
-        # Grid settings (Minimalist: only horizontal grid lines)
+        # Grid settings (Only horizontal grid lines for Y-axis reference)
         "grid.color": GRID_COLOR,
         "grid.linestyle": "-", 
-        "grid.alpha": 1.0, # Full opacity for consistency
-        "axes.grid": True, # Ensure grid is on
-        "axes.grid.axis": "y", # Only show y-axis grid lines (more professional)
+        "grid.alpha": 1.0,
+        "axes.grid": True, 
+        "axes.grid.axis": "y", 
         
-        # Axes line/tick settings (Thin, light lines)
+        # Axes line/tick settings
         "axes.edgecolor": BORDER_COLOR,
         "axes.linewidth": 0.8,
         "xtick.major.width": 0.8,
@@ -188,6 +189,9 @@ def generate_mpu_chart():
     })
 
     fig, (ax_accel, ax_gyro) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    
+    # Add vertical space between subplots
+    plt.subplots_adjust(hspace=0.2) 
     
     # Ensure background colors are set
     fig.set_facecolor(FIGURE_BG)
@@ -219,13 +223,23 @@ def generate_mpu_chart():
     # Accel Plot
     ax_accel.set_title("Acceleration Data (Linear G-Forces)", fontsize=14, color=TEXT_COLOR)
     ax_accel.set_ylabel("Acceleration (g)")
+    
+    # SCIENTIFIC ACCURACY: Ensure Y-axis is centered at zero.
+    accel_data = np.concatenate([data[f"accel_{axis}"] for axis in ["x", "y", "z"]])
+    accel_max_abs = np.nanmax(np.abs(accel_data))
+    y_limit_accel = accel_max_abs * 1.05 # Add 5% padding
+    ax_accel.set_ylim(-y_limit_accel, y_limit_accel) 
+
+    # SCIENTIFIC ACCURACY: Add explicit zero line for bias/offset reference
+    ax_accel.axhline(0, color=ZERO_LINE_COLOR, linestyle='--', linewidth=1.2, zorder=0)
+
     for axis in ["x", "y", "z"]:
         raw = np.array(data[f"accel_{axis}"], dtype=float)
-        # Raw data: Thinner line, lower opacity to push it to the background
-        ax_accel.plot(dates, raw, label=f"Accel {axis} (Raw)", color=colors[axis], linewidth=0.7, alpha=0.10) 
+        # Raw data: Very low opacity (0.05) to function as a visual noise background
+        ax_accel.plot(dates, raw, label=f"Accel {axis} (Raw)", color=colors[axis], linewidth=0.7, alpha=0.05) 
         smooth = maybe_smooth(raw)
         if smooth is not None:
-            # Smoothed data: Thicker line, full opacity, clearly showing the trend
+            # Smoothed data: Primary line, full opacity
             ax_accel.plot(dates, smooth, label=f"Accel {axis} (Smoothed)", color=colors[axis], linewidth=2.0) 
 
     # Clean up spines (the box around the plot)
@@ -234,19 +248,29 @@ def generate_mpu_chart():
     
     # Legend: Minimalist styling
     ax_accel.legend(loc="upper right", ncol=3, facecolor=AXES_BG, frameon=True, 
-                    edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
+                    edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR, title="Acceleration (g)")
 
     # Gyro Plot
     ax_gyro.set_title("Gyroscope Data (Rotational Velocity)", fontsize=14, color=TEXT_COLOR)
     ax_gyro.set_xlabel("Time (HH:MM)")
     ax_gyro.set_ylabel("Angular Velocity (deg/s)")
+    
+    # SCIENTIFIC ACCURACY: Ensure Y-axis is centered at zero.
+    gyro_data = np.concatenate([data[f"gyro_{axis}"] for axis in ["x", "y", "z"]])
+    gyro_max_abs = np.nanmax(np.abs(gyro_data))
+    y_limit_gyro = gyro_max_abs * 1.05 # Add 5% padding
+    ax_gyro.set_ylim(-y_limit_gyro, y_limit_gyro) 
+
+    # SCIENTIFIC ACCURACY: Add explicit zero line for bias/drift reference
+    ax_gyro.axhline(0, color=ZERO_LINE_COLOR, linestyle='--', linewidth=1.2, zorder=0)
+
     for axis in ["x", "y", "z"]:
         raw = np.array(data[f"gyro_{axis}"], dtype=float)
-        # Raw data: Thinner line, lower opacity
-        ax_gyro.plot(dates, raw, label=f"Gyro {axis} (Raw)", color=colors[axis], linewidth=0.7, alpha=0.10)
+        # Raw data: Very low opacity (0.05)
+        ax_gyro.plot(dates, raw, label=f"Gyro {axis} (Raw)", color=colors[axis], linewidth=0.7, alpha=0.05)
         smooth = maybe_smooth(raw)
         if smooth is not None:
-            # Smoothed data: Thicker line, full opacity
+            # Smoothed data: Primary line, full opacity
             ax_gyro.plot(dates, smooth, label=f"Gyro {axis} (Smoothed)", color=colors[axis], linewidth=2.0)
 
     ax_gyro.xaxis.set_major_formatter(date_formatter)
@@ -257,13 +281,13 @@ def generate_mpu_chart():
 
     # Legend: Minimalist styling
     ax_gyro.legend(loc="upper right", ncol=3, facecolor=AXES_BG, frameon=True, 
-                    edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
+                    edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR, title="Angular Velocity (deg/s)")
 
     fig.autofmt_xdate(rotation=45)
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.tight_layout(rect=[0, 0, 1, 0.96]) # Adjust for suptitle
 
     # ======================================================================
-    # PROFESSIONAL DARK THEME CHANGES END HERE
+    # SCIENTIFIC/ACCURATE THEME CHANGES END HERE
     # ======================================================================
 
     # Backup + save
