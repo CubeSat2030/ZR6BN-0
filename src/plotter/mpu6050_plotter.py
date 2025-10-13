@@ -1,13 +1,3 @@
-# =========================================================================
-# Kabot-1 Post-Flight MPU-6050 Data Analysis and Chart Generation (WebUI)
-# =========================================================================
-# Robust version:
-# - Handles missing SciPy by skipping smoothing.
-# - Normalizes header names (ax/ay/az/gx/gy/gz) to internal keys.
-# - Aligns output filename with WebUI: src/charts/mpu_chart.svg
-# - PATCHED: Added robust timestamp parsing to handle time-only log entries.
-# =========================================================================
-
 import os
 import sys
 from datetime import datetime
@@ -22,10 +12,22 @@ try:
 except Exception:
     HAS_SAVGOL = False
 
+# =========================================================================
+# FIX: Use absolute paths based on the script's location for robustness.
+# =========================================================================
+
+# Get the directory of the current script file
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Assume the project root is two levels up from this script (plotter/generate_chart.py)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR)) 
+
 # Paths (relative to project root)
-DATA_DIR = "src/logger/data"
-DATA_FILE = os.path.join(DATA_DIR, "MPU6050.txt")
-CHARTS_DIR = "src/plotter/charts"
+DATA_DIR_RELATIVE = "src/logger/data"
+CHARTS_DIR_RELATIVE = "src/plotter/charts"
+
+# Construct ABSOLUTE paths
+DATA_FILE = os.path.join(PROJECT_ROOT, DATA_DIR_RELATIVE, "MPU6050.txt")
+CHARTS_DIR = os.path.join(PROJECT_ROOT, CHARTS_DIR_RELATIVE)
 CHART_FILE = os.path.join(CHARTS_DIR, "mpu_chart.svg")  # aligns with WebUI
 CHART_BACKUP_FILE = os.path.join(CHARTS_DIR, "mpu_chart_backup.svg")
 
@@ -36,7 +38,7 @@ POLY_ORDER = 3
 # Map possible header names to internal keys
 HEADER_MAP = {
     "accel_x": "accel_x", "accel_y": "accel_y", "accel_z": "accel_z",
-    "gyro_x": "gyro_x",   "gyro_y": "gyro_y",   "gyro_z": "gyro_z",
+    "gyro_x":  "gyro_x",  "gyro_y":  "gyro_y",  "gyro_z":  "gyro_z",
     "ax": "accel_x", "ay": "accel_y", "az": "accel_z",
     "gx": "gyro_x",  "gy": "gyro_y",  "gz": "gyro_z",
 }
@@ -44,9 +46,10 @@ HEADER_MAP = {
 def generate_mpu_chart():
     # Basic checks
     if not os.path.exists(DATA_FILE):
+        # Print the absolute path for the user's debug purposes
         print(f"Error: Mission data file not found at {DATA_FILE}", file=sys.stderr)
         sys.exit(2)
-
+# ... (rest of the code remains the same from here down) ...
     # Read file
     try:
         with open(DATA_FILE, "r") as f:
@@ -208,4 +211,3 @@ def generate_mpu_chart():
 
 if __name__ == "__main__":
     generate_mpu_chart()
-
