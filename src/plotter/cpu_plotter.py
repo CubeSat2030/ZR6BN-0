@@ -10,16 +10,34 @@ try:
 except Exception:
     HAS_SAVGOL = False
 
-DATA_DIR = "src/logger/data"
-DATA_FILE = os.path.join(DATA_DIR, "CPU_TEMP.txt")
-CHARTS_DIR = "src/plotter/charts"
+# =========================================================================
+# FIX: Use absolute paths based on the script's location for robustness.
+# =========================================================================
+
+# Get the directory of the current script file
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Assume the project root is two levels up from this script (plotter/generate_chart.py)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR)) 
+
+# Paths (relative to project root)
+DATA_DIR_RELATIVE = "src/logger/data"
+CHARTS_DIR_RELATIVE = "src/plotter/charts"
+
+# Construct ABSOLUTE paths
+DATA_FILE = os.path.join(PROJECT_ROOT, DATA_DIR_RELATIVE, "CPU_TEMP.txt")
+CHARTS_DIR = os.path.join(PROJECT_ROOT, CHARTS_DIR_RELATIVE)
 CHART_FILE = os.path.join(CHARTS_DIR, "cpu_chart.svg")
 CHART_BACKUP_FILE = os.path.join(CHARTS_DIR, "cpu_chart_backup.svg")
+
+# =========================================================================
+# The rest of the script is unchanged, utilizing the new absolute paths.
+# =========================================================================
 
 def generate_chart():
     dates, temps = [], []
 
     if not os.path.exists(DATA_FILE):
+        # The error message now displays the absolute path for easier debugging
         print(f"Error: Mission data file not found at {DATA_FILE}", file=sys.stderr)
         sys.exit(2)
 
@@ -61,6 +79,7 @@ def generate_chart():
         print("No data to plot.", file=sys.stderr)
         sys.exit(2)
 
+    # Use the now-absolute CHARTS_DIR
     os.makedirs(CHARTS_DIR, exist_ok=True)
 
     plt.style.use('ggplot')
@@ -92,6 +111,7 @@ def generate_chart():
     ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.6)
     ax.legend(loc='upper left')
 
+    # Use the now-absolute CHART_FILE and CHART_BACKUP_FILE
     if os.path.exists(CHART_FILE):
         os.replace(CHART_FILE, CHART_BACKUP_FILE)
 
