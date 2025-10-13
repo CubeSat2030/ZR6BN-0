@@ -175,7 +175,7 @@ def generate_mpu_chart():
         if smooth is not None:
             ax_accel.plot(dates, smooth, color=colors[axis], linewidth=2.0, label=f"Accel {axis.upper()}")
 
-    # === PATCH START: Burst/Impact markers + total linear g ===
+    # --- Total linear g ---
     try:
         g_net = np.sqrt(
             np.square(data["accel_x"]) +
@@ -189,6 +189,7 @@ def generate_mpu_chart():
     except Exception as e:
         print(f"Warning: Could not compute total g magnitude: {e}", file=sys.stderr)
 
+    # ---- BURST / IMPACT ----
     burst_time = datetime.strptime("2025-10-11 10:30:01.200", "%Y-%m-%d %H:%M:%S.%f")
     impact_time = datetime.strptime("2025-10-11 10:39:18.000", "%Y-%m-%d %H:%M:%S.%f")
 
@@ -203,7 +204,6 @@ def generate_mpu_chart():
 
     mark_event(ax_accel, burst_time, "BURST (Balloon Rupture)", "#FF8A65")
     mark_event(ax_accel, impact_time, "IMPACT (Ground Contact)", "#FF5252")
-    # === PATCH END ===
 
     ax_accel.legend(loc="upper right", ncol=3, facecolor=AXES_BG, frameon=True,
                     edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
@@ -226,11 +226,15 @@ def generate_mpu_chart():
         if smooth is not None:
             ax_gyro.plot(dates, smooth, color=colors[axis], linewidth=2.0, label=f"Gyro {axis.upper()}")
 
+    # --- Mark events on gyro plot too ---
+    mark_event(ax_gyro, burst_time, "BURST (Balloon Rupture)", "#FF8A65")
+    mark_event(ax_gyro, impact_time, "IMPACT (Ground Contact)", "#FF5252")
+
     ax_gyro.legend(loc="upper right", ncol=3, facecolor=AXES_BG, frameon=True,
                    edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
     ax_gyro.spines['top'].set_visible(False)
     ax_gyro.spines['right'].set_visible(False)
-    ax_gyro.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+    ax_gyro.xaxis.set_major_formatter(date_formatter)
 
     fig.autofmt_xdate(rotation=45)
     plt.tight_layout(rect=[0, 0, 1, 0.96])
