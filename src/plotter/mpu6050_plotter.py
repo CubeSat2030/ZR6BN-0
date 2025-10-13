@@ -139,19 +139,70 @@ def generate_mpu_chart():
     total_seconds = int(duration.total_seconds() % 60)
     duration_str = f"{total_hours:02d}h {total_minutes:02d}m {total_seconds:02d}s"
 
-    # Plot style
-    plt.style.use("ggplot")
-    plt.rcParams.update({"font.size": 10, "axes.labelsize": 12, "axes.titlesize": 14})
+    # ======================================================================
+    # PROFESSIONAL DARK THEME CHANGES START HERE
+    # ======================================================================
+
+    # 1. Define Professional/Minimal Colors
+    FIGURE_BG = '#0F0F0F'   # Near-black for a strong contrast border
+    AXES_BG = '#1A1A1A'     # Plot area background (slight contrast to figure)
+    TEXT_COLOR = '#F0F0F0'  # Bright white/light gray text
+    BORDER_COLOR = '#404040' # Soft gray for axes and minor lines
+    GRID_COLOR = '#2A2A2A'  # Subtle grid lines (darker than border)
+    
+    # 2. Refined Muted Color Palette (High contrast against the dark background)
+    colors = {
+        "x": "#EF5350", # Material Red (for X)
+        "y": "#66BB6A", # Material Green (for Y)
+        "z": "#42A5F5"  # Material Blue (for Z)
+    }
+
+    # 3. Apply Minimalist rcParams
+    plt.style.use("default") 
+    plt.rcParams.update({
+        "font.size": 10, 
+        "axes.labelsize": 12, 
+        "axes.titlesize": 14,
+        
+        # Color settings
+        "text.color": TEXT_COLOR,
+        "axes.labelcolor": TEXT_COLOR,
+        "xtick.color": TEXT_COLOR,
+        "ytick.color": TEXT_COLOR,
+        "figure.facecolor": FIGURE_BG,
+        "axes.facecolor": AXES_BG,
+        "savefig.facecolor": FIGURE_BG,
+        
+        # Grid settings (Minimalist: only horizontal grid lines)
+        "grid.color": GRID_COLOR,
+        "grid.linestyle": "-", 
+        "grid.alpha": 1.0, # Full opacity for consistency
+        "axes.grid": True, # Ensure grid is on
+        "axes.grid.axis": "y", # Only show y-axis grid lines (more professional)
+        
+        # Axes line/tick settings (Thin, light lines)
+        "axes.edgecolor": BORDER_COLOR,
+        "axes.linewidth": 0.8,
+        "xtick.major.width": 0.8,
+        "ytick.major.width": 0.8,
+    })
 
     fig, (ax_accel, ax_gyro) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    
+    # Ensure background colors are set
+    fig.set_facecolor(FIGURE_BG)
+    ax_accel.set_facecolor(AXES_BG)
+    ax_gyro.set_facecolor(AXES_BG)
+    
+    # Overall Title
     fig.suptitle(
         f"Kabot I Mission MPU-6050 Motion Analysis | Duration: {duration_str}\n"
         f"Start: {start_time.strftime('%Y-%m-%d %H:%M:%S')} | End: {end_time.strftime('%Y-%m-%d %H:%M:%S')}",
-        fontsize=16
+        fontsize=16,
+        color=TEXT_COLOR
     )
 
     date_formatter = mdates.DateFormatter("%H:%M")
-    colors = {"x": "tab:red", "y": "tab:green", "z": "tab:blue"}
 
     # Helper for smoothing
     def maybe_smooth(series):
@@ -165,36 +216,55 @@ def generate_mpu_chart():
         except Exception:
             return None
 
-    # Accel
-    ax_accel.set_title("Acceleration Data (Linear G-Forces)", fontsize=14)
+    # Accel Plot
+    ax_accel.set_title("Acceleration Data (Linear G-Forces)", fontsize=14, color=TEXT_COLOR)
     ax_accel.set_ylabel("Acceleration (g)")
     for axis in ["x", "y", "z"]:
         raw = np.array(data[f"accel_{axis}"], dtype=float)
-        ax_accel.plot(dates, raw, label=f"Accel {axis} (Raw)", color=colors[axis], linewidth=1.0, alpha=0.3)
+        # Raw data: Thinner line, lower opacity to push it to the background
+        ax_accel.plot(dates, raw, label=f"Accel {axis} (Raw)", color=colors[axis], linewidth=0.7, alpha=0.10) 
         smooth = maybe_smooth(raw)
         if smooth is not None:
-            ax_accel.plot(dates, smooth, label=f"Accel {axis} (Smoothed)", color=colors[axis], linewidth=2.0)
+            # Smoothed data: Thicker line, full opacity, clearly showing the trend
+            ax_accel.plot(dates, smooth, label=f"Accel {axis} (Smoothed)", color=colors[axis], linewidth=2.0) 
 
-    ax_accel.grid(True, linestyle="--", alpha=0.6)
-    ax_accel.legend(loc="upper right", ncol=3)
+    # Clean up spines (the box around the plot)
+    ax_accel.spines['top'].set_visible(False)
+    ax_accel.spines['right'].set_visible(False)
+    
+    # Legend: Minimalist styling
+    ax_accel.legend(loc="upper right", ncol=3, facecolor=AXES_BG, frameon=True, 
+                    edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
 
-    # Gyro
-    ax_gyro.set_title("Gyroscope Data (Rotational Velocity)", fontsize=14)
+    # Gyro Plot
+    ax_gyro.set_title("Gyroscope Data (Rotational Velocity)", fontsize=14, color=TEXT_COLOR)
     ax_gyro.set_xlabel("Time (HH:MM)")
     ax_gyro.set_ylabel("Angular Velocity (deg/s)")
     for axis in ["x", "y", "z"]:
         raw = np.array(data[f"gyro_{axis}"], dtype=float)
-        ax_gyro.plot(dates, raw, label=f"Gyro {axis} (Raw)", color=colors[axis], linewidth=1.0, alpha=0.3)
+        # Raw data: Thinner line, lower opacity
+        ax_gyro.plot(dates, raw, label=f"Gyro {axis} (Raw)", color=colors[axis], linewidth=0.7, alpha=0.10)
         smooth = maybe_smooth(raw)
         if smooth is not None:
+            # Smoothed data: Thicker line, full opacity
             ax_gyro.plot(dates, smooth, label=f"Gyro {axis} (Smoothed)", color=colors[axis], linewidth=2.0)
 
     ax_gyro.xaxis.set_major_formatter(date_formatter)
-    ax_gyro.grid(True, linestyle="--", alpha=0.6)
-    ax_gyro.legend(loc="upper right", ncol=3)
+    
+    # Clean up spines (the box around the plot)
+    ax_gyro.spines['top'].set_visible(False)
+    ax_gyro.spines['right'].set_visible(False)
+
+    # Legend: Minimalist styling
+    ax_gyro.legend(loc="upper right", ncol=3, facecolor=AXES_BG, frameon=True, 
+                    edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
 
     fig.autofmt_xdate(rotation=45)
     plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+    # ======================================================================
+    # PROFESSIONAL DARK THEME CHANGES END HERE
+    # ======================================================================
 
     # Backup + save
     try:
