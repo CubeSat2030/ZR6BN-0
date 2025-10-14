@@ -470,10 +470,12 @@
     // --- END MODIFIED systemControl function ---
 
     async function startClientAppPickupBeacon(action) {
+        if (action !== 'start') return; // Only 'start' is currently supported by the API
         const btn = document.querySelector(`#start-client-app-pickup-beacon-modal .start-btn`);
         const originalText = btn.innerHTML;
         btn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
         try {
+            // FIX: This calls the specific, dedicated route /api/control/start_pickup_beacon
             const response = await fetch(`/api/control/start_pickup_beacon`, { method: 'POST' });
             const result = await response.json();
             if (result.success) { showAlert(`${result.message}`, 'success'); } else { showAlert(`Error: ${result.message}`, 'error'); }
@@ -494,3 +496,4 @@
 
 </body>
 </html>
+
