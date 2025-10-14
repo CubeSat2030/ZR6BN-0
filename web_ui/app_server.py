@@ -1,8 +1,8 @@
 # =========================================================================
 # Kabot-1 Mission Control Dashboard Server - THREAD-SAFE VERSION
 # =========================================================================
-# FIX: Added 'beacon' to SCRIPTS_CONFIG and updated api_start_pickup_beacon
-# to call 'beacon' instead of 'main'.
+# FIX: Updated start_script to use 'sudo' for beacon.py as it requires
+# elevated permissions for Bluetooth and network commands.
 # =========================================================================
 
 import subprocess
@@ -47,10 +47,7 @@ AUTO_START_TIMEOUT = 30 # seconds
 BUZZER_THREAD_STOP = threading.Event()
 
 # --- Script Configuration ---
-# NOTE: The 'main_controller' entry must always be present.
-# 'log_script' is the file run for manual logger scripts.
-# 'plot_script' is the file run to generate a chart.
-# 'chart_file' is the resulting chart filename.
+# 'requires_sudo': New flag to run script using 'sudo' if necessary (e.g., for Bluetooth/GPIO).
 SCRIPTS_CONFIG = {
     "main_controller": {
         "title": "Main Flight Controller",
@@ -78,7 +75,8 @@ SCRIPTS_CONFIG = {
     "beacon": {
         "title": "Bluetooth PAN Hotspot",
         "log_script": SRC_DIR / "beacon.py",
-        "is_main_controller": False # Ensure it can run concurrently with main
+        "is_main_controller": False,
+        "requires_sudo": True # THIS SCRIPT NEEDS SUDO FOR BLUETOOTH
     }
 }
 
@@ -100,6 +98,9 @@ def stop_script(name):
     if proc and proc.poll() is None:
         try:
             print(f"[CONTROL] Terminating {name} (PID: {proc.pid})...")
+            # If started with sudo, use SIGINT/SIGTERM, otherwise termination is enough.
+            # We use terminate/kill as the standard approach here, as graceful shutdown is handled 
+            # by the script's signal handlers if it was running interactively.
             proc.terminate()
             try:
                 proc.wait(timeout=5)
@@ -127,7 +128,7 @@ def start_script(name):
         if name in RUNNING_PROCESSES and RUNNING_PROCESSES[name].poll() is None:
             return False, f"{config['title']} is already running (PID: {RUNNING_PROCESSES[name].pid})."
             
-        # 2. Check for main controller conflict for manual scripts
+        # 2. Check for main controller conflict for manual loggers
         if not config.get('is_main_controller', False) and name != 'beacon':
             if is_main_controller_active():
                 return False, f"Cannot start manual logger while Main Flight Controller is active."
@@ -142,10 +143,17 @@ def start_script(name):
         return False, f"Script file not found: {script_path}"
         
     try:
-        command = [sys.executable, str(script_path)]
+        command = []
+        # CRITICAL FIX: Add sudo if required
+        if config.get('requires_sudo', False):
+            command.append("sudo")
+
+        command.extend([sys.executable, str(script_path)])
+        
         print(f"[CONTROL] Starting {name}: {' '.join(command)}")
         
         # Start the subprocess
+        # NOTE: If using sudo, the subprocess needs to be robust, typically in cwd=SRC_DIR
         proc = subprocess.Popen(command, cwd=SRC_DIR)
         
         with PROCESSES_LOCK:
@@ -378,8 +386,6 @@ def api_wipe_data():
 @app.route('/api/control/start_pickup_beacon', methods=['POST'])
 def api_start_pickup_beacon():
     """API endpoint to start the pickup beacon (beacon.py)."""
-    # NOTE: We allow the beacon to run concurrently with the main controller if needed,
-    # but the primary use case is during the recovery/pickup phase.
     if 'beacon' in RUNNING_PROCESSES and RUNNING_PROCESSES['beacon'].poll() is None:
          return jsonify({"success": False, "message": "Bluetooth Beacon is already running."}), 400
         
@@ -420,10 +426,6 @@ if __name__ == "__main__":
     else:
         print("Buzzer Countdown: INACTIVE (gpiozero not found or failed to initialize).")
     print("------------------------------------------------------------------")
-
-    # The main controller script will be started automatically if it's past the timeout
-    # This logic is currently managed by the buzzer countdown thread in real deployment.
-    # We will rely on the user to manually launch the script for now until deployment logic is finalized.
     
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
