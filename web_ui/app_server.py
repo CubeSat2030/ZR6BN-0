@@ -506,22 +506,14 @@ def api_wipe_data(): # <--- NEW ROUTE for data wipe
         else:
             return jsonify({"success": False, "message": message}), 500
         
-
-
-
-# Note:
-#  Thus must habe its own seperate button icon in sashboard.html.        
 @app.route('/api/control/start_pickup_beacon', methods=['POST'])
 def api_start_pickup_beacon():
     """API endpoint to start the pickup beacon (main.py)."""
     if is_main_controller_active():
-        return jsonify({"success": False, "message": "Flight Controller is already running."}), 400
+        return jsonify({"success": False, "message": "Flight Controller is already running. Stop it before starting the beacon."}), 403
     
-    success, message = start_script('main')
-    if success:
-        return jsonify({"success": True, "message": message}), 200
-    else:
-        return jsonify({"success": False, "message": message}), 500
+    # Starting the pickup beacon is equivalent to launching the main flight controller
+    return api_script_control('main', 'start')
 
 # =========================================================================        
 
