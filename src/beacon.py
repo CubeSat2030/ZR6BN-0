@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Kabot-1 Bluetooth PAN Hotspot Beacon Script (src/beacon.py)
-Refactored with RF-kill detection and clearer diagnostics.
+
+This script is launched by the Mission Control Dashboard to activate the 
+Bluetooth Personal Area Network (PAN) Hotspot, allowing the KabotSat 
+client application to connect and establish a dedicated link with the 
+Kabot-1 payload.
+
+It requires 'sudo' privileges for system-level Bluetooth and networking commands.
 """
 
 import subprocess
@@ -11,15 +17,18 @@ import signal
 
 # --- Configuration ---
 DEVICE_NAME = "Kabot-1"
-BLUETOOTH_ADAPTER = "hci0"
-PAN_SERVICE_NAME = "KabotSat"
+BLUETOOTH_ADAPTER = "hci0" # Default adapter name
+PAN_SERVICE_NAME = "KabotSat" # Placeholder for a dedicated service identifier
 
 # --- Global State ---
 ACTIVE = True
 
-def run_command(command, description="Command", fatal=False):
-    """Executes a shell command with logging and error handling."""
-    print(f"[BEACON] Executing: {description} -> {' '.join(command)}")
+def run_command(command, description="Command"):
+    """
+    Executes a shell command using subprocess and checks for errors.
+    Returns True on success, False otherwise.
+    """
+    print(f"[BEACON] Executing: {description} ('{' '.join(command)}')")
     try:
         result = subprocess.run(
             command,
@@ -28,59 +37,45 @@ def run_command(command, description="Command", fatal=False):
             text=True,
             timeout=5
         )
+        
         if result.returncode == 0:
             return True
         else:
-            print(f"[ERROR] {description} failed (Code {result.returncode})")
-            if result.stdout.strip():
-                print(f"  STDOUT: {result.stdout.strip()}")
-            if result.stderr.strip():
-                print(f"  STDERR: {result.stderr.strip()}")
-            if fatal:
-                sys.exit(1)
+            print(f"[ERROR] {description} failed (Code {result.returncode}):")
+            print(f"  STDOUT: {result.stdout.strip()}")
+            print(f"  STDERR: {result.stderr.strip()}")
             return False
-    except Exception as e:
-        print(f"[ERROR] {description} exception: {e}")
-        if fatal:
-            sys.exit(1)
+            
+    except FileNotFoundError:
+        print(f"[ERROR] Required command not found: {command[0]}")
         return False
-
-def check_and_unblock_rfkill():
-    """Detects and unblocks RF-kill if Bluetooth is blocked."""
-    print("[BEACON] Checking RF-kill status...")
-    result = subprocess.run(["rfkill", "list"], capture_output=True, text=True)
-    if "bluetooth" not in result.stdout.lower():
-        print("[WARNING] No Bluetooth device found in rfkill list.")
-        return True  # Not fatal, may still work
-
-    if "Soft blocked: yes" in result.stdout or "Hard blocked: yes" in result.stdout:
-        print("[WARNING] Bluetooth is blocked. Attempting to unblock...")
-        if run_command(["sudo", "rfkill", "unblock", "bluetooth"], "Unblocking Bluetooth"):
-            print("[BEACON] RF-kill unblock attempted. Re-check with 'rfkill list'.")
-            return True
-        else:
-            print("[FATAL] Unable to unblock Bluetooth. Manual intervention required.")
-            return False
-    print("[BEACON] RF-kill check passed. Bluetooth not blocked.")
-    return True
+    except subprocess.TimeoutExpired:
+        print(f"[ERROR] {description} timed out.")
+        return False
+    except Exception as e:
+        print(f"[ERROR] An unexpected error occurred during {description}: {e}")
+        return False
 
 def setup_beacon():
     """Configures the Bluetooth adapter and starts the network service."""
     print(f"[BEACON] Starting setup for {DEVICE_NAME}...")
 
-    if not check_and_unblock_rfkill():
-        return False
-
+    # 1. Ensure Bluetooth Adapter is powered on
     if not run_command(["sudo", "hciconfig", BLUETOOTH_ADAPTER, "up"], "Powering up adapter"):
         return False
+        
+    # 2. Set the local device name
+    if not run_command(["sudo", "bluetoothctl", "system-alias", DEVICE_NAME], f"Setting device name to {DEVICE_NAME}"):
+        run_command(["sudo", "bluetoothctl", "alias", DEVICE_NAME], f"Setting temporary alias to {DEVICE_NAME}")
 
-    run_command(["sudo", "bluetoothctl", "system-alias", DEVICE_NAME], f"Setting device name to {DEVICE_NAME}")
+    # 3. Set discoverable and pairable
     run_command(["sudo", "bluetoothctl", "discoverable", "on"], "Enabling discoverable mode")
     run_command(["sudo", "bluetoothctl", "pairable", "on"], "Enabling pairable mode")
-
+    
+    # 4. Set link mode (optional)
     if not run_command(["sudo", "hciconfig", BLUETOOTH_ADAPTER, "lm", "master", "iscan"], "Set Link Mode for host"):
-        print("[WARNING] Could not set advanced link mode. Proceeding with defaults.")
-
+         print("[WARNING] Could not set advanced link mode. Proceeding with default settings.")
+         
     print(f"[BEACON] Configuration complete. Advertising as '{DEVICE_NAME}'.")
     return True
 
@@ -91,7 +86,6 @@ def cleanup_beacon(signum, frame):
     print("\n[BEACON] Received termination signal. Starting cleanup...")
     run_command(["sudo", "bluetoothctl", "discoverable", "off"], "Disabling discoverable mode")
     run_command(["sudo", "bluetoothctl", "pairable", "off"], "Disabling pairable mode")
-    run_command(["sudo", "hciconfig", BLUETOOTH_ADAPTER, "down"], "Powering down adapter")
     print("[BEACON] Cleanup complete. Exiting.")
     sys.exit(0)
 
@@ -105,18 +99,14 @@ def main():
         return
 
     print("[BEACON] Hotspot is active. Running until stopped via dashboard...")
-    heartbeat = 0
     while ACTIVE:
         try:
-            time.sleep(5)
-            heartbeat += 1
-            if heartbeat % 12 == 0:  # Every minute
-                print("[BEACON] Heartbeat: beacon still active.")
+            time.sleep(1) 
         except Exception:
             break
 
     if ACTIVE:
-        cleanup_beacon(None, None)
+        cleanup_beacon(None, None) 
 
 if __name__ == "__main__":
     main()
