@@ -67,13 +67,8 @@ SCRIPTS_CONFIG = {
         "log_script": LOG_DIR / "mpu6050_logger.py",
         "plot_script": PLOT_DIR / "mpu6050_plotter.py",
         "chart_file": "mpu_chart.svg"
-    },
-    "sound": {
-        "title": "Sound Logger",
-        "log_script": LOG_DIR / "sound_logger.py",
-        "plot_script": PLOT_DIR / "sound_plotter.py",
-        "chart_file": "sound_chart.svg"
     }
+    
 }
 
 # =========================================================================
@@ -510,6 +505,26 @@ def api_wipe_data(): # <--- NEW ROUTE for data wipe
             return jsonify({"success": False, "message": message}), 403
         else:
             return jsonify({"success": False, "message": message}), 500
+        
+
+
+
+# Note:
+# start_pickup_beacon is not part of system control button and must fall under tis own route.that does not clash with commands under System Actions.
+#  Thus must habe its own seperate button icon in sashboard.html.        
+@app.route('/api/control/start_pickup_beacon', methods=['POST'])
+def api_start_pickup_beacon():
+    """API endpoint to start the pickup beacon (main.py)."""
+    if is_main_controller_active():
+        return jsonify({"success": False, "message": "Flight Controller is already running."}), 400
+    
+    success, message = start_script('main')
+    if success:
+        return jsonify({"success": True, "message": message}), 200
+    else:
+        return jsonify({"success": False, "message": message}), 500
+
+# =========================================================================        
 
 
 if __name__ == "__main__":

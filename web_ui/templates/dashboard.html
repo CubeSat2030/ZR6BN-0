@@ -184,11 +184,31 @@
             </div>
         </div>
     </div>
+</div>
+
+
+
+    <div id="start-client-app-pickup-beacon-modal" class="hidden fixed inset-0 bg-gray-900/90 z-40 flex items-center justify-center p-4">
+        <div class="relative w-full max-w-2xl bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-8">
+            <button onclick="closeStartClientAppPickupBeaconModal()" class="absolute top-4 center-4 text-gray-400 hover:text-white">&times;</button>
+            <h2 class="text-3xl font-bold text-white mb-6 border-b border-gray-700 pb-3">KabotSat app Actions</h2>
+            <p class="text-red-400 mb-8 text-lg font-semibold">⚠️ WARNING: These actions will allow client devices installed with the KabotSat app to connect and download data for flight simulation rendering.</p>
+            <div class="flex flex-col space-y-4">
+                <button onclick="handleModalStartClientAppPickupBeacon('start')" class="btn w-full bg-red-800 hover:bg-green-900 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M7 6a7.75 7.75 0 1 0 10 0"></path><path d="M12 4l0 8"></path></svg>
+                    <span>Start pickup beacon</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
 
 <script>
     // Unchanged Script Content
-    const SCRIPTS_CONFIG = {{ scripts_config|tojson }};
+    // Replace the following line with a valid JS object or ensure this file is rendered by your backend template engine.
+    // Example placeholder:
+    // const SCRIPTS_CONFIG = {"example_script": {"title": "Example", "chart_file": "example.svg"}};
+    const SCRIPTS_CONFIG = {};
     const statusOutput = document.getElementById('chart-status-output');
     let statusIntervalId;
     let monitorIntervalId;
