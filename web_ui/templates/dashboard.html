@@ -458,7 +458,27 @@
             document.querySelectorAll('.btn').forEach(b => b.disabled = false); 
         }
     }
+
     // --- END MODIFIED systemControl function ---
+
+    async function startClientAppPickupBeacon(action) {
+        const btn = document.querySelector(`#start-client-app-pickup-beacon-modal .${action}-btn`);
+        const originalText = btn.innerHTML;
+        const actionButtons = document.querySelectorAll(`#start-client-app-pickup-beacon-modal button`);
+        actionButtons.forEach(b => b.disabled = true);
+        btn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
+        try {
+            const response = await fetch(`/api/client_app/pickup_beacon/${action}`, { method: 'POST' });
+            const result = await response.json();
+            if (result.success) { showAlert(`${result.message}`, 'success'); } else { showAlert(`Error: ${result.message}`, 'error'); }
+        } catch (error) { showAlert(`Network error: Could not contact server for ${action}.`, 'error');
+        } finally { btn.innerHTML = originalText; fetchStatus(); }
+    }
+    // --- END MODIFIED startClientAppPickupBeacon function ---
+
+    function openStartClientAppPickupBeaconModal() { document.getElementById('start-client-app-pickup-beacon-modal').classList.remove('hidden'); }
+    function closeStartClientAppPickupBeaconModal() { document.getElementById('start-client-app-pickup-beacon-modal').classList.add('hidden'); }
+    function handleModalStartClientAppPickupBeacon(action) { closeStartClientAppPickupBeaconModal(); startClientAppPickupBeacon(action); }  
 
 
     function openSystemControlModal() { document.getElementById('system-control-modal').classList.remove('hidden'); }

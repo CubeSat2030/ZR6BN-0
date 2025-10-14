@@ -510,7 +510,6 @@ def api_wipe_data(): # <--- NEW ROUTE for data wipe
 
 
 # Note:
-# start_pickup_beacon is not part of system control button and must fall under tis own route.that does not clash with commands under System Actions.
 #  Thus must habe its own seperate button icon in sashboard.html.        
 @app.route('/api/control/start_pickup_beacon', methods=['POST'])
 def api_start_pickup_beacon():
