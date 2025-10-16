@@ -48,7 +48,7 @@
         @keyframes pulse-shadow-red-fast { 0%, 100% { box-shadow: 0 0 8px rgba(220, 38, 38, 0.6); } 50% { box-shadow: 0 0 16px rgba(220, 38, 38, 0.9); } }
 
         /* Loading spinner */
-        .loading-ring { border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%; w-3idth: 16px; h-3eight: 16px; animation: spin 1s linear infinite; }
+        .loading-ring { border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         /* --- NEW HEARTBEAT ICON STYLES --- */
@@ -94,15 +94,6 @@
                         <path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"></path>
                      </svg>
                 </div>
-                <button id="beacon-icon-btn" onclick="openStartClientAppPickupBeaconModal()" title="Start Client Pickup Beacon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                        <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-                        <path d="M12 18l.01 0"></path>
-                        <path d="M10 16.5a2.4 2.4 0 0 1 4 0"></path>
-                        <path d="M8.4 15a5.5 5.5 0 0 1 7.2 0"></path>
-                        <path d="M6.8 13.5a8.7 8.7 0 0 1 10.4 0"></path>
-                    </svg>
-                </button>
                 <button id="power-icon-btn" onclick="openSystemControlModal()" title="System Control">
                     <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M7 12l5 5l5 -5"></path><path d="M12 3v14"></path></svg>
                 </button>
@@ -193,30 +184,11 @@
             </div>
         </div>
     </div>
-</div>
-
-
-    <div id="start-client-app-pickup-beacon-modal" class="hidden fixed inset-0 bg-gray-900/90 z-40 flex items-center justify-center p-4">
-        <div class="relative w-full max-w-2xl bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-8">
-            <button onclick="closeStartClientAppPickupBeaconModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
-            <h2 class="text-3xl font-bold text-white mb-6 border-b border-gray-700 pb-3">Start Client App Pickup Beacon</h2>
-            <p class="text-yellow-400 mb-8 text-lg font-semibold">⚠️ WARNING: Starting the beacon will launch the dedicated **Bluetooth PAN Hotspot** to enable client app connection.</p>
-            <div class="flex flex-col space-y-4">
-                <button onclick="handleModalStartClientAppPickupBeacon('start')" class="start-btn btn w-full bg-green-700 hover:bg-green-800 text-white font-extrabold py-4 text-xl rounded-lg flex items-center justify-center space-x-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M7 6a7.75 7.75 0 1 0 10 0"></path><path d="M12 4l0 8"></path></svg>
-                    <span>Start pickup beacon</span>
-                </button>
-            </div>
-        </div>
-    </div>
 
 
 <script>
     // Unchanged Script Content
-    // Replace the following line with a valid JS object or ensure this file is rendered by your backend template engine.
-    // Example placeholder:
-    // const SCRIPTS_CONFIG = {"example_script": {"title": "Example", "chart_file": "example.svg"}};
-    const SCRIPTS_CONFIG = {};
+    const SCRIPTS_CONFIG = {{ scripts_config|tojson }};
     const statusOutput = document.getElementById('chart-status-output');
     let statusIntervalId;
     let monitorIntervalId;
@@ -466,24 +438,7 @@
             document.querySelectorAll('.btn').forEach(b => b.disabled = false); 
         }
     }
-
     // --- END MODIFIED systemControl function ---
-
-    async function startClientAppPickupBeacon(action) {
-        const btn = document.querySelector(`#start-client-app-pickup-beacon-modal .start-btn`);
-        const originalText = btn.innerHTML;
-        btn.innerHTML = `<div class="loading-ring mx-auto"></div>`;
-        try {
-            const response = await fetch(`/api/control/start_pickup_beacon`, { method: 'POST' });
-            const result = await response.json();
-            if (result.success) { showAlert(`${result.message}`, 'success'); } else { showAlert(`Error: ${result.message}`, 'error'); }
-        } catch (error) { showAlert(`Network error: Could not contact server for ${action}.`, 'error');
-        } finally { btn.innerHTML = originalText; fetchStatus(); }
-    }
-
-    function openStartClientAppPickupBeaconModal() { document.getElementById('start-client-app-pickup-beacon-modal').classList.remove('hidden'); }
-    function closeStartClientAppPickupBeaconModal() { document.getElementById('start-client-app-pickup-beacon-modal').classList.add('hidden'); }
-    function handleModalStartClientAppPickupBeacon(action) { closeStartClientAppPickupBeaconModal(); startClientAppPickupBeacon(action); }  
 
 
     function openSystemControlModal() { document.getElementById('system-control-modal').classList.remove('hidden'); }
