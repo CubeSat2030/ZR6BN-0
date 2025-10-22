@@ -9,10 +9,10 @@ from scipy.spatial.transform import Rotation as R
 # CONFIGURATION
 # ===============================================================
 FILE = "MPU6050.txt"
-REALTIME_SPEED = 1.0        # 1 = real time, 2 = 2× faster
-CUBE_SIZE = 0.1             # meters (100 mm)
-ACC_SCALE = 0.015           # acceleration arrow scale
-TRAIL_LENGTH = 60           # number of past vectors to keep in fading trail
+REALTIME_SPEED = 1.0
+CUBE_SIZE = 0.1
+ACC_SCALE = 0.015
+TRAIL_LENGTH = 60
 START_TIME = "2025-10-11 08:00:00.000"
 END_TIME   = "2025-10-11 11:00:00.000"
 
@@ -27,26 +27,30 @@ df = df.interpolate().fillna(0)
 times = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds().values
 dt = np.diff(times, prepend=times[0])
 
-gyro = df[["gyro_x_dps", "gyro_y_dps", "gyro_z_dps"]].to_numpy() * np.pi / 180.0  # rad/s
+gyro = df[["gyro_x_dps", "gyro_y_dps", "gyro_z_dps"]].to_numpy() * np.pi / 180.0
 accel = df[["accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2"]].to_numpy()
 vel = df["velocity_m_s"].to_numpy() if "velocity_m_s" in df else np.zeros(len(df))
+
+# Estimate altitude by integrating vertical velocity
 alt = np.zeros(len(df))
 for i in range(1, len(df)):
-    alt[i] = alt[i - 1] + vel[i] * dt[i]
+    alt[i] = alt[i-1] + vel[i]*dt[i]
+
+alt = np.clip(alt, 0, 32000)  # keep within flight limits
 
 # ===============================================================
 # ORIENTATION INTEGRATION
 # ===============================================================
 orientations = [R.identity()]
 for i in range(1, len(df)):
-    omega = gyro[i] * dt[i]
-    orientations.append(orientations[-1] * R.from_rotvec(omega))
+    omega = gyro[i]*dt[i]
+    orientations.append(orientations[-1]*R.from_rotvec(omega))
 rotations = np.array([r.as_matrix() for r in orientations])
 
 # ===============================================================
 # PAYLOAD GEOMETRY
 # ===============================================================
-L = CUBE_SIZE / 2
+L = CUBE_SIZE/2
 verts = np.array([
     [-L,-L,-L],[+L,-L,-L],[+L,+L,-L],[-L,+L,-L],
     [-L,-L,+L],[+L,-L,+L],[+L,+L,+L],[-L,+L,+L]
@@ -87,7 +91,19 @@ acc_vec = ax3d.quiver(0,0,0,0,0,0,color="cyan",lw=2,arrow_length_ratio=0.3)
 trail_segments = [Line3DCollection([], colors=[(0,1,1,0.2)], lw=2)]
 ax3d.add_collection3d(trail_segments[0])
 
-fig.suptitle("ZR6BN Payload Flight — Orientation + Telemetry", fontsize=16)
+fig.suptitle("ZR6BN Payload Flight — Stratospheric Descent", fontsize=16)
+
+# ===============================================================
+# SKY COLOR FUNCTION
+# ===============================================================
+def altitude_to_color(h):
+    """Return (r,g,b) background color for given altitude (0–32000 m)."""
+    t = np.clip(h / 32000.0, 0, 1)
+    # Black at top (space) → Blue → Pale Sky near ground
+    r = 0.0 + 0.5*(1 - t)
+    g = 0.0 + 0.7*(1 - t)
+    b = 0.1 + 0.9*(1 - t/2)
+    return (r, g, b)
 
 # ===============================================================
 # ANIMATION UPDATE
@@ -113,10 +129,16 @@ def update(frame):
     trail_buffer[:-1] = trail_buffer[1:]
     trail_buffer[-1] = acc_world
     segments = [[trail_buffer[i], trail_buffer[i+1]] for i in range(TRAIL_LENGTH-1)]
-    # gradient: bright cyan (new) → deep blue (old)
-    colors = [(0, 0.2 + 0.8*(i/TRAIL_LENGTH), 1.0, 0.2 + 0.8*(i/TRAIL_LENGTH)) for i in range(TRAIL_LENGTH-1)]
+    colors = [(0, 0.3+0.7*(i/TRAIL_LENGTH), 1.0, 0.2+0.8*(i/TRAIL_LENGTH)) for i in range(TRAIL_LENGTH-1)]
     trail_segments[0].set_segments(segments)
     trail_segments[0].set_color(colors)
+
+    # --- Sky gradient ---
+    bg = altitude_to_color(alt[frame])
+    fig.patch.set_facecolor(bg)
+    ax3d.set_facecolor(bg)
+    ax_alt.set_facecolor(bg)
+    ax_vel.set_facecolor(bg)
 
     # telemetry markers
     alt_marker.set_data([times[frame]], [alt[frame]])
@@ -135,8 +157,9 @@ ani = FuncAnimation(
     fig, update, frames=len(df),
     interval=dt.mean()*1000/REALTIME_SPEED, blit=False, repeat=False
 )
+
 plt.tight_layout()
 plt.show()
 
-# Optional: export video
-# ani.save("payload_flight_trail_bluefade.mp4", fps=30, dpi=150)
+# --- Optional: save to file ---
+# ani.save("payload_flight_stratosphere_descent.mp4", fps=30, dpi=150)
