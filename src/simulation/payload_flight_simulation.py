@@ -215,4 +215,4 @@ plt.tight_layout()
 plt.show()
 
 # To record video:
-# ani.save("payload_flight_stratosphere_descent.mp4", fps=30, dpi=150)
+ani.save("payload_flight_simulation.mp4", fps=30, dpi=150)
