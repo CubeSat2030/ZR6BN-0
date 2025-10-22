@@ -1,3 +1,13 @@
+"""
+payload_flight_simulation.py
+────────────────────────────
+Visual 3D simulation of the ZR6BN payload’s descent from 32 000 m.
+Reads sensor data from src/logger/data/MPU6050.txt and renders a
+physics-accurate animation with altitude-based sky color and
+fading blue acceleration trail.
+"""
+
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -5,21 +15,24 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 from matplotlib.animation import FuncAnimation
 from scipy.spatial.transform import Rotation as R
 
-# ===============================================================
+# -----------------------------------------------------------------
 # CONFIGURATION
-# ===============================================================
-FILE = "MPU6050.txt"
+# -----------------------------------------------------------------
+DATA_FILE = os.path.join(
+    os.path.dirname(__file__),
+    "..", "logger", "data", "MPU6050.txt"
+)
 REALTIME_SPEED = 1.0
-CUBE_SIZE = 0.1
+CUBE_SIZE = 0.1          # meters
 ACC_SCALE = 0.015
 TRAIL_LENGTH = 60
 START_TIME = "2025-10-11 08:00:00.000"
 END_TIME   = "2025-10-11 11:00:00.000"
 
-# ===============================================================
+# -----------------------------------------------------------------
 # LOAD DATA
-# ===============================================================
-df = pd.read_csv(FILE, comment="#")
+# -----------------------------------------------------------------
+df = pd.read_csv(DATA_FILE, comment="#")
 df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 df = df[(df["timestamp"] >= START_TIME) & (df["timestamp"] <= END_TIME)]
 df = df.interpolate().fillna(0)
@@ -31,26 +44,25 @@ gyro = df[["gyro_x_dps", "gyro_y_dps", "gyro_z_dps"]].to_numpy() * np.pi / 180.0
 accel = df[["accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2"]].to_numpy()
 vel = df["velocity_m_s"].to_numpy() if "velocity_m_s" in df else np.zeros(len(df))
 
-# Estimate altitude by integrating vertical velocity
+# Integrate altitude from velocity
 alt = np.zeros(len(df))
 for i in range(1, len(df)):
     alt[i] = alt[i-1] + vel[i]*dt[i]
+alt = np.clip(alt, 0, 32000)
 
-alt = np.clip(alt, 0, 32000)  # keep within flight limits
-
-# ===============================================================
+# -----------------------------------------------------------------
 # ORIENTATION INTEGRATION
-# ===============================================================
+# -----------------------------------------------------------------
 orientations = [R.identity()]
 for i in range(1, len(df)):
     omega = gyro[i]*dt[i]
     orientations.append(orientations[-1]*R.from_rotvec(omega))
 rotations = np.array([r.as_matrix() for r in orientations])
 
-# ===============================================================
+# -----------------------------------------------------------------
 # PAYLOAD GEOMETRY
-# ===============================================================
-L = CUBE_SIZE/2
+# -----------------------------------------------------------------
+L = CUBE_SIZE / 2
 verts = np.array([
     [-L,-L,-L],[+L,-L,-L],[+L,+L,-L],[-L,+L,-L],
     [-L,-L,+L],[+L,-L,+L],[+L,+L,+L],[-L,+L,+L]
@@ -58,9 +70,9 @@ verts = np.array([
 faces = [[0,1,2,3],[4,5,6,7],[0,1,5,4],
          [2,3,7,6],[1,2,6,5],[0,3,7,4]]
 
-# ===============================================================
+# -----------------------------------------------------------------
 # FIGURE SETUP
-# ===============================================================
+# -----------------------------------------------------------------
 plt.style.use("dark_background")
 fig = plt.figure(figsize=(14,7))
 gs = fig.add_gridspec(2,2,width_ratios=[1.1,1.3])
@@ -93,21 +105,21 @@ ax3d.add_collection3d(trail_segments[0])
 
 fig.suptitle("ZR6BN Payload Flight — Stratospheric Descent", fontsize=16)
 
-# ===============================================================
+# -----------------------------------------------------------------
 # SKY COLOR FUNCTION
-# ===============================================================
+# -----------------------------------------------------------------
 def altitude_to_color(h):
-    """Return (r,g,b) background color for given altitude (0–32000 m)."""
+    """Return RGB sky color based on altitude (0–32 000 m)."""
     t = np.clip(h / 32000.0, 0, 1)
-    # Black at top (space) → Blue → Pale Sky near ground
-    r = 0.0 + 0.5*(1 - t)
-    g = 0.0 + 0.7*(1 - t)
-    b = 0.1 + 0.9*(1 - t/2)
+    # Black at top → Deep blue → Pale blue near ground
+    r = 0.05 + 0.45*(1 - t)
+    g = 0.05 + 0.7*(1 - t)
+    b = 0.1  + 0.9*(1 - t/2)
     return (r, g, b)
 
-# ===============================================================
+# -----------------------------------------------------------------
 # ANIMATION UPDATE
-# ===============================================================
+# -----------------------------------------------------------------
 trail_buffer = np.zeros((TRAIL_LENGTH, 3))
 
 def update(frame):
@@ -133,7 +145,7 @@ def update(frame):
     trail_segments[0].set_segments(segments)
     trail_segments[0].set_color(colors)
 
-    # --- Sky gradient ---
+    # --- Sky color ---
     bg = altitude_to_color(alt[frame])
     fig.patch.set_facecolor(bg)
     ax3d.set_facecolor(bg)
@@ -153,13 +165,15 @@ def update(frame):
     )
     return [poly, acc_vec, trail_segments[0], alt_marker, vel_marker]
 
+# -----------------------------------------------------------------
+# RUN
+# -----------------------------------------------------------------
 ani = FuncAnimation(
     fig, update, frames=len(df),
     interval=dt.mean()*1000/REALTIME_SPEED, blit=False, repeat=False
 )
-
 plt.tight_layout()
 plt.show()
 
-# --- Optional: save to file ---
+# To record video:
 # ani.save("payload_flight_stratosphere_descent.mp4", fps=30, dpi=150)
