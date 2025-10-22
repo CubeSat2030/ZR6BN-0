@@ -73,7 +73,7 @@ ax3d   = fig.add_subplot(gs[:,1], projection="3d")
 
 for a in [ax_alt, ax_vel]:
     a.grid(True, alpha=0.25)
-    a.set_facecolor("#000010")  # deep black-blue
+    a.set_facecolor("#000010")
 
 ax_alt.set_title("Altitude profile")
 ax_alt.set_ylabel("Altitude (m)")
@@ -84,19 +84,16 @@ ax_vel.set_xlabel("Time (s)")
 ax3d.set_xlim([-L*4, L*4])
 ax3d.set_ylim([-L*4, L*4])
 ax3d.set_zlim([-L*4, L*4])
-ax3d.set_xlabel("X (m)")
-ax3d.set_ylabel("Y (m)")
-ax3d.set_zlabel("Z (m)")
 ax3d.set_facecolor("#000000")
 
-# Starfield background (dim random dots)
+# Starfield
 np.random.seed(42)
 for _ in range(120):
     ax3d.scatter(
-        np.random.uniform(-3, 3),
-        np.random.uniform(-3, 3),
-        np.random.uniform(-3, 3),
-        color=(1,1,1,np.random.uniform(0.02, 0.08)),
+        np.random.uniform(-3,3),
+        np.random.uniform(-3,3),
+        np.random.uniform(-3,3),
+        color=(1,1,1,np.random.uniform(0.02,0.08)),
         s=np.random.uniform(2,5),
         depthshade=False
     )
@@ -106,31 +103,41 @@ vel_line, = ax_vel.plot(times, vel, color="#EF5350", lw=1)
 alt_marker, = ax_alt.plot([], [], "o", color="gold")
 vel_marker, = ax_vel.plot([], [], "o", color="gold")
 
-# Gold cube payload
+# Payload cube
 poly = Poly3DCollection([], facecolors="#FFD54F", edgecolors="#333333", lw=0.4, alpha=0.95)
 ax3d.add_collection3d(poly)
 
-# Acceleration vector
 acc_vec = ax3d.quiver(0,0,0,0,0,0,color="cyan",lw=2,arrow_length_ratio=0.3)
 
-# Trail setup
-dummy_segments = np.array([[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]])
+# Trail
+dummy_segments = np.array([[[0,0,0],[0,0,0]]])
 trail_segments = [Line3DCollection(dummy_segments, colors=[(0,1,1,0.2)], lw=2)]
 ax3d.add_collection3d(trail_segments[0])
 trail_segments[0].set_segments([])
 
-fig.suptitle("ZR6BN Payload Flight — Stratospheric Descent (Cinematic View)", fontsize=15, color="white")
+fig.suptitle("ZR6BN Payload Flight — Stratospheric Descent (Cinematic Horizon View)",
+             fontsize=15, color="white")
 
 # -----------------------------------------------------------------
 # SKY COLOR FUNCTION
 # -----------------------------------------------------------------
 def altitude_to_color(h):
-    """Dark near-space color with faint blue horizon glow near ground."""
+    """Space black to light blue near ground."""
     t = np.clip(h / 32000.0, 0, 1)
-    r = 0.0 + 0.2*(1 - t)
-    g = 0.05 + 0.4*(1 - t)
-    b = 0.1 + 0.9*(1 - t/2)
+    r = 0.0 + 0.15*(1 - t)
+    g = 0.05 + 0.5*(1 - t)
+    b = 0.1 + 1.0*(1 - t/2)
     return (r, g, b)
+
+# -----------------------------------------------------------------
+# HORIZON ARC GENERATION
+# -----------------------------------------------------------------
+horizon_radius = 2.5  # apparent radius of the arc
+theta = np.linspace(-np.pi/1.5, np.pi/1.5, 200)
+x_arc = horizon_radius * np.cos(theta)
+y_arc = horizon_radius * np.sin(theta)
+z_arc = np.zeros_like(x_arc)
+horizon_line = ax3d.plot(x_arc, y_arc, z_arc, color=(0.3,0.6,1,0.0), lw=6)[0]
 
 # -----------------------------------------------------------------
 # ANIMATION UPDATE
@@ -148,36 +155,31 @@ def update(frame):
     acc_world = Rm @ (acc_body * ACC_SCALE)
     acc_vec.set_segments([[[0,0,0], acc_world]])
 
-    # Blue trail glow
     trail_buffer[:-1] = trail_buffer[1:]
     trail_buffer[-1] = acc_world
     segments = [[trail_buffer[i], trail_buffer[i+1]] for i in range(TRAIL_LENGTH-1)]
     colors = [
-        (0.2*(i/TRAIL_LENGTH), 0.5 + 0.5*(i/TRAIL_LENGTH), 1.0, 0.1 + 0.8*(i/TRAIL_LENGTH))
+        (0.2*(i/TRAIL_LENGTH), 0.5+0.5*(i/TRAIL_LENGTH), 1.0, 0.1+0.8*(i/TRAIL_LENGTH))
         for i in range(TRAIL_LENGTH-1)
     ]
     trail_segments[0].set_segments(segments)
     trail_segments[0].set_color(colors)
 
-    # Environment background
+    # Background & horizon brightness
     bg = altitude_to_color(alt[frame])
     fig.patch.set_facecolor(bg)
     ax3d.set_facecolor(bg)
 
-    # Horizon glow near surface
-    if alt[frame] < 5000:
-        horizon_blend = (5000 - alt[frame]) / 5000
-        glow_color = (bg[0]+0.2*horizon_blend, bg[1]+0.3*horizon_blend, bg[2]+0.5*horizon_blend)
-        ax3d.set_facecolor(glow_color)
-        fig.patch.set_facecolor(glow_color)
+    horizon_strength = np.clip((8000 - alt[frame]) / 8000, 0, 1)
+    horizon_color = (0.3, 0.6 + 0.3*horizon_strength, 1.0, 0.15 + 0.6*horizon_strength)
+    horizon_line.set_color(horizon_color)
 
     alt_marker.set_data([times[frame]], [alt[frame]])
     vel_marker.set_data([times[frame]], [vel[frame]])
 
-    # Cinematic camera motion
     ax3d.view_init(
-        elev=20 + np.sin(frame * 0.02) * 4,
-        azim=frame * 0.5 + np.sin(frame * 0.03) * 10
+        elev=20 + np.sin(frame*0.02)*4,
+        azim=frame*0.5 + np.sin(frame*0.03)*10
     )
 
     # Impact flash
@@ -186,12 +188,10 @@ def update(frame):
     if impact_frame != -1:
         elapsed = (frame - impact_frame) * dt.mean()
         if elapsed < 2.0:
-            flash_strength = max(0, 1 - (elapsed / 2.0))
-            flash_color = (1.0, 1.0, 1.0)
-            blended = tuple(
-                flash_color[i] * flash_strength + bg[i] * (1 - flash_strength)
-                for i in range(3)
-            )
+            flash_strength = max(0, 1 - elapsed/2)
+            flash_color = (1,1,1)
+            blended = tuple(flash_color[i]*flash_strength + bg[i]*(1-flash_strength)
+                            for i in range(3))
             fig.patch.set_facecolor(blended)
             ax3d.set_facecolor(blended)
 
@@ -199,10 +199,9 @@ def update(frame):
         f"ZR6BN | t={times[frame]:.1f}s | Alt={alt[frame]:.0f} m | "
         f"Vel={vel[frame]:.1f} m/s | |a|={np.linalg.norm(acc_body):.1f} m/s² | "
         f"{df['timestamp'].iloc[frame]}",
-        fontsize=12,
-        color="white"
+        fontsize=12, color="white"
     )
-    return [poly, acc_vec, trail_segments[0], alt_marker, vel_marker]
+    return [poly, acc_vec, trail_segments[0], alt_marker, vel_marker, horizon_line]
 
 # -----------------------------------------------------------------
 # RUN
@@ -213,3 +212,6 @@ ani = FuncAnimation(
 )
 plt.tight_layout()
 plt.show()
+
+# To export:
+# ani.save("payload_flight_simulation_horizon.mp4", fps=30, dpi=150)
