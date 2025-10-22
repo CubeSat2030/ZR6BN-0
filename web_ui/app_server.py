@@ -69,7 +69,7 @@ SCRIPTS_CONFIG = {
         "plot_script": PLOT_DIR / "mpu6050_plotter.py",
         "chart_file": "mpu_chart.svg"
     },
-    "sound": {
+    "simulation": {
         "title": "Payload Flight Simulation",
         "sim_script": SIM_DIR / "payload_flight_simulation.py",
         "video_file": "payload_flight_simulation.mp4"
