@@ -196,12 +196,15 @@ def update(frame):
         ambient_factor = (10000 - alt[frame])/10000
         poly.set_facecolor((1.0, 0.84, 0.4 + 0.1*ambient_factor))
 
-    # Ground bloom
+    # Ground bloom — safe handling if no facecolor yet
     if alt[frame] < 1000:
         bloom_strength = (1000 - alt[frame])/1000
-        poly.set_facecolor(tuple(
-            min(1, c + bloom_strength*0.1) for c in poly.get_facecolor()[0][:3]
-        ))
+        fc = poly.get_facecolor()
+        if len(fc) == 0:
+            base_color = np.array([1.0, 0.84, 0.4])
+        else:
+            base_color = np.array(fc[0][:3])
+        poly.set_facecolor(tuple(np.clip(base_color + bloom_strength*0.1, 0, 1)))
 
     # Alt/Vel markers
     alt_marker.set_data([times[frame]], [alt[frame]])
@@ -213,6 +216,18 @@ def update(frame):
         elev=20 + np.sin(frame*0.02)*(4*(1-smooth_factor)),
         azim=frame*0.5 + np.sin(frame*0.03)*(10*(1-smooth_factor))
     )
+
+    # Volumetric glow around payload
+    if alt[frame] < 12000:
+        glow_strength = np.clip((12000 - alt[frame])/12000, 0, 1)
+        halo_color = (1.0, 0.84, 0.4 + 0.1*glow_strength, 0.2*glow_strength)
+        ax3d.scatter(
+            [0], [0], [0],
+            s=2000*glow_strength,
+            color=halo_color,
+            edgecolors='none',
+            alpha=halo_color[3]
+        )
 
     # Impact flash
     if impact_frame == -1 and alt[frame] <= 5:
@@ -246,4 +261,4 @@ plt.tight_layout()
 plt.show()
 
 # To export:
-# ani.save("payload_flight_simulation_troposphere.mp4", fps=30, dpi=150)
+# ani.save("payload_flight_simulation_troposphere_cinematic.mp4", fps=30, dpi=150)
