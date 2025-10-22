@@ -160,31 +160,38 @@ def update(frame):
     alt_marker.set_data([times[frame]], [alt[frame]])
     vel_marker.set_data([times[frame]], [vel[frame]])
 
-    # --- Normal camera rotation ---
+    # --- Normal camera motion ---
     ax3d.view_init(elev=20, azim=frame * 0.4)
 
     # ===============================================================
-    # 💥 Ground Impact Flash & Shake
+    # 💥 Ground Impact Flash + Lingering Flare
     # ===============================================================
-    if alt[frame] <= 10:  # near ground
-        # Short white flash overlay
-        flash_intensity = max(0, 1 - alt[frame] / 10.0)
-        flash_color = (1, 1, 1)
-        fig.patch.set_facecolor(
-            (
-                flash_color[0] * flash_intensity + bg[0] * (1 - flash_intensity),
-                flash_color[1] * flash_intensity + bg[1] * (1 - flash_intensity),
-                flash_color[2] * flash_intensity + bg[2] * (1 - flash_intensity),
-            )
-        )
-        ax3d.set_facecolor(fig.patch.get_facecolor())
+    global impact_frame
+    if "impact_frame" not in globals() and alt[frame] <= 5:
+        impact_frame = frame  # mark time of impact
 
-        # Add a subtle shake (simulate camera jolt)
-        shake_strength = 1.0 * flash_intensity
-        ax3d.view_init(
-            elev=20 + np.sin(frame * 30) * shake_strength,
-            azim=frame * 0.4 + np.cos(frame * 30) * shake_strength * 2,
-        )
+    # If we’ve impacted, calculate elapsed time since then
+    if "impact_frame" in globals():
+        elapsed = (frame - impact_frame) * dt.mean()
+        if elapsed < 2.0:  # 2 s fade duration
+            # Bright flash that decays smoothly
+            flash_strength = max(0, 1 - (elapsed / 2.0))
+            flash_color = (1.0, 1.0, 1.0)
+            blended = tuple(
+                flash_color[i] * flash_strength + bg[i] * (1 - flash_strength)
+                for i in range(3)
+            )
+            fig.patch.set_facecolor(blended)
+            ax3d.set_facecolor(blended)
+            ax_alt.set_facecolor(blended)
+            ax_vel.set_facecolor(blended)
+
+            # Add mild shake that diminishes with flash strength
+            shake = 1.0 * flash_strength
+            ax3d.view_init(
+                elev=20 + np.sin(frame * 30) * shake,
+                azim=frame * 0.4 + np.cos(frame * 25) * shake * 2,
+            )
 
     # ===============================================================
 
@@ -195,6 +202,8 @@ def update(frame):
         fontsize=13,
     )
     return [poly, acc_vec, trail_segments[0], alt_marker, vel_marker]
+
+
 # -----------------------------------------------------------------
 # RUN
 # -----------------------------------------------------------------
