@@ -1,12 +1,3 @@
-"""
-payload_flight_simulation.py
-────────────────────────────
-Visual 3D simulation of the ZR6BN payload’s descent from 32 000 m.
-Reads sensor data from src/logger/data/MPU6050.txt and renders a
-physics-accurate animation with altitude-based sky color and
-fading blue acceleration trail.
-"""
-
 import os
 import numpy as np
 import pandas as pd
@@ -37,6 +28,9 @@ df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 df = df[(df["timestamp"] >= START_TIME) & (df["timestamp"] <= END_TIME)]
 df = df.interpolate().fillna(0)
 
+# 🚀 FIX: Explicitly sort the DataFrame by timestamp to ensure chronological (forward) simulation.
+df = df.sort_values(by="timestamp").reset_index(drop=True)
+
 times = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds().values
 dt = np.diff(times, prepend=times[0])
 
@@ -53,6 +47,7 @@ alt = np.clip(alt, 0, 32000)
 # -----------------------------------------------------------------
 # ORIENTATION INTEGRATION
 # -----------------------------------------------------------------
+# This integration is correct for a forward-time simulation.
 orientations = [R.identity()]
 for i in range(1, len(df)):
     omega = gyro[i]*dt[i]
@@ -100,8 +95,15 @@ vel_marker, = ax_vel.plot([], [], "o", color="gold")
 poly = Poly3DCollection([], facecolors="gold", edgecolors="black", lw=0.5, alpha=0.9)
 ax3d.add_collection3d(poly)
 acc_vec = ax3d.quiver(0,0,0,0,0,0,color="cyan",lw=2,arrow_length_ratio=0.3)
-trail_segments = [Line3DCollection([], colors=[(0,1,1,0.2)], lw=2)]
-ax3d.add_collection3d(trail_segments[0])
+
+# FIX: Initialize Line3DCollection with a single, trivial segment 
+dummy_segments = np.array([[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]])
+trail_segments = [Line3DCollection(dummy_segments, colors=[(0,1,1,0.2)], lw=2)]
+
+ax3d.add_collection3d(trail_segments[0]) 
+
+# Immediately clear the segment so the animation starts empty
+trail_segments[0].set_segments([])
 
 fig.suptitle("ZR6BN Payload Flight — Stratospheric Descent", fontsize=16)
 
@@ -121,6 +123,7 @@ def altitude_to_color(h):
 # ANIMATION UPDATE
 # -----------------------------------------------------------------
 trail_buffer = np.zeros((TRAIL_LENGTH, 3))
+impact_frame = -1 # Initialize impact_frame outside the function
 
 def update(frame):
     Rm = rotations[frame]
@@ -130,14 +133,9 @@ def update(frame):
     acc_body = accel[frame]
     acc_world = Rm @ (acc_body * ACC_SCALE)
 
-    global acc_vec
-    acc_vec.remove()
-    acc_vec = ax3d.quiver(
-        0, 0, 0,
-        acc_world[0], acc_world[1], acc_world[2],
-        color="cyan", lw=2, arrow_length_ratio=0.3
-    )
-
+    # Update the existing quiver object
+    acc_vec.set_segments([[[0, 0, 0], acc_world]])
+    
     # --- Fading blue trail ---
     trail_buffer[:-1] = trail_buffer[1:]
     trail_buffer[-1] = acc_world
@@ -164,14 +162,14 @@ def update(frame):
     ax3d.view_init(elev=20, azim=frame * 0.4)
 
     # ===============================================================
-    # 💥 Ground Impact Flash + Lingering Flare
+    # Ground Impact Flash + Lingering Flare
     # ===============================================================
     global impact_frame
-    if "impact_frame" not in globals() and alt[frame] <= 5:
+    if impact_frame == -1 and alt[frame] <= 5:
         impact_frame = frame  # mark time of impact
 
     # If we’ve impacted, calculate elapsed time since then
-    if "impact_frame" in globals():
+    if impact_frame != -1:
         elapsed = (frame - impact_frame) * dt.mean()
         if elapsed < 2.0:  # 2 s fade duration
             # Bright flash that decays smoothly
@@ -215,4 +213,4 @@ plt.tight_layout()
 plt.show()
 
 # To record video:
-ani.save("payload_flight_simulation.mp4", fps=30, dpi=150)
+# ani.save("payload_flight_simulation.mp4", fps=30, dpi=150)
