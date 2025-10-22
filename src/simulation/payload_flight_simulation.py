@@ -133,15 +133,19 @@ def update(frame):
     global acc_vec
     acc_vec.remove()
     acc_vec = ax3d.quiver(
-        0,0,0,acc_world[0],acc_world[1],acc_world[2],
+        0, 0, 0,
+        acc_world[0], acc_world[1], acc_world[2],
         color="cyan", lw=2, arrow_length_ratio=0.3
     )
 
     # --- Fading blue trail ---
     trail_buffer[:-1] = trail_buffer[1:]
     trail_buffer[-1] = acc_world
-    segments = [[trail_buffer[i], trail_buffer[i+1]] for i in range(TRAIL_LENGTH-1)]
-    colors = [(0, 0.3+0.7*(i/TRAIL_LENGTH), 1.0, 0.2+0.8*(i/TRAIL_LENGTH)) for i in range(TRAIL_LENGTH-1)]
+    segments = [[trail_buffer[i], trail_buffer[i + 1]] for i in range(TRAIL_LENGTH - 1)]
+    colors = [
+        (0, 0.3 + 0.7 * (i / TRAIL_LENGTH), 1.0, 0.2 + 0.8 * (i / TRAIL_LENGTH))
+        for i in range(TRAIL_LENGTH - 1)
+    ]
     trail_segments[0].set_segments(segments)
     trail_segments[0].set_color(colors)
 
@@ -156,15 +160,41 @@ def update(frame):
     alt_marker.set_data([times[frame]], [alt[frame]])
     vel_marker.set_data([times[frame]], [vel[frame]])
 
-    ax3d.view_init(elev=20, azim=frame*0.4)
+    # --- Normal camera rotation ---
+    ax3d.view_init(elev=20, azim=frame * 0.4)
+
+    # ===============================================================
+    # 💥 Ground Impact Flash & Shake
+    # ===============================================================
+    if alt[frame] <= 10:  # near ground
+        # Short white flash overlay
+        flash_intensity = max(0, 1 - alt[frame] / 10.0)
+        flash_color = (1, 1, 1)
+        fig.patch.set_facecolor(
+            (
+                flash_color[0] * flash_intensity + bg[0] * (1 - flash_intensity),
+                flash_color[1] * flash_intensity + bg[1] * (1 - flash_intensity),
+                flash_color[2] * flash_intensity + bg[2] * (1 - flash_intensity),
+            )
+        )
+        ax3d.set_facecolor(fig.patch.get_facecolor())
+
+        # Add a subtle shake (simulate camera jolt)
+        shake_strength = 1.0 * flash_intensity
+        ax3d.view_init(
+            elev=20 + np.sin(frame * 30) * shake_strength,
+            azim=frame * 0.4 + np.cos(frame * 30) * shake_strength * 2,
+        )
+
+    # ===============================================================
+
     fig.suptitle(
         f"ZR6BN | t={times[frame]:.1f}s | Alt={alt[frame]:.0f} m | "
         f"Vel={vel[frame]:.1f} m/s | |a|={np.linalg.norm(acc_body):.1f} m/s² | "
         f"{df['timestamp'].iloc[frame]}",
-        fontsize=13
+        fontsize=13,
     )
     return [poly, acc_vec, trail_segments[0], alt_marker, vel_marker]
-
 # -----------------------------------------------------------------
 # RUN
 # -----------------------------------------------------------------
