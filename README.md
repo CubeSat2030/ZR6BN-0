@@ -107,6 +107,7 @@ sed -i '/export TMPDIR=\/var\/tmp\/pip/d' venv/bin/activate
 
 # Project tree
 ~~~
+
 ├── .gitattributes
 ├── README.md
 ├── main.py
@@ -141,16 +142,21 @@ sed -i '/export TMPDIR=\/var\/tmp\/pip/d' venv/bin/activate
 │   │   │       └── .gitkeep
 │   │   ├── image_capture.py
 │   │   └── video_capture.py
-│   └── plotter/
-│       ├── charts/
-│       │   ├── cpu_chart.svg
-│       │   ├── mpu_chart.svg
-│       │   └── mpu_chart_backup.svg
-│       ├── cpu_plotter.py
-│       ├── mpu6050_plotter.py
-│       └── sound_plotter.py
+│   ├── plotter/
+│   │   ├── charts/
+│   │   │   ├── cpu_chart.svg
+│   │   │   ├── cpu_chart_backup.svg
+│   │   │   ├── mpu_chart.svg
+│   │   │   ├── mpu_chart_backup.svg
+│   │   │   └── mpu_phases.svg
+│   │   ├── cpu_plotter.py
+│   │   ├── mpu6050_plotter.py
+│   │   └── sound_plotter.py
+│   └── simulation/
+│       └── payload_flight_simulation.py
 └── web_ui/
     ├── app_server.py
     └── templates/
         └── dashboard.html
+
 ~~~
