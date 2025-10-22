@@ -115,7 +115,7 @@ trail_segments = [Line3DCollection(dummy_segments, colors=[(0,1,1,0.2)], lw=2)]
 ax3d.add_collection3d(trail_segments[0])
 trail_segments[0].set_segments([])
 
-fig.suptitle("ZR6BN Payload Flight — Stratospheric Descent (Cinematic Horizon View)",
+fig.suptitle("ZR6BN Payload Flight — Stratospheric → Tropospheric Descent",
              fontsize=15, color="white")
 
 # -----------------------------------------------------------------
@@ -123,11 +123,21 @@ fig.suptitle("ZR6BN Payload Flight — Stratospheric Descent (Cinematic Horizon 
 # -----------------------------------------------------------------
 def altitude_to_color(h):
     """Space black to light blue near ground."""
-    t = np.clip(h / 32000.0, 0, 1)
-    r = 0.0 + 0.15*(1 - t)
-    g = 0.05 + 0.5*(1 - t)
-    b = 0.1 + 1.0*(1 - t/2)
-    return (r, g, b)
+    if h > 12000:  # Stratosphere
+        t = np.clip(h / 32000.0, 0, 1)
+        r = 0.0 + 0.15*(1 - t)
+        g = 0.05 + 0.5*(1 - t)
+        b = 0.1 + 1.0*(1 - t/2)
+    else:  # Troposphere
+        t = np.clip(h / 12000.0, 0, 1)
+        r = 0.5 * (1 - t) + 0.1 * t
+        g = 0.7 * (1 - t) + 0.3 * t
+        b = 1.0 * (1 - t) + 0.5 * t
+        haze = 0.2 * (1 - t)
+        r += haze
+        g += haze * 0.8
+        b += haze * 0.6
+    return (np.clip(r,0,1), np.clip(g,0,1), np.clip(b,0,1))
 
 # -----------------------------------------------------------------
 # HORIZON ARC GENERATION
@@ -170,16 +180,38 @@ def update(frame):
     fig.patch.set_facecolor(bg)
     ax3d.set_facecolor(bg)
 
-    horizon_strength = np.clip((8000 - alt[frame]) / 8000, 0, 1)
-    horizon_color = (0.3, 0.6 + 0.3*horizon_strength, 1.0, 0.15 + 0.6*horizon_strength)
+    # Horizon thickening & aerosol
+    horizon_strength = np.clip((5000 - alt[frame]) / 5000, 0, 1)
+    horizon_color = (
+        0.3 + 0.3*horizon_strength, 
+        0.6 + 0.2*horizon_strength, 
+        1.0, 
+        0.15 + 0.5*horizon_strength
+    )
     horizon_line.set_color(horizon_color)
+    horizon_line.set_linewidth(4 + 2*horizon_strength)
 
+    # Payload lighting response
+    if alt[frame] < 10000:
+        ambient_factor = (10000 - alt[frame])/10000
+        poly.set_facecolor((1.0, 0.84, 0.4 + 0.1*ambient_factor))
+
+    # Ground bloom
+    if alt[frame] < 1000:
+        bloom_strength = (1000 - alt[frame])/1000
+        poly.set_facecolor(tuple(
+            min(1, c + bloom_strength*0.1) for c in poly.get_facecolor()[0][:3]
+        ))
+
+    # Alt/Vel markers
     alt_marker.set_data([times[frame]], [alt[frame]])
     vel_marker.set_data([times[frame]], [vel[frame]])
 
+    # Camera stabilization
+    smooth_factor = np.clip((500 - alt[frame])/500, 0, 1)
     ax3d.view_init(
-        elev=20 + np.sin(frame*0.02)*4,
-        azim=frame*0.5 + np.sin(frame*0.03)*10
+        elev=20 + np.sin(frame*0.02)*(4*(1-smooth_factor)),
+        azim=frame*0.5 + np.sin(frame*0.03)*(10*(1-smooth_factor))
     )
 
     # Impact flash
@@ -214,4 +246,4 @@ plt.tight_layout()
 plt.show()
 
 # To export:
-# ani.save("payload_flight_simulation_horizon.mp4", fps=30, dpi=150)
+# ani.save("payload_flight_simulation_troposphere.mp4", fps=30, dpi=150)
