@@ -34,6 +34,7 @@ MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger" # Data folder location: src/logger/
 PLOT_DIR = SRC_DIR / "plotter"
+SIM_DIR = SRC_DIR / "simulation"
 CHARTS_DIR = PLOT_DIR / "charts" # Charts folder location: src/plotter/charts/
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
@@ -69,10 +70,9 @@ SCRIPTS_CONFIG = {
         "chart_file": "mpu_chart.svg"
     },
     "sound": {
-        "title": "Sound Logger",
-        "log_script": LOG_DIR / "sound_logger.py",
-        "plot_script": PLOT_DIR / "sound_plotter.py",
-        "chart_file": "sound_chart.svg"
+        "title": "Payload Flight Simulation",
+        "sim_script": SIM_DIR / "payload_flight_simulation.py",
+        "video_file": "payload_flight_simulation.mp4"
     }
 }
 
