@@ -38,7 +38,30 @@ MAX_ALT_KNOWN = 32000.0  # 32 km burst altitude (user-confirmed)
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
-# ---------------- LOAD DATA ----------------
+# ---------------- HELPERS ----------------
+def altitude_to_color(h):
+    """
+    Map altitude (meters) to a cinematic background RGB tuple.
+    Lower alt -> slightly warmer/darker; high alt -> near-space navy.
+    """
+    a = np.clip(h / MAX_ALT_KNOWN, 0.0, 1.0)
+    # three-stage gradient for cinematic look
+    if a < 0.25:
+        t = a / 0.25
+        base = np.array([0.02, 0.02, 0.04])        # near-black twilight
+        sky  = np.array([0.08, 0.10, 0.20])        # deep blue
+    elif a < 0.75:
+        t = (a - 0.25) / 0.5
+        base = np.array([0.08, 0.10, 0.20])
+        sky  = np.array([0.03, 0.06, 0.14])
+    else:
+        t = (a - 0.75) / 0.25
+        base = np.array([0.03, 0.06, 0.14])
+        sky  = np.array([0.01, 0.02, 0.06])
+    col = (1 - t) * base + t * sky
+    return tuple(np.clip(col, 0, 1))
+
+# ---------------- LOAD & PREP DATA ----------------
 if not os.path.exists(DATA_FILE):
     raise FileNotFoundError(f"Telemetry file missing: {DATA_FILE}")
 
@@ -76,12 +99,10 @@ elif not df["velocity_m_s"].isna().all():
     alt = np.zeros(len(df))
     for i in range(1, len(df)):
         alt[i] = alt[i-1] + vel[i] * dt[i]
-    # if outer values look wrong, clip
     alt = np.clip(alt, 0.0, MAX_ALT_KNOWN * 1.1)
 else:
-    # synthesize a realistic ascent -> burst -> descent profile
+    # synthesize
     print("No altitude or velocity present. Synthesizing altitude profile (burst at ~32km).")
-    # detect burst by accel spike if available
     accel_present = not df[["accel_x_m_s2","accel_y_m_s2","accel_z_m_s2"]].isna().all().all()
     burst_index = None
     if accel_present:
@@ -90,26 +111,20 @@ else:
         az = df["accel_z_m_s2"].fillna(0).to_numpy()
         mag = np.sqrt(ax*ax + ay*ay + az*az)
         burst_index = int(np.argmax(mag))
-        # require a noticeable spike relative to median
         if mag[burst_index] < np.median(mag) * 3:
             burst_index = None
     if burst_index is None:
-        # fallback: set burst near mid-sample
         burst_index = len(df)//2
-
-    # create a smooth rise to MAX_ALT_KNOWN at burst_index then descend
     climb_len = burst_index
     descent_len = len(df) - burst_index
     climb = np.linspace(0.0, MAX_ALT_KNOWN, climb_len, endpoint=False) if climb_len>0 else np.array([])
     descent = np.linspace(MAX_ALT_KNOWN, 0.0, descent_len) if descent_len>0 else np.array([])
     alt = np.concatenate([climb, descent])
-    # safety: if lengths differ cause final length mismatch, pad/trim
     if len(alt) < len(df):
         alt = np.pad(alt, (0, len(df)-len(alt)), 'edge')
     elif len(alt) > len(df):
         alt = alt[:len(df)]
 
-# clamp alt to [0, MAX_ALT_KNOWN * 1.05]
 alt = np.clip(alt, 0.0, MAX_ALT_KNOWN * 1.05)
 
 # ---------------- EXPORT FPS (exact mapping: one frame per telemetry row) ----------------
@@ -124,7 +139,6 @@ frames = len(df)
 print(f"Telemetry rows: {len(df)}, median dt={median_dt:.3f}s, export_fps={export_fps}, frames={frames}")
 
 # ---------------- LAYOUT parameters (2D flat cinematic) ----------------
-# left panel portion (0.65 width)
 left_w = 0.65
 right_w = 1.0 - left_w
 pad = 0.04
@@ -133,10 +147,9 @@ rod_x = 0.35  # fraction across left panel (0..1 within left)
 rod_top = 0.88
 rod_bottom = 0.12
 
-# map altitude (0..MAX_ALT_KNOWN) -> y position within left panel (rod_top..rod_bottom)
 def alt_to_yp(alt_m):
     t = np.clip(alt_m / MAX_ALT_KNOWN, 0.0, 1.0)
-    return rod_bottom + (rod_top - rod_bottom) * (t)
+    return rod_bottom + (rod_top - rod_bottom) * t
 
 # ---------------- FIGURE & STATIC ASSETS ----------------
 plt.style.use("dark_background")
@@ -148,11 +161,10 @@ ax_left.set_xlim(0,1); ax_left.set_ylim(0,1)
 ax_left.axis("off")
 ax_right.axis("off")
 
-# prepare right chart image if available (no cairosvg dependency)
+# load right chart image if available (Pillow)
 chart_img = None
 if os.path.exists(CHART_SVG):
     try:
-        # Pillow can open some SVG via its loader; if not, skip gracefully
         chart_img = Image.open(CHART_SVG).convert("RGBA")
     except Exception:
         chart_img = None
@@ -163,28 +175,25 @@ else:
     ax_right.set_facecolor("#0F0F0F")
     ax_right.text(0.5, 0.5, "mpu_chart.svg\nnot found", ha="center", va="center", color="white", fontsize=18)
 
-# static left background gradient (we will set fig.patch each frame for dynamic color)
-# draw the rod as a vertical soft rectangle (simulate tapered shadow)
+# rod rectangle
 rod_pixel_x = rod_x
 rod_width = 0.015
 rod = plt.Rectangle((rod_pixel_x - rod_width/2, rod_bottom - 0.02), rod_width, rod_top - rod_bottom + 0.04,
                     color=ROD_COLOR, zorder=1, alpha=0.95)
 ax_left.add_patch(rod)
 
-# draw tick dots positions along the rod for visual context (spaced)
+# faint ticks
 n_ticks = 36
 tick_ys = np.linspace(rod_bottom, rod_top, n_ticks)
 for ty in tick_ys:
     ax_left.plot([rod_pixel_x], [ty], marker='o', markersize=4, color=(1,1,1,0.03))
 
-# static left labels (positioned like your reference)
+# overlay labels & arrows (persistent)
 overlay_ax = fig.add_axes([0,0,1,1], zorder=20)
 overlay_ax.axis("off")
 overlay_ax.text(0.04, 0.72, "future\nvertical\npayload\ntrajectory", fontsize=26, color=LABEL_COLOR, va="center")
 overlay_ax.text(0.04, 0.45, "payload", fontsize=28, color=LABEL_COLOR, va="center")
 overlay_ax.text(0.04, 0.22, "passed\nvertical\npayload\ntrajectory", fontsize=26, color=LABEL_COLOR, va="center")
-
-# arrows using overlay axis (axes fraction coords)
 overlay_ax.annotate("", xy=(0.45, 0.75), xytext=(0.15, 0.75),
                     xycoords='figure fraction', textcoords='figure fraction',
                     arrowprops=dict(arrowstyle="-|>", lw=3, color=LABEL_COLOR))
@@ -195,51 +204,46 @@ overlay_ax.annotate("", xy=(0.40, 0.28), xytext=(0.15, 0.28),
                     xycoords='figure fraction', textcoords='figure fraction',
                     arrowprops=dict(arrowstyle="-|>", lw=3, color=LABEL_COLOR))
 
-# prepare artists for dynamic elements
+# dynamic artists
 past_scatter = ax_left.scatter([], [], s=18, color=PAST_COLOR, zorder=5)
 future_scatter = ax_left.scatter([], [], s=18, color=FUTURE_COLOR, zorder=4)
-cube_artist = Rectangle((rod_pixel_x - 0.04, 0.5 - 0.04), 0.08, 0.08,
+cube_size_frac = 0.08
+cube_artist = Rectangle((rod_pixel_x - cube_size_frac/2, 0.5 - cube_size_frac/2), cube_size_frac, cube_size_frac,
                         facecolor=CUBE_COLOR, edgecolor="#2b2430", linewidth=1.0, zorder=10)
 ax_left.add_patch(cube_artist)
 
-# small ground marker at bottom
 ax_left.plot([rod_pixel_x], [rod_bottom], marker='s', markersize=6, color=(0.9,0.9,0.9,0.7), zorder=6)
 
-# ---------------- EXPORT (FFMpegWriter) ----------------
+# ---------------- EXPORT ----------------
 writer = FFMpegWriter(fps=export_fps, metadata=dict(artist="BACAR-13 Replay"), codec=CODEC)
 print(f"Exporting to: {OUT_FILE}\nframes={frames}, fps={export_fps}")
 
-# dynamic frame loop — one frame per telemetry row (exact mapping)
 with writer.saving(fig, OUT_FILE, dpi=DPI):
     for i in range(frames):
-        # set dynamic background color based on altitude
+        # dynamic background
         bg = altitude_to_color(alt[i])
         fig.patch.set_facecolor(bg)
         ax_left.set_facecolor(bg)
 
-        # compute cube center y in left panel coords
+        # cube position
         y = alt_to_yp(alt[i])
-        # convert fraction to axes units — our ax_left is 0..1
-        cube_size_frac = 0.08
         cube_artist.set_xy((rod_pixel_x - cube_size_frac/2, y - cube_size_frac/2))
         cube_artist.set_width(cube_size_frac)
         cube_artist.set_height(cube_size_frac)
-        # subtle shading: slightly darken cube when low alt
+        # subtle shade
         shade_factor = 0.12 * (1.0 - np.clip(alt[i] / MAX_ALT_KNOWN, 0.0, 1.0))
         facecol = tuple(np.clip(np.array((200/255.,185/255.,1.0)) - shade_factor, 0, 1))
         cube_artist.set_facecolor(facecol)
 
-        # past / future points along rod
+        # past/future dots
         past_idx = np.arange(0, i+1)
         future_idx = np.arange(i+1, frames)
         past_ys = alt_to_yp(alt[past_idx]) if len(past_idx)>0 else np.array([])
         future_ys = alt_to_yp(alt[future_idx]) if len(future_idx)>0 else np.array([])
 
-        # plot small faded dots for passed and future
         if len(past_ys)>0:
             past_xs = np.full_like(past_ys, rod_pixel_x)
             past_scatter.set_offsets(np.column_stack([past_xs, past_ys]))
-            # progressively fade older points
             alphas = np.linspace(0.05, 0.35, len(past_ys))
             past_scatter.set_color([(1,1,1,a) for a in alphas])
         else:
@@ -247,7 +251,6 @@ with writer.saving(fig, OUT_FILE, dpi=DPI):
 
         if len(future_ys)>0:
             future_xs = np.full_like(future_ys, rod_pixel_x)
-            # draw fewer future dots if too many
             step = max(1, len(future_ys)//36)
             sel = np.arange(0, len(future_ys), step)
             future_scatter.set_offsets(np.column_stack([future_xs[sel], future_ys[sel]]))
@@ -256,19 +259,14 @@ with writer.saving(fig, OUT_FILE, dpi=DPI):
         else:
             future_scatter.set_offsets([])
 
-        # small halo glow under cube when below 12 km
+        # halo glow when low
         halo = None
         if alt[i] < 12000:
             glow_strength = np.clip((12000.0 - alt[i]) / 12000.0, 0.0, 1.0)
-            # draw a translucent circle via scatter
             halo = ax_left.scatter([rod_pixel_x], [y - cube_size_frac*0.04], s=600*glow_strength,
                                    color=(1.0,0.95,0.6,0.06+0.18*glow_strength), zorder=6)
 
-        # event banners top-left when in window
-        # clear any previous small texts (we rely on fig.texts clear below)
-        for name,(sidx,eidx) in event_windows.items():
-            pass  # we'll show via fig.texts clearing below
-
+        # event banner texts
         fig.texts.clear()
         for name, (sidx, eidx) in event_windows.items():
             if sidx <= i <= eidx:
@@ -278,11 +276,10 @@ with writer.saving(fig, OUT_FILE, dpi=DPI):
                 fig.text(0.03, 0.94, name, fontsize=20, color=(1,0.95,0.85,alpha),
                          bbox=dict(boxstyle="round,pad=0.4", facecolor=(0,0,0,0.6*alpha)))
 
-        # HUD line bottom-right with timestamp (small)
+        # timestamp HUD (small)
         ts = df["timestamp"].iloc[i].strftime("%Y-%m-%d %H:%M:%S")
         fig.text(0.70, 0.03, f"t={ts} | Alt={alt[i]:.0f} m", fontsize=10, color="white")
 
-        # grab frame
         writer.grab_frame(facecolor=fig.get_facecolor())
 
 print("Export complete ->", OUT_FILE)
