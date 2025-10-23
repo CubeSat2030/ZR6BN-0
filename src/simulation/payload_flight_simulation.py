@@ -217,6 +217,10 @@ future_scat = ax3d.scatter([], [], [], s=26, alpha=0.45, color="#9AD6FF")
 # rod representation: we place a thick dark line along the rod
 rod_line, = ax3d.plot(traj_x, traj_y, traj_z, lw=18, solid_capstyle='round', alpha=0.95, color="#121417")
 
+# horizon line – gives the lower atmospheric glow band
+horizon_line, = ax3d.plot([-1, 1], [0, 0], [-1.2, -1.2],
+                          lw=4.0, color=(0.3, 0.6, 1.0, 0.3), alpha=0.6)
+
 # trail and halo containers
 trail_collection = Line3DCollection([[[0,0,0],[0,0,0]]], colors=[(0.2,0.6,1.0,0.12)], lw=2)
 ax3d.add_collection3d(trail_collection)
