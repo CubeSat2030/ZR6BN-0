@@ -3,7 +3,7 @@
 BACAR-13 Cinematic Payload Flight Simulation
 - Left: 3D cinematic payload visualization (past/future trajectory, atmosphere transitions)
 - Right: Telemetry chart stack driven from the actual logger/data/MPU6050.txt file
-Author: Generated for Nathan Busse
+Author:  Nathan Graham Busse
 """
 
 import os
