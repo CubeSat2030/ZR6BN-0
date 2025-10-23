@@ -21,7 +21,7 @@ import warnings
 
 # ---------------- CONFIG ----------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
-DATA_FILE = os.path.join(PROJECT_ROOT, "src", "logger", "data", "MPU6050.txt")
+DATA_FILE = os.path.join(PROJECT_ROOT, "logger", "data", "MPU6050.txt")
 CHART_SVG = os.path.join(PROJECT_ROOT, "src", "plotter", "charts", "mpu_chart.svg")
 OUT_DIR = os.path.join(PROJECT_ROOT, "src", "output")
 OUT_FILE = os.path.join(OUT_DIR, "BACAR13_full_simulation_vis.mp4")
