@@ -45,11 +45,10 @@ def altitude_to_color(h):
     Lower alt -> slightly warmer/darker; high alt -> near-space navy.
     """
     a = np.clip(h / MAX_ALT_KNOWN, 0.0, 1.0)
-    # three-stage gradient for cinematic look
     if a < 0.25:
         t = a / 0.25
-        base = np.array([0.02, 0.02, 0.04])        # near-black twilight
-        sky  = np.array([0.08, 0.10, 0.20])        # deep blue
+        base = np.array([0.02, 0.02, 0.04])
+        sky  = np.array([0.08, 0.10, 0.20])
     elif a < 0.75:
         t = (a - 0.25) / 0.5
         base = np.array([0.08, 0.10, 0.20])
@@ -101,7 +100,7 @@ elif not df["velocity_m_s"].isna().all():
         alt[i] = alt[i-1] + vel[i] * dt[i]
     alt = np.clip(alt, 0.0, MAX_ALT_KNOWN * 1.1)
 else:
-    # synthesize
+    # synthesize a realistic ascent -> burst -> descent profile
     print("No altitude or velocity present. Synthesizing altitude profile (burst at ~32km).")
     accel_present = not df[["accel_x_m_s2","accel_y_m_s2","accel_z_m_s2"]].isna().all().all()
     burst_index = None
@@ -126,6 +125,34 @@ else:
         alt = alt[:len(df)]
 
 alt = np.clip(alt, 0.0, MAX_ALT_KNOWN * 1.05)
+
+# ---------------- EVENT DETECTION (build event_windows BEFORE use) ----------------
+# Use acceleration magnitude to detect burst and impact windows.
+ax_col = df["accel_x_m_s2"].fillna(0).to_numpy()
+ay_col = df["accel_y_m_s2"].fillna(0).to_numpy()
+az_col = df["accel_z_m_s2"].fillna(0).to_numpy()
+acc_mag = np.sqrt(ax_col*ax_col + ay_col*ay_col + az_col*az_col)
+
+if len(acc_mag) == 0:
+    # fallback: define simple windows
+    burst_idx = len(df)//3
+    impact_idx = int(len(df)*0.9)
+else:
+    burst_idx = int(np.argmax(acc_mag))
+    tail_start = int(len(acc_mag) * 0.90)
+    if tail_start < len(acc_mag):
+        impact_idx = tail_start + int(np.argmax(acc_mag[tail_start:]))
+    else:
+        impact_idx = len(acc_mag) - 1
+
+descent_start_idx = min(len(df)-1, burst_idx + 1)
+
+event_windows = {
+    "ASCENT": (0, max(0, burst_idx-1)),
+    "BURST": (max(0, burst_idx-2), min(len(df)-1, burst_idx+4)),
+    "DESCENT": (descent_start_idx, max(descent_start_idx+1, impact_idx-1)),
+    "IMPACT": (max(0, impact_idx-3), min(len(df)-1, impact_idx+4))
+}
 
 # ---------------- EXPORT FPS (exact mapping: one frame per telemetry row) ----------------
 median_dt = np.median(dt[np.where(dt>0)]) if np.any(dt>0) else 1.0
