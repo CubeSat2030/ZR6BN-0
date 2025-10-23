@@ -1,7 +1,16 @@
 ~~~
-Import "cairosvg" could not be resolved
-"horizon_line" is not defined
-"horizon_line" is not defined
+
+Traceback (most recent call last):
+  File "/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/payload_flight_simulation.py", line 248, in <module>
+    with writer.saving(fig, OUT_FILE, dpi=DPI):
+  File "/usr/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/home/nathan/lib/python3.12/site-packages/matplotlib/animation.py", line 226, in saving
+    self.finish()
+  File "/home/nathan/lib/python3.12/site-packages/matplotlib/animation.py", line 341, in finish
+    raise subprocess.CalledProcessError(
+subprocess.CalledProcessError: Command '['ffmpeg', '-f', 'rawvideo', '-vcodec', 'rawvideo', '-s', '1920x1080', '-pix_fmt', 'rgba', '-framerate', '1', '-loglevel', 'error', '-i', 'pipe:', '-vcodec', 'libx264', '-metadata', 'artist=BACAR-13 Replay', '-y', '/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/output/BACAR13_simulation_flat.mp4']' returned non-zero exit status 255.
+
 ~~~
 
 
