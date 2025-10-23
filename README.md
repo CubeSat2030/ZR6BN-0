@@ -1,24 +1,8 @@
 ~~~
-(nathan) (base) nathan@exodos:~/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1$ /home/nathan/bin/python /home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/payload_flight_simulation.py
-Traceback (most recent call last):
-  File "/home/nathan/lib/python3.12/site-packages/matplotlib/cbook.py", line 361, in process
-    func(*args, **kwargs)
-  File "/home/nathan/lib/python3.12/site-packages/matplotlib/animation.py", line 928, in _start
-    self._init_draw()
-  File "/home/nathan/lib/python3.12/site-packages/matplotlib/animation.py", line 1770, in _init_draw
-    self._draw_frame(frame_data)
-  File "/home/nathan/lib/python3.12/site-packages/matplotlib/animation.py", line 1789, in _draw_frame
-    self._drawn_artists = self._func(framedata, *self._args)
-                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/payload_flight_simulation.py", line 203, in update
-    min(1, c + bloom_strength*0.1) for c in poly.get_facecolor()[0][:3]
-                                            ~~~~~~~~~~~~~~~~~~~~^^^
-IndexError: index 0 is out of bounds for axis 0 with size 0
-(nathan) (base) nathan@exodos:~/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1$ 
-
-
+Import "cairosvg" could not be resolved
+"horizon_line" is not defined
+"horizon_line" is not defined
 ~~~
-
 
 
 # 🐍 Raspberry Pi OS Lite (Bookworm 32-bit) — Pip "No Space Left on Device" Fix
