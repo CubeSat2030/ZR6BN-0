@@ -253,6 +253,27 @@ def draw_event_banner(name, alpha):
     bbox = dict(boxstyle="round,pad=0.6", facecolor=(0,0,0,0.6*alpha), edgecolor=(1,1,1,0.08))
     fig.text(0.04, 0.92, name, fontsize=22, color=(1,0.95,0.8,alpha), bbox=bbox)
 
+# ---------------- HELPER: altitude -> color gradient ----------------
+def altitude_to_color(altitude):
+    """
+    Converts altitude (m) to a cinematic sky gradient RGB tuple.
+    Sea level = warm horizon, high altitude = dark near-space blue.
+    """
+    # clamp altitude to 0–30 000 m range
+    a = np.clip(altitude / 30000.0, 0.0, 1.0)
+    # interpolate between (R,G,B)
+    # ground = sunset orange, mid = sky blue, stratosphere = deep navy
+    ground = np.array([0.98, 0.58, 0.20])   # orange-gold
+    midsky = np.array([0.30, 0.55, 0.90])   # light blue
+    highsky = np.array([0.03, 0.06, 0.12])  # near-space navy
+    if a < 0.4:
+        t = a / 0.4
+        color = (1 - t) * ground + t * midsky
+    else:
+        t = (a - 0.4) / 0.6
+        color = (1 - t) * midsky + t * highsky
+    return tuple(np.clip(color, 0, 1))
+
 # ---------------- EXPORT (no interactive display) ----------------
 total_output_frames = len(selected_frames)
 writer = FFMpegWriter(fps=out_fps, metadata=dict(artist="BACAR-13 Replay"), codec=CODEC)
