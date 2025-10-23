@@ -224,20 +224,29 @@ halo_artist = None
 
 # left overlay text/labels that match the concept (positions are figure-relative)
 def draw_left_overlays():
-    # large white labels with arrows pointing to target features
-    fig.text(0.06, 0.72, "future\nvertical\npayload\ntrajectory", fontsize=26, color="white", va="center")
-    fig.text(0.06, 0.45, "payload", fontsize=28, color="white", va="center")
-    fig.text(0.06, 0.22, "passed\nvertical\npayload\ntrajectory", fontsize=26, color="white", va="center")
-    # draw arrows (approximate)
-    fig.annotate("", xy=(0.45, 0.75), xytext=(0.15, 0.75), xycoords='figure fraction', textcoords='figure fraction',
-                 arrowprops=dict(arrowstyle="-|>", lw=3, color="white"))
-    fig.annotate("", xy=(0.60, 0.52), xytext=(0.15, 0.52), xycoords='figure fraction', textcoords='figure fraction',
-                 arrowprops=dict(arrowstyle="-|>", lw=3, color="white"))
-    fig.annotate("", xy=(0.40, 0.28), xytext=(0.15, 0.28), xycoords='figure fraction', textcoords='figure fraction',
-                 arrowprops=dict(arrowstyle="-|>", lw=3, color="white"))
+    # create an invisible 2-D axes that spans the figure for annotations
+    ax_overlay = fig.add_axes([0, 0, 1, 1], zorder=10)
+    ax_overlay.axis("off")
 
-draw_left_overlays()
+    # text labels
+    ax_overlay.text(0.06, 0.72, "future\nvertical\npayload\ntrajectory",
+                    fontsize=26, color="white", va="center", transform=ax_overlay.transAxes)
+    ax_overlay.text(0.06, 0.45, "payload",
+                    fontsize=28, color="white", va="center", transform=ax_overlay.transAxes)
+    ax_overlay.text(0.06, 0.22, "passed\nvertical\npayload\ntrajectory",
+                    fontsize=26, color="white", va="center", transform=ax_overlay.transAxes)
 
+    # arrows
+    ax_overlay.annotate("", xy=(0.45, 0.75), xytext=(0.15, 0.75),
+                        xycoords="axes fraction", textcoords="axes fraction",
+                        arrowprops=dict(arrowstyle="-|>", lw=3, color="white"))
+    ax_overlay.annotate("", xy=(0.60, 0.52), xytext=(0.15, 0.52),
+                        xycoords="axes fraction", textcoords="axes fraction",
+                        arrowprops=dict(arrowstyle="-|>", lw=3, color="white"))
+    ax_overlay.annotate("", xy=(0.40, 0.28), xytext=(0.15, 0.28),
+                        xycoords="axes fraction", textcoords="axes fraction",
+                        arrowprops=dict(arrowstyle="-|>", lw=3, color="white"))
+    
 # ---------------- EXPORT PREPARATION ----------------
 writer = FFMpegWriter(fps=export_fps, metadata=dict(artist="BACAR-13 Replay"), codec=CODEC)
 print(f"Exporting to {OUT_FILE} at {export_fps} fps, frames={total_output_frames}")
