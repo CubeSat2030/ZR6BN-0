@@ -24,10 +24,10 @@ from tqdm import tqdm
 # ---------------- CONFIG ----------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
 DATA_FILE = os.path.join(PROJECT_ROOT, "logger", "data", "MPU6050.txt")
-CHART_SVG  = os.path.join(PROJECT_ROOT, "plotter", "charts", "mpu_chart.svg")
-OUT_DIR    = os.path.join(PROJECT_ROOT, "simulation", "output")
-FRAME_DIR  = os.path.join(OUT_DIR, "frames_temp")
-OUT_FILE   = os.path.join(OUT_DIR, "BACAR13_simulation_split.mp4")
+CHART_SVG = os.path.join(PROJECT_ROOT, "src", "plotter", "charts", "mpu_chart.svg")
+OUT_DIR = os.path.join(PROJECT_ROOT, "simulation", "output")
+FRAME_DIR = os.path.join(OUT_DIR, "frames_temp")
+OUT_FILE = os.path.join(OUT_DIR, "BACAR13_simulation_framecache.mp4")
 
 W, H = 1920, 1080
 DPI = 150
@@ -288,4 +288,4 @@ try:
 except Exception:
     pass
 
-print(f"\n✅ Done. MP4 saved -> {OUT_FILE}")
+print(f"\n✅ Export complete -> {OUT_FILE}")
