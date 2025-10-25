@@ -215,9 +215,9 @@ def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, 
 
     def update(i):
         col = colors[i]
-        ax3d.w_xaxis.set_pane_color((col[0]*0.05, col[1]*0.05, col[2]*0.05, 1.0))
-        ax3d.w_yaxis.set_pane_color((col[0]*0.05, col[1]*0.05, col[2]*0.05, 1.0))
-        ax3d.w_zaxis.set_pane_color((col[0]*0.07, col[1]*0.07, col[2]*0.07, 1.0))
+        ax3d.xaxis.set_pane_color((col[0]*0.05, col[1]*0.05, col[2]*0.05, 1.0))
+        ax3d.yaxis.set_pane_color((col[0]*0.05, col[1]*0.05, col[2]*0.05, 1.0))
+        ax3d.zaxis.set_pane_color((col[0]*0.07, col[1]*0.07, col[2]*0.07, 1.0))
 
         start_past = max(0, i - DOTS_PAST)
         past_idx = np.arange(start_past, i+1)
