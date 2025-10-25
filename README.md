@@ -1,17 +1,62 @@
+# Project tree
+~~~
+├── .gitattributes
+├── README.md
+├── main.py
+├── mission_master.log
+├── requirements.txt
+├── src/
+│   ├── .gitkeeep
+│   ├── logger/
+│   │   ├── __pycache__/
+│   │   │   └── heartbeat.cpython-313.pyc
+│   │   ├── calibrate_sound.py
+│   │   ├── cpu_logger.py
+│   │   ├── data/
+│   │   │   ├── CPU_TEMP.txt
+│   │   │   ├── LATEST_SENSOR_DATA.json
+│   │   │   ├── LATEST_SYSTEM_STATUS.json
+│   │   │   ├── MPU6050.txt
+│   │   │   ├── sound_data_D0.txt
+│   │   │   └── sound_data_D0_backup.txt
+│   │   ├── heartbeat.py
+│   │   ├── heartbeats/
+│   │   │   ├── cpu_logger.json
+│   │   │   └── mpu_logger.json
+│   │   ├── mpu6050_logger.py
+│   │   └── sound_logger.py
+│   ├── photography/
+│   │   ├── footage/
+│   │   │   ├── .gitkeep
+│   │   │   ├── images/
+│   │   │   │   └── .gitkeep
+│   │   │   └── videos/
+│   │   │       └── .gitkeep
+│   │   ├── image_capture.py
+│   │   └── video_capture.py
+│   ├── plotter/
+│   │   ├── charts/
+│   │   │   ├── cpu_chart.svg
+│   │   │   ├── cpu_chart_backup.svg
+│   │   │   ├── mpu_chart.svg
+│   │   │   ├── mpu_chart_backup.svg
+│   │   │   └── mpu_phases.svg
+│   │   ├── cpu_plotter.py
+│   │   ├── mpu6050_plotter.py
+│   │   └── sound_plotter.py
+│   └── simulation/
+│       ├── output/
+│       │   └── BACAR13_simulation_framecache.mp4
+│       └── payload_flight_simulation.py
+└── web_ui/
+    ├── app_server.py
+    └── templates/
+        └── dashboard.html
 ~~~
 
-Traceback (most recent call last):
-  File "/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/payload_flight_simulation.py", line 248, in <module>
-    with writer.saving(fig, OUT_FILE, dpi=DPI):
-  File "/usr/lib/python3.12/contextlib.py", line 158, in __exit__
-    self.gen.throw(value)
-  File "/home/nathan/lib/python3.12/site-packages/matplotlib/animation.py", line 226, in saving
-    self.finish()
-  File "/home/nathan/lib/python3.12/site-packages/matplotlib/animation.py", line 341, in finish
-    raise subprocess.CalledProcessError(
-subprocess.CalledProcessError: Command '['ffmpeg', '-f', 'rawvideo', '-vcodec', 'rawvideo', '-s', '1920x1080', '-pix_fmt', 'rgba', '-framerate', '1', '-loglevel', 'error', '-i', 'pipe:', '-vcodec', 'libx264', '-metadata', 'artist=BACAR-13 Replay', '-y', '/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/output/BACAR13_simulation_flat.mp4']' returned non-zero exit status 255.
 
-~~~
+
+
 
 
 # 🐍 Raspberry Pi OS Lite (Bookworm 32-bit) — Pip "No Space Left on Device" Fix
@@ -121,58 +166,3 @@ sed -i '/export TMPDIR=\/var\/tmp\/pip/d' venv/bin/activate
 
 
 
-# Project tree
-~~~
-
-├── .gitattributes
-├── README.md
-├── main.py
-├── mission_master.log
-├── requirements.txt
-├── src/
-│   ├── .gitkeeep
-│   ├── logger/
-│   │   ├── __pycache__/
-│   │   │   └── heartbeat.cpython-313.pyc
-│   │   ├── calibrate_sound.py
-│   │   ├── cpu_logger.py
-│   │   ├── data/
-│   │   │   ├── CPU_TEMP.txt
-│   │   │   ├── LATEST_SENSOR_DATA.json
-│   │   │   ├── LATEST_SYSTEM_STATUS.json
-│   │   │   ├── MPU6050.txt
-│   │   │   ├── sound_data_D0.txt
-│   │   │   └── sound_data_D0_backup.txt
-│   │   ├── heartbeat.py
-│   │   ├── heartbeats/
-│   │   │   ├── cpu_logger.json
-│   │   │   └── mpu_logger.json
-│   │   ├── mpu6050_logger.py
-│   │   └── sound_logger.py
-│   ├── photography/
-│   │   ├── footage/
-│   │   │   ├── .gitkeep
-│   │   │   ├── images/
-│   │   │   │   └── .gitkeep
-│   │   │   └── videos/
-│   │   │       └── .gitkeep
-│   │   ├── image_capture.py
-│   │   └── video_capture.py
-│   ├── plotter/
-│   │   ├── charts/
-│   │   │   ├── cpu_chart.svg
-│   │   │   ├── cpu_chart_backup.svg
-│   │   │   ├── mpu_chart.svg
-│   │   │   ├── mpu_chart_backup.svg
-│   │   │   └── mpu_phases.svg
-│   │   ├── cpu_plotter.py
-│   │   ├── mpu6050_plotter.py
-│   │   └── sound_plotter.py
-│   └── simulation/
-│       └── payload_flight_simulation.py
-└── web_ui/
-    ├── app_server.py
-    └── templates/
-        └── dashboard.html
-
-~~~
