@@ -229,7 +229,7 @@ def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, 
         ys_f = np.zeros_like(future_idx, dtype=float)
         zs_f = z[future_idx]
 
-        ax3d.collections.clear()
+        ax3d.collections.Artist.remove()
         ax3d.scatter(xs_p, ys_p, zs_p, s=20, c=colors[past_idx], alpha=0.9, depthshade=True)
         ax3d.scatter(xs_f, ys_f, zs_f, s=6, c=colors[future_idx], alpha=0.35, depthshade=False)
 
