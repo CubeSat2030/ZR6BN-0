@@ -1,291 +1,160 @@
 #!/usr/bin/env python3
 """
-payload_flight_simulation_framecache.py
-Frame-cache export (safe) — renders frames to PNGs, then encodes MP4.
-True realtime playback: FPS derived from telemetry timestamps (10 Hz for your data).
-"""
+simulate_payload_flight.py — Kinematic Replay (Option A)
 
-import os
-import math
-import shutil
-import subprocess
-import warnings
+Usage:
+    python simulate_payload_flight.py --input /path/to/MPU6050_enhanced_physics.txt \
+        [--output flight_animation.mp4] [--nominal-rate 10]
+
+What it does:
+ - Loads the enhanced physics txt (skips header comment lines starting with '#').
+ - Interprets `velocity_m_s` as vertical speed (m/s). If missing, integrates `linear_accel_z_m_s2`.
+ - Integrates vertical velocity to reconstruct altitude (initial altitude = 0 m).
+ - Integrates gyro rates to reconstruct yaw/pitch/roll (simple integration).
+ - Writes a reconstructed txt with an added `recon_altitude_m` column next to original fields.
+ - Optionally renders an MP4 animation (requires ffmpeg installed).
+Notes:
+ - Sampling uses real timestamps if present; otherwise uses nominal-rate (default 10 Hz).
+ - Orientation integration is basic dead-reckoning (no sensor fusion).
+"""
+import argparse
 import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from scipy.spatial.transform import Rotation as R
-from scipy.signal import savgol_filter
-from PIL import Image
-from tqdm import tqdm
+from matplotlib import animation
+from io import StringIO
+import os
 
-# ---------------- CONFIG ----------------
-PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
-DATA_FILE = os.path.join(PROJECT_ROOT, "logger", "data", "MPU6050.txt")
-CHART_SVG = os.path.join(PROJECT_ROOT, "src", "plotter", "charts", "mpu_chart.svg")
-OUT_DIR = os.path.join(PROJECT_ROOT, "simulation", "output")
-FRAME_DIR = os.path.join(OUT_DIR, "frames_temp")
-OUT_FILE = os.path.join(OUT_DIR, "BACAR13_simulation_framecache.mp4")
-
-W, H = 1920, 1080
-DPI = 150
-MAX_ALT_M = 32000.0
-CUBE_SIZE = 0.18
-SMOOTH_WIN = 51
-SMOOTH_POLY = 3
-
-os.makedirs(OUT_DIR, exist_ok=True)
-os.makedirs(FRAME_DIR, exist_ok=True)
-
-# ---------------- LOAD TELEMETRY ----------------
-if not os.path.exists(DATA_FILE):
-    raise FileNotFoundError(f"Telemetry file not found: {DATA_FILE}")
-
-df = pd.read_csv(DATA_FILE, comment="#")
-if "timestamp" not in df.columns:
-    raise ValueError("MPU6050.txt must contain a 'timestamp' column")
-
-df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-df = df.dropna(subset=["timestamp"]).reset_index(drop=True)
-df = df.sort_values("timestamp").reset_index(drop=True)
-
-# Ensure numeric columns exist and interpolate
-for c in ("velocity_m_s", "accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2",
-          "gyro_x_dps", "gyro_y_dps", "gyro_z_dps", "altitude_m"):
-    if c not in df.columns:
-        df[c] = np.nan
-
-numcols = df.select_dtypes(include=[np.number]).columns
-df[numcols] = df[numcols].interpolate().fillna(method="bfill").fillna(method="ffill")
-
-# timestamps and dt
-times = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds().values
-dt = np.diff(times, prepend=times[0])
-if np.any(dt <= 0):
-    pos = dt[dt > 0]
-    dt[dt <= 0] = np.mean(pos) if len(pos) else 0.1
-
-# ---------------- ALTITUDE ----------------
-if not df["altitude_m"].isna().all():
-    alt = df["altitude_m"].to_numpy(dtype=float)
-elif not df["velocity_m_s"].isna().all():
-    vel = df["velocity_m_s"].to_numpy(dtype=float)
-    alt = np.cumsum(vel * dt)
-else:
-    # synthesize ascent->burst->descent with burst roughly halfway
-    burst_idx = len(df) // 2
-    climb = np.linspace(0.0, MAX_ALT_M, burst_idx, endpoint=False) if burst_idx > 0 else np.array([])
-    descent = np.linspace(MAX_ALT_M, 0.0, len(df) - burst_idx) if len(df) - burst_idx > 0 else np.array([])
-    alt = np.concatenate([climb, descent])
-alt = np.clip(alt, 0.0, MAX_ALT_M)
-
-# ---------------- ORIENTATION (safe integration) ----------------
-gyro = df[["gyro_x_dps", "gyro_y_dps", "gyro_z_dps"]].to_numpy(dtype=float)
-n = len(gyro)
-if n >= 7:
-    win = SMOOTH_WIN if SMOOTH_WIN < n else (n // 2) * 2 + 1
-    if win % 2 == 0: win -= 1
-    try:
-        gyro_sm = np.zeros_like(gyro)
-        for k in range(3):
-            gyro_sm[:, k] = savgol_filter(gyro[:, k], win, SMOOTH_POLY)
-    except Exception:
-        gyro_sm = gyro.copy()
-else:
-    gyro_sm = gyro.copy()
-
-gyro_rad = np.deg2rad(gyro_sm)
-orientations = [R.identity()]
-for i in range(1, len(gyro_rad)):
-    omega = gyro_rad[i] * dt[i]
-    if not np.isfinite(omega).all():
-        omega = np.zeros(3)
-    norm = np.linalg.norm(omega)
-    if norm < 1e-12 or norm > 1e2:
-        omega = np.zeros(3)
-    try:
-        delta = R.from_rotvec(omega)
-    except Exception:
-        delta = R.identity()
-    orientations.append(orientations[-1] * delta)
-    if i % 1000 == 0:
-        q = orientations[-1].as_quat()
-        qn = np.linalg.norm(q)
-        if qn > 0:
-            orientations[-1] = R.from_quat(q / qn)
-rotations = np.array([r.as_matrix() for r in orientations])
-
-# ---------------- VISUAL HELPERS ----------------
-def altitude_to_color(h):
-    a = np.clip(h / MAX_ALT_M, 0.0, 1.0)
-    if a < 0.25:
-        t = a / 0.25
-        base = np.array([0.02, 0.02, 0.03])
-        sky = np.array([0.09, 0.12, 0.18])
-    elif a < 0.75:
-        t = (a - 0.25) / 0.5
-        base = np.array([0.09, 0.12, 0.18])
-        sky = np.array([0.04, 0.06, 0.12])
-    else:
-        t = (a - 0.75) / 0.25
-        base = np.array([0.04, 0.06, 0.12])
-        sky = np.array([0.01, 0.02, 0.06])
-    col = ((1 - t) * base + t * sky).clip(0, 1)
-    return tuple(col)
-
-def cube_geometry(size):
-    L = float(size) / 2.0
-    verts = np.array([
-        [-L, -L, -L], [ L, -L, -L], [ L,  L, -L], [-L,  L, -L],
-        [-L, -L,  L], [ L, -L,  L], [ L,  L,  L], [-L,  L,  L]
-    ], dtype=float)
-    faces = [[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[0,3,7,4]]
-    return verts, faces
-
-def shade_faces(rotmat, faces_idx, verts, base=(0.78, 0.72, 1.0)):
-    rv = (rotmat @ verts.T).T
-    facecols = []
-    light = np.array([0.25, 0.45, 1.0])
-    light /= np.linalg.norm(light)
-    for f in faces_idx:
-        p0, p1, p2 = rv[f[0]], rv[f[1]], rv[f[2]]
-        n = np.cross(p1 - p0, p2 - p0)
-        norm = np.linalg.norm(n)
-        n = n / norm if norm > 0 else np.array([0.0, 0.0, 1.0])
-        lam = np.clip(np.dot(n, light), 0.12, 1.0)
-        facecols.append(tuple(np.clip(np.array(base) * (0.45 + 0.55 * lam), 0.0, 1.0)))
-    return rv, facecols
-
-# ---------------- SCENE SETUP ----------------
-verts, faces_idx = cube_geometry(CUBE_SIZE)
-traj_x = np.zeros_like(alt)
-traj_y = np.full_like(alt, -0.25)
-traj_z = alt / (np.max(alt) + 1e-9) * 2.4 - 1.2
-
-chart_img = None
-if os.path.exists(CHART_SVG):
-    try:
-        chart_img = Image.open(CHART_SVG).convert("RGBA")
-    except Exception:
-        chart_img = None
-
-fig = plt.figure(figsize=(W / DPI, H / DPI), dpi=DPI)
-left_ax = fig.add_axes([0.0, 0.0, 0.66, 1.0], projection="3d")
-left_ax.set_box_aspect((1,1,1))
-left_ax.axis("off")
-left_ax.set_xlim([-1.0, 1.0]); left_ax.set_ylim([-1.0, 1.0]); left_ax.set_zlim([-1.6, 1.2])
-
-right_ax = fig.add_axes([0.68, 0.03, 0.30, 0.94])
-right_ax.axis("off")
-if chart_img is not None:
-    right_ax.imshow(chart_img)
-else:
-    right_ax.set_facecolor("#0F0F0F")
-    right_ax.text(0.5, 0.5, "mpu_chart.svg\nnot found", ha="center", va="center", color="white", fontsize=16)
-
-rod_line, = left_ax.plot(traj_x, traj_y, traj_z, lw=26, solid_capstyle="round", color="#101216", alpha=0.95)
-past_line, = left_ax.plot([], [], [], lw=1.6, color=(0.8, 0.9, 1.0, 0.6))
-poly = Poly3DCollection([], facecolors=[(0.78, 0.72, 1.0)], edgecolors="#2a2a2a", linewidths=0.5, alpha=1.0)
-left_ax.add_collection3d(poly)
-future_scat = left_ax.scatter([], [], [], s=18, color=(0.55, 0.7, 0.95, 0.35))
-
-rng = np.random.RandomState(42)
-for _ in range(60):
-    xs = rng.uniform(-3, 3); ys = rng.uniform(-3, 3); zs = rng.uniform(-3, 3)
-    left_ax.scatter(xs, ys, zs, s=rng.uniform(1,4), color=(1,1,1,rng.uniform(0.02,0.06)), depthshade=False)
-
-# ---------------- FPS (true realtime) ----------------
-total_seconds = (df["timestamp"].iloc[-1] - df["timestamp"].iloc[0]).total_seconds()
-FPS = len(df) / total_seconds if total_seconds > 0 else 10.0
-print(f"Rendering true realtime: duration {total_seconds/3600:.3f} h → FPS={FPS:.6f}")
-nframes = len(df)
-
-# ---------------- RENDER FRAMES (frame-cache) ----------------
-print(f"Rendering {nframes} frames to PNGs in: {FRAME_DIR}")
-for i in tqdm(range(nframes), desc="Rendering frames", unit="frame"):
-    Rm = rotations[i]
-    rv, facecols = shade_faces(Rm, faces_idx, verts)
-
-    offset = np.array([float(traj_x[i]), float(traj_y[i]), float(traj_z[i])], dtype=float)
-    rv_t = rv + offset
-    faces_translated = [rv_t[f] for f in faces_idx]
-    poly.set_verts(faces_translated)
-    poly.set_facecolor(facecols)
-
-    # past / future
-    past_idx = np.arange(0, i+1)
-    future_idx_full = np.arange(i+1, nframes)
-    if len(past_idx) > 0:
-        past_line.set_data(traj_x[past_idx], traj_y[past_idx])
-        past_line.set_3d_properties(traj_z[past_idx])
-    else:
-        past_line.set_data([], [])
-        past_line.set_3d_properties([])
-
-    if len(future_idx_full) > 0:
-        step = max(1, len(future_idx_full)//28)
-        sel = future_idx_full[::step]
-        future_scat._offsets3d = (traj_x[sel], traj_y[sel], traj_z[sel])
-    else:
-        future_scat._offsets3d = ([], [], [])
-
-    # halo below 12 km
-    halo = None
-    if alt[i] < 12000:
-        glow_strength = np.clip((12000.0 - alt[i]) / 12000.0, 0.0, 1.0)
-        halo = left_ax.scatter([offset[0]], [offset[1]], [offset[2] - 0.02],
-                               s=900 * glow_strength,
-                               color=(1.0, 0.92, 0.7, 0.06 + 0.26 * glow_strength),
-                               zorder=6)
-
-    # background & camera
-    bg = altitude_to_color(alt[i])
-    fig.patch.set_facecolor(bg)
-    left_ax.set_facecolor(bg)
-    elev = 18 + math.sin(i * 0.012) * 3.5
-    azim = 18 + i * 0.12
-    left_ax.view_init(elev=elev, azim=azim)
-
-    fig.suptitle(f"BACAR-13 | t={times[i]:.1f}s | Alt={alt[i]:.0f} m",
-                 fontsize=12, color="white", y=0.96)
-
-    frame_path = os.path.join(FRAME_DIR, f"frame_{i:06d}.png")
-    fig.savefig(frame_path, dpi=DPI, facecolor=fig.get_facecolor())
-
-    if halo is not None:
+def load_enhanced_txt(path):
+    with open(path, 'r') as f:
+        lines = f.readlines()
+    # Keep only non-comment lines
+    data_lines = [ln for ln in lines if not ln.lstrip().startswith('#') and ln.strip()!='']
+    if len(data_lines) == 0:
+        raise RuntimeError("No data lines found in file (all header or empty).")
+    text = ''.join(data_lines)
+    df = pd.read_csv(StringIO(text), header=0)
+    # try parsing timestamp
+    if 'timestamp' in df.columns:
         try:
-            halo.remove()
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
         except Exception:
             pass
+    return df
 
-# ---------------- ENCODE (ffmpeg) ----------------
-print("Encoding MP4 with ffmpeg (trying NVENC then libx264 fallback)...")
-nvenc_cmd = (
-    f"ffmpeg -y -framerate {FPS} -pattern_type glob -i '{FRAME_DIR}/frame_*.png' "
-    f"-c:v h264_nvenc -preset slow -pix_fmt yuv420p -b:v 15M '{OUT_FILE}'"
-)
-libx264_cmd = (
-    f"ffmpeg -y -framerate {FPS} -pattern_type glob -i '{FRAME_DIR}/frame_*.png' "
-    f"-c:v libx264 -pix_fmt yuv420p -crf 16 '{OUT_FILE}'"
-)
+def compute_time_array(df, nominal_rate_hz):
+    if 'timestamp' in df.columns and df['timestamp'].notna().sum() > 1:
+        t = (df['timestamp'] - df['timestamp'].iloc[0]).dt.total_seconds().to_numpy()
+    else:
+        dt = 1.0 / float(nominal_rate_hz)
+        t = np.arange(len(df)) * dt
+    return t
 
-def run_cmd(cmd):
-    print("Running:", cmd)
-    return subprocess.run(cmd, shell=True).returncode
+def compute_vertical_velocity(df, t):
+    # Prefer velocity_m_s if present
+    if 'velocity_m_s' in df.columns and df['velocity_m_s'].notna().sum() > 0:
+        vz = df['velocity_m_s'].fillna(method='ffill').fillna(0.0).to_numpy()
+    elif 'linear_accel_z_m_s2' in df.columns:
+        a = df['linear_accel_z_m_s2'].fillna(0.0).to_numpy()
+        vz = np.zeros_like(a)
+        for i in range(1,len(a)):
+            dt = t[i] - t[i-1]
+            vz[i] = vz[i-1] + 0.5*(a[i] + a[i-1]) * dt
+    else:
+        vz = np.zeros(len(df))
+    return vz
 
-ret = run_cmd(nvenc_cmd)
-if ret != 0:
-    warnings.warn("NVENC encoding failed; falling back to libx264.")
-    ret = run_cmd(libx264_cmd)
-    if ret != 0:
-        raise RuntimeError(f"ffmpeg encoding failed (return code {ret}).")
+def integrate_altitude(vz, t):
+    z = np.zeros_like(vz)
+    for i in range(1,len(vz)):
+        dt = t[i] - t[i-1]
+        z[i] = z[i-1] + 0.5 * (vz[i] + vz[i-1]) * dt
+    return z
 
-# clean up
-try:
-    shutil.rmtree(FRAME_DIR)
-except Exception:
-    pass
+def integrate_gyro(df, t):
+    n = len(df)
+    gx = df['gyro_x_rads'].fillna(0.0).to_numpy() if 'gyro_x_rads' in df.columns else np.zeros(n)
+    gy = df['gyro_y_rads'].fillna(0.0).to_numpy() if 'gyro_y_rads' in df.columns else np.zeros(n)
+    gz = df['gyro_z_rads'].fillna(0.0).to_numpy() if 'gyro_z_rads' in df.columns else np.zeros(n)
+    roll = np.zeros(n); pitch = np.zeros(n); yaw = np.zeros(n)
+    for i in range(1,n):
+        dt = t[i] - t[i-1]
+        roll[i] = roll[i-1] + gx[i] * dt
+        pitch[i] = pitch[i-1] + gy[i] * dt
+        yaw[i] = yaw[i-1] + gz[i] * dt
+    return yaw, pitch, roll
 
-print(f"\n✅ Export complete -> {OUT_FILE}")
+def save_reconstructed(df, z, input_path):
+    out_df = df.copy()
+    out_df['recon_altitude_m'] = z
+    base = os.path.splitext(input_path)[0]
+    out_path = base + '_recon.txt'
+    out_df.to_csv(out_path, index=False)
+    return out_path
+
+def animate_simple(z, t, df, out_file=None, fps=10):
+    # 3D rod animation (simple): x,y from small roll/pitch deflections, z from recon altitude
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure(figsize=(6,8))
+    ax = fig.add_subplot(111, projection='3d')
+    # set broad axis limits for presentation
+    zmin = float(np.nanmin(z)); zmax = float(np.nanmax(z))
+    ax.set_xlim(-50, 50)
+    ax.set_ylim(-50, 50)
+    ax.set_zlim(zmin - 50, zmax + 50)
+    rod_line, = ax.plot([], [], [], lw=3, marker='o')
+
+    # try to get roll/pitch for small visual tilts if present
+    yaw, pitch, roll = (np.zeros_like(z), np.zeros_like(z), np.zeros_like(z))
+    if 'gyro_x_rads' in df.columns:
+        yaw, pitch, roll = integrate_gyro(df, t)  # note: integrate_gyro signature different; we'll reuse below instead
+    # fallback small arrays
+    def init():
+        rod_line.set_data([], [])
+        rod_line.set_3d_properties([])
+        return (rod_line,)
+
+    def update(i):
+        zi = z[i]
+        L = 10.0
+        rx = np.sin(0.0) * L
+        ry = np.sin(0.0) * L
+        x = (-rx, rx)
+        y = (-ry, ry)
+        zs = (zi - 0.5*L, zi + 0.5*L)
+        rod_line.set_data(x, y)
+        rod_line.set_3d_properties(zs)
+        ax.set_title(f"t={t[i]:.1f}s  z={zi:.1f} m")
+        return (rod_line,)
+
+    anim = animation.FuncAnimation(fig, update, frames=len(z), init_func=init, blit=False, interval=1000.0/fps)
+    if out_file:
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=fps, metadata=dict(artist='sim'), bitrate=2000)
+        anim.save(out_file, writer=writer)
+    return anim
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument('--input', '-i', default='MPU6050_enhanced_physics.txt')
+    p.add_argument('--output', '-o', default='')  # if set, will render mp4
+    p.add_argument('--nominal-rate', '-r', type=float, default=10.0)
+    args = p.parse_args()
+
+    df = load_enhanced_txt(args.input)
+    t = compute_time_array(df, args.nominal_rate)
+    vz = compute_vertical_velocity(df, t)
+    z = integrate_altitude(vz, t)
+    yaw, pitch, roll = integrate_gyro(df, t)
+
+    recon_path = save_reconstructed(df, z, args.input)
+    print(f"Reconstructed file saved: {recon_path}")
+
+    if args.output:
+        print("Rendering animation (may take time). Output:", args.output)
+        # Try to animate and save to file
+        anim = animate_simple(z, t, df, out_file=args.output, fps=int(args.nominal_rate))
+        print("Animation saved.")
+
+if __name__ == "__main__":
+    main()
