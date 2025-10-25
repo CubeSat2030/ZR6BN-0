@@ -18,6 +18,7 @@ Place alongside your other simulation files in src/simulation/.
 """
 import os
 from pathlib import Path
+import io
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -55,29 +56,24 @@ EVENTS = {
 def find_event_indices(df):
     idx_map = {}
     if "timestamp" in df.columns:
-        # attempt to match by wall-clock time only (ignore date) because user didn't give date
         ts = pd.to_datetime(df["timestamp"], errors="coerce")
         times = ts.dt.time
         for name, hhmm in EVENTS.items():
             hh, mm = [int(x) for x in hhmm.split(":")]
-            # create a time object
             want = time(hour=hh, minute=mm)
-            # find nearest index where time matches exactly; else nearest by seconds difference
             matches = np.where(times == want)[0]
             if matches.size > 0:
                 idx_map[name] = matches[0]
             else:
-                # fallback: find minimal absolute difference in seconds ignoring date
                 secs = ts.dt.hour * 3600 + ts.dt.minute * 60 + ts.dt.second
                 want_secs = hh * 3600 + mm * 60
                 absdiff = np.abs(secs - want_secs)
                 idx = int(absdiff.idxmin()) if len(absdiff)>0 else 0
                 idx_map[name] = idx
     else:
-        # no timestamps: approximate based on sample index by proportion of flight
         N = len(df)
         idx_map["LAUNCH"] = 0
-        idx_map["BURST"] = min(int(N * 0.25), N-1)  # heuristic
+        idx_map["BURST"] = min(int(N * 0.25), N-1)
         idx_map["LANDING"] = N-1
     return idx_map
 
@@ -90,8 +86,7 @@ def load_enhanced_txt(path: Path):
     data_lines = [ln for ln in lines if not ln.lstrip().startswith("#") and ln.strip() != ""]
     if len(data_lines) == 0:
         raise RuntimeError("No data lines found in enhanced txt.")
-    df = pd.read_csv(pd.compat.StringIO("".join(data_lines)), header=0)
-    # parse timestamp if present
+    df = pd.read_csv(io.StringIO("".join(data_lines)), header=0)
     if "timestamp" in df.columns:
         try:
             df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
@@ -99,7 +94,7 @@ def load_enhanced_txt(path: Path):
             pass
     return df
 
-# Kinematic reconstruction functions (textbook exact)
+# Kinematic reconstruction functions
 def compute_time_array(df, nominal_rate=NOMINAL_RATE_HZ):
     if "timestamp" in df.columns and df["timestamp"].notna().sum() > 1:
         t = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds().to_numpy()
@@ -141,19 +136,13 @@ def integrate_gyro_angles(df, t):
         yaw[i]   = yaw[i-1]   + gz[i] * dt
     return yaw, pitch, roll
 
-# Dynamic atmosphere color mapping (time-normalized)
 def atmosphere_color(t, cmap_name="plasma"):
-    # Normalize t into 0..1
     tnorm = (t - t[0]) / max(1e-9, (t[-1] - t[0]))
     cmap = plt.get_cmap(cmap_name)
-    # Return array of colors for each time
     return cmap(tnorm)
 
-# Build telemetry right-panel axes for accel & gyro
 def draw_static_right_panel_axes(fig):
-    # Create a grid of subplots stacked vertically (for accelerometer and gyroscope traces)
     right = fig.add_gridspec(5, 2, width_ratios=[1,1], left=0.55, right=0.99, top=0.96, bottom=0.04, hspace=0.6)
-    # We'll allocate top 3 rows for accel,x/y/z + one for gyro, then legend row
     ax_accel = fig.add_subplot(right[0:2, :])
     ax_accel.set_title("Acceleration (m/s²) - X (yellow), Y (green), Z (cyan)")
     ax_accel.set_ylabel("m/s²")
@@ -165,69 +154,52 @@ def draw_static_right_panel_axes(fig):
     ax_time.set_yticks([])
     return ax_accel, ax_gyro, ax_time
 
-# Create the combined figure and axes
 def create_figure():
     fig = plt.figure(figsize=FIGSIZE)
-    # Left large 3d axis
     left = fig.add_gridspec(1, 2, left=0.02, right=0.53)
     ax3d = fig.add_subplot(left[0, 0], projection="3d")
-    # Right panel axes created separately
     ax_accel, ax_gyro, ax_time = draw_static_right_panel_axes(fig)
     return fig, ax3d, ax_accel, ax_gyro, ax_time
 
-# Animation update function
 def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, fps=FPS):
     n = len(t)
     colors = atmosphere_color(t)
-    # prepare telemetry arrays for plotting
     axx = df.get("accel_x_m_s2", pd.Series(np.zeros(n))).fillna(0).to_numpy()
     axy = df.get("accel_y_m_s2", pd.Series(np.zeros(n))).fillna(0).to_numpy()
     axz = df.get("accel_z_m_s2", pd.Series(np.zeros(n))).fillna(0).to_numpy()
-    # gyro in deg/s for plotting (original dps columns were present in the enhanced file)
     gxd = df.get("gyro_x_dps", pd.Series(np.zeros(n))).fillna(0).to_numpy()
     gyd = df.get("gyro_y_dps", pd.Series(np.zeros(n))).fillna(0).to_numpy()
     gzd = df.get("gyro_z_dps", pd.Series(np.zeros(n))).fillna(0).to_numpy()
 
     fig, ax3d, ax_accel, ax_gyro, ax_time = create_figure()
 
-    # Configure 3D axes
     ax3d.set_xlim(-100, 100); ax3d.set_ylim(-100, 100)
     ax3d.set_zlim(np.min(z)-50, np.max(z)+50)
     ax3d.set_xlabel("X (m)"); ax3d.set_ylabel("Y (m)"); ax3d.set_zlabel("Altitude (m)")
 
-    # Pre-create plot elements
-    # Past and future dots
     past_scatter = ax3d.scatter([], [], [], s=15, c="white", alpha=0.6)
     future_scatter = ax3d.scatter([], [], [], s=6, c="lightgrey", alpha=0.4)
-    # rod line
     rod_line, = ax3d.plot([], [], [], lw=6, color="#b0b8c6")
     cube_marker, = ax3d.plot([], [], [], marker="s", markersize=20, linestyle="None", color="#d9c9ff")
 
-    # Telemetry lines (static full trace)
     t_sec = t
     accel_line_x, = ax_accel.plot(t_sec, axx, lw=0.5, color="#ffee58", label="Accel X")
     accel_line_y, = ax_accel.plot(t_sec, axy, lw=0.5, color="#66bb6a", label="Accel Y")
     accel_line_z, = ax_accel.plot(t_sec, axz, lw=0.5, color="#4dd0e1", label="Accel Z")
     ax_accel.legend(loc="upper right", fontsize="small")
-    # For gyro
     gyro_line_x, = ax_gyro.plot(t_sec, gxd, lw=0.5, color="#ef5350", label="Gyro X")
     gyro_line_y, = ax_gyro.plot(t_sec, gyd, lw=0.5, color="#66bb6a", label="Gyro Y")
     gyro_line_z, = ax_gyro.plot(t_sec, gzd, lw=0.5, color="#42a5f5", label="Gyro Z")
     ax_gyro.legend(loc="upper right", fontsize="small")
 
-    # Vertical time marker on telemetry plots
     vline_accel = ax_accel.axvline(x=0.0, color="white", linewidth=1.2)
     vline_gyro  = ax_gyro.axvline(x=0.0, color="white", linewidth=1.2)
-    # time text
     time_text = ax_time.text(0.02, 0.5, "", transform=ax_time.transAxes, color="white", fontsize=12)
 
-    # Event text overlay on 3D axis
     event_texts = {}
     for name, idx in event_indices.items():
-        # create a text object on 3D axis (we'll reposition per frame)
         event_texts[name] = ax3d.text2D(0.02, 0.95 - 0.04*len(event_texts), "", transform=ax3d.transAxes, color="white", fontsize=12)
 
-    # Setup background style (dark)
     fig.patch.set_facecolor("#000000")
     for ax in [ax_accel, ax_gyro, ax_time]:
         ax.set_facecolor("#111111")
@@ -241,15 +213,12 @@ def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, 
     ax_accel.set_xlim(t_sec[0], t_sec[-1])
     ax_gyro.set_xlim(t_sec[0], t_sec[-1])
 
-    # Animation update
     def update(i):
-        # update atmosphere color (background) based on time index color
         col = colors[i]
         ax3d.w_xaxis.set_pane_color((col[0]*0.05, col[1]*0.05, col[2]*0.05, 1.0))
         ax3d.w_yaxis.set_pane_color((col[0]*0.05, col[1]*0.05, col[2]*0.05, 1.0))
         ax3d.w_zaxis.set_pane_color((col[0]*0.07, col[1]*0.07, col[2]*0.07, 1.0))
 
-        # past and future dots in vertical line at center x,y=0
         start_past = max(0, i - DOTS_PAST)
         past_idx = np.arange(start_past, i+1)
         future_idx = np.arange(i, min(n, i + DOTS_FUTURE))
@@ -260,14 +229,11 @@ def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, 
         ys_f = np.zeros_like(future_idx, dtype=float)
         zs_f = z[future_idx]
 
-        # Update scatter data (workaround: remove and re-create to update colors per dot)
         ax3d.collections.clear()
         ax3d.scatter(xs_p, ys_p, zs_p, s=20, c=colors[past_idx], alpha=0.9, depthshade=True)
         ax3d.scatter(xs_f, ys_f, zs_f, s=6, c=colors[future_idx], alpha=0.35, depthshade=False)
 
-        # rod endpoints using small tilt from roll/pitch (visual)
         roll_i = roll[i]; pitch_i = pitch[i]
-        # compute small offsets for orientation visualization
         dx = np.sin(roll_i) * ROD_LENGTH / 2.0
         dy = np.sin(pitch_i) * ROD_LENGTH / 2.0
         x_points = np.array([-dx, dx])
@@ -278,7 +244,6 @@ def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, 
         cube_marker.set_data([0.0], [0.0])
         cube_marker.set_3d_properties([z[i]])
 
-        # telemetry vertical marker
         curt = t_sec[i]
         vline_accel.set_xdata(curt)
         vline_gyro.set_xdata(curt)
@@ -289,12 +254,9 @@ def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, 
                 time_str += f" | {ts}"
         time_text.set_text(time_str)
 
-        # Event overlay: show label when current index is within a small window around event index
         for name, idx in event_indices.items():
             txt_obj = event_texts[name]
-            # if within +/- 3 seconds show label; else hide
             window_s = 3.0
-            # convert index difference to seconds approx
             if i >= idx - int(window_s*FPS) and i <= idx + int(window_s*FPS):
                 txt_obj.set_text(name)
             else:
@@ -302,12 +264,10 @@ def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, 
 
         return []
 
-    # Build animation
     frames = n
-    interval = 1000.0 / fps  # ms
+    interval = 1000.0 / fps
     anim = animation.FuncAnimation(fig, update, frames=frames, interval=interval, blit=False)
 
-    # Save MP4 (ffmpeg must be available)
     print(f"[+] Rendering MP4 to: {out_path}  (this may take a while for long datasets)")
     Writer = animation.writers['ffmpeg']
     writer = Writer(fps=fps, metadata=dict(artist='BACAR'), bitrate=6000)
@@ -315,7 +275,6 @@ def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, 
     plt.close(fig)
     print("[✓] MP4 render complete.")
 
-# Main entry
 def main():
     print("[...] Loading enhanced MPU6050 data")
     df = load_enhanced_txt(DATA_PATH)
@@ -324,15 +283,12 @@ def main():
     z = integrate_altitude(vz, t)
     yaw, pitch, roll = integrate_gyro_angles(df, t)
 
-    # Save recon file
     out_df = df.copy()
     out_df["recon_altitude_m"] = z
     out_df.to_csv(OUT_RECON, index=False)
     print(f"[✓] Saved reconstructed file: {OUT_RECON}")
 
-    # quick altitude plot
     try:
-        import matplotlib
         plt.figure(figsize=(10,4))
         plt.plot(t, z, linewidth=0.9)
         plt.xlabel("Time (s)"); plt.ylabel("Altitude (m)")
@@ -345,10 +301,8 @@ def main():
     except Exception as e:
         print("[!] Could not save altitude plot:", e)
 
-    # find event indices
     event_idx = find_event_indices(df)
 
-    # produce animation MP4
     try:
         make_animation(df, t, z, yaw, pitch, roll, event_idx, out_path=OUT_MP4, fps=FPS)
     except Exception as e:
