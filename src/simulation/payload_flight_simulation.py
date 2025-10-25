@@ -2,7 +2,7 @@
 """
 replay_flight_from_mpu6050.py
 ---------------------------------
-Option A: Kinematic Replay Simulation
+Kinematic Replay Simulation
 
 Recreates the payload's true trajectory and attitude from recorded MPU6050 data.
 - Loads src/logger/data/MPU6050_enhanced_physics.txt
