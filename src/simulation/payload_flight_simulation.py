@@ -10,7 +10,7 @@ Right: Telemetry charts (accel + gyro) that scroll in sync with the animation fr
 Outputs:
     src/simulation/output/BACAR13_flight_replay.mp4
     src/simulation/output/altitude_profile.png
-    src/simulation/output/MPU6050_reconstructed.txt
+    src/simulation/output/MPU6050.txt
 
 Requirements:
     python >=3.8, packages: numpy, pandas, matplotlib, ffmpeg (system)
@@ -29,11 +29,11 @@ from datetime import datetime, time
 
 # Paths (relative to file)
 HERE = Path(__file__).resolve().parent
-DATA_PATH = HERE.parent / "logger" / "data" / "MPU6050_enhanced_physics.txt"
+DATA_PATH = HERE.parent / "logger" / "data" / "MPU6050.txt"
 OUTPUT_DIR = HERE / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 OUT_MP4 = OUTPUT_DIR / "BACAR13_flight_replay.mp4"
-OUT_RECON = OUTPUT_DIR / "MPU6050_reconstructed.txt"
+OUT_RECON = OUTPUT_DIR / "MPU6050.txt"
 OUT_ALT_PLOT = OUTPUT_DIR / "altitude_profile.png"
 
 # Config
