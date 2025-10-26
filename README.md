@@ -1,3 +1,11 @@
+# Error log
+~~~
+[!] FFMPEG failed to save the animation. 
+Check if 'ffmpeg' is installed and in your system PATH. 
+Error: x must be a sequence
+~~~
+
+
 # Project tree
 ~~~
 ├── .gitattributes
