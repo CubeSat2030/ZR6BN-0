@@ -4,7 +4,8 @@
 # - Temperature used: 20 C (293.15 K)
 # - Air density computed using International Standard Atmosphere (ISA) where altitude available
 # - Launch pressure used if altitude missing: 30.2 inHg = 102268.947800 Pa
-# Columns (comma-separated): timestamp,velocity_m_s,accel_x_m_s2,accel_y_m_s2,accel_z_m_s2,accel_mag_m_s2,linear_accel_z_m_s2,gyro_x_rads,gyro_y_rads,gyro_z_rads,dynamic_pressure_Pa,kinetic_energy_J
+# Columns (comma-separated): 
+timestamp,velocity_m_s,accel_x_m_s2,accel_y_m_s2,accel_z_m_s2,accel_mag_m_s2,linear_accel_z_m_s2,gyro_x_rads,gyro_y_rads,gyro_z_rads,dynamic_pressure_Pa,kinetic_energy_J
 2025-10-11T08:00:00,-3.555555555556e+00,,,,0.000000000000e+00,,,,,7.681909325232e+00,3.160493827160e+00
 2025-10-11T08:00:01,-3.486818754856e+00,-5.683342076297e-02,8.623154585919e-02,9.710973931693e+00,9.711523084421e+00,-9.567606830664e-02,-1.120644344261e-04,-3.994065458160e-03,2.251029019121e-03,7.387763521053e+00,3.039476257305e+00
 2025-10-11T08:00:02,-3.524846801262e+00,-1.565484403893e-02,1.039780254600e-01,9.594397977918e+00,9.594974156432e+00,-2.122520220824e-01,-1.215425143380e-03,7.042560273565e-03,2.407604060214e-03,7.549787557307e+00,3.106136243091e+00
