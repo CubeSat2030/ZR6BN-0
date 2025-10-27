@@ -36,23 +36,38 @@ END_TIME   = "2025-10-11 11:00:00.000"
 # Altitude breakpoints (meters)
 STRATOPAUSE = 12000.0   # above: stratosphere
 MID_TROPO = 5000.0      # transition band
-NEAR_SURFACE = 1000.0   # strong haze & ground reflection
+NEAR_SURFACE = 1000.0   # strong haze & ground gyro = df[["gyro_x_dps", "gyro_y_dps", "gyro_z_dps"]].to_numpy() * np.pi / 180.0
+accel = df[["accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2"]].to_numpy()
+vel = df["velocity_m_s"].to_numpy() if "velocity_m_s" in df else np.zeros(len(df))
 
 # -----------------------------------------------------------------
-# LOAD & PREPARE DATA
+# LOAD & PREPARE DATA (auto-handle missing timestamp)
 # -----------------------------------------------------------------
 df = pd.read_csv(DATA_FILE, comment="#")
-df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+
+# Normalize column names (lowercase, stripped)
+df.columns = [c.strip().lower() for c in df.columns]
+
+# Case 1: If timestamp column exists (with any casing)
+if any(c in df.columns for c in ["timestamp", "time", "datetime"]):
+    col = next(c for c in df.columns if c in ["timestamp", "time", "datetime"])
+    df["timestamp"] = pd.to_datetime(df[col], errors="coerce")
+
+# Case 2: No time column — synthesize evenly spaced timestamps
+else:
+    print("⚠️ No timestamp column found — generating synthetic timestamps at 10 Hz.")
+    start_time = pd.Timestamp(START_TIME)
+    freq_hz = 10.0  # adjust if your MPU6050 logger ran at another rate
+    df["timestamp"] = [start_time + pd.Timedelta(seconds=i / freq_hz) for i in range(len(df))]
+
+# Apply time window
 df = df[(df["timestamp"] >= START_TIME) & (df["timestamp"] <= END_TIME)]
 df = df.interpolate().fillna(0)
 df = df.sort_values(by="timestamp").reset_index(drop=True)
 
+# Create time delta (s)
 times = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds().values
 dt = np.diff(times, prepend=times[0])
-
-gyro = df[["gyro_x_dps", "gyro_y_dps", "gyro_z_dps"]].to_numpy() * np.pi / 180.0
-accel = df[["accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2"]].to_numpy()
-vel = df["velocity_m_s"].to_numpy() if "velocity_m_s" in df else np.zeros(len(df))
 
 # Integrate altitude (simple numerical integration of vertical velocity)
 alt = np.zeros(len(df))
