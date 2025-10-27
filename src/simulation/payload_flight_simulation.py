@@ -1,378 +1,333 @@
-#!/usr/bin/env python3
 """
 payload_flight_simulation.py
----------------------------------
-Integrated cinematic replay (Option A) — split-screen MP4.
 
-Left:  3D cinematic payload (cube + rod), trail (past + future), dynamic atmosphere fade.
-Right: Telemetry charts (accel + gyro) that scroll in sync with the animation frames.
+Cinematic, physics-accurate payload flight animation with realistic
+troposphere transition (Matplotlib 3.10.3 compatible).
 
-Outputs:
-    src/simulation/output/BACAR13_flight_replay.mp4
-    src/simulation/output/altitude_profile.png
-    src/simulation/output/MPU6050.txt
-
-Requirements:
-    python >=3.8, packages: numpy, pandas, matplotlib, ffmpeg (system)
-Place alongside your other simulation files in src/simulation/.
+- Reads sensor data from src/logger/data/MPU6050.txt
+- Renders a gold payload cube using recorded orientation (gyro-integrated)
+- Shows blue ionized trail (fading) and acceleration vector
+- Adds an altitude-driven environment: space -> stratosphere -> troposphere -> near-surface
+- Adds horizon arc, horizon thickening, haze, star fade, and subtle payload tinting
+- Impact flash + lingering flare remain in place
 """
+
 import os
-from pathlib import Path
-import io
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib import animation
-import matplotlib.gridspec as gridspec
-from mpl_toolkits.mplot3d import Axes3D  # registers 3d projection
-from datetime import datetime, time
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
+from matplotlib.animation import FuncAnimation
+from scipy.spatial.transform import Rotation as R
 
-# Paths (relative to file)
-HERE = Path(__file__).resolve().parent
-# NOTE: Update this path if your MPU6050.txt is located elsewhere
-DATA_PATH = HERE.parent / "logger" / "data" / "MPU6050.txt"
-OUTPUT_DIR = HERE / "output"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-OUT_MP4 = OUTPUT_DIR / "BACAR13_flight_replay.mp4"
-OUT_RECON = OUTPUT_DIR / "MPU6050.txt"
-OUT_ALT_PLOT = OUTPUT_DIR / "altitude_profile.png"
+# -----------------------------------------------------------------
+# CONFIGURATION
+# -----------------------------------------------------------------
+DATA_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "logger", "data", "MPU6050.txt"
+)
+REALTIME_SPEED = 1.0
+CUBE_SIZE = 0.1
+ACC_SCALE = 0.015
+TRAIL_LENGTH = 60
+START_TIME = "2025-10-11 08:00:00.000"
+END_TIME   = "2025-10-11 11:00:00.000"
 
-# Config
-NOMINAL_RATE_HZ = 10.0
-FPS = 10  # frames per second in MP4
-DOTS_PAST = 60   # number of trailing dots to draw behind current time
-DOTS_FUTURE = 120  # number of future dots to draw ahead (visual only)
-ROD_LENGTH = 10.0  # visual rod length in meters
-FIGSIZE = (16, 9)
+# Altitude breakpoints (meters)
+STRATOPAUSE = 12000.0   # above: stratosphere
+MID_TROPO = 5000.0      # transition band
+NEAR_SURFACE = 1000.0   # strong haze & ground reflection
 
-# Event timestamps (SAST local times). We'll search for matching timestamps in data.
-# Format: "HH:MM" (24-hour). User provided 08:36 (launch), 09:18 (burst), 12:15 (landing)
-EVENTS = {
-    "LAUNCH": "08:36",
-    "BURST": "09:18",
-    "LANDING": "12:15"
-}
+# -----------------------------------------------------------------
+# LOAD & PREPARE DATA
+# -----------------------------------------------------------------
+df = pd.read_csv(DATA_FILE, comment="#")
+df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+df = df[(df["timestamp"] >= START_TIME) & (df["timestamp"] <= END_TIME)]
+df = df.interpolate().fillna(0)
+df = df.sort_values(by="timestamp").reset_index(drop=True)
 
-# Helper: parse events into datetimes matching data timestamps if possible
-def find_event_indices(df):
-    idx_map = {}
-    if "timestamp" in df.columns:
-        ts = pd.to_datetime(df["timestamp"], errors="coerce")
-        times = ts.dt.time
-        for name, hhmm in EVENTS.items():
-            hh, mm = [int(x) for x in hhmm.split(":")]
-            want = time(hour=hh, minute=mm)
-            matches = np.where(times == want)[0]
-            if matches.size > 0:
-                idx_map[name] = matches[0]
-            else:
-                secs = ts.dt.hour * 3600 + ts.dt.minute * 60 + ts.dt.second
-                want_secs = hh * 3600 + mm * 60
-                absdiff = np.abs(secs - want_secs)
-                idx = int(absdiff.idxmin()) if len(absdiff)>0 else 0
-                idx_map[name] = idx
+times = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds().values
+dt = np.diff(times, prepend=times[0])
+
+gyro = df[["gyro_x_dps", "gyro_y_dps", "gyro_z_dps"]].to_numpy() * np.pi / 180.0
+accel = df[["accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2"]].to_numpy()
+vel = df["velocity_m_s"].to_numpy() if "velocity_m_s" in df else np.zeros(len(df))
+
+# Integrate altitude (simple numerical integration of vertical velocity)
+alt = np.zeros(len(df))
+for i in range(1, len(df)):
+    alt[i] = alt[i-1] + vel[i] * dt[i]
+alt = np.clip(alt, 0, 32000)
+
+# -----------------------------------------------------------------
+# ORIENTATION INTEGRATION (forward-time)
+# -----------------------------------------------------------------
+orientations = [R.identity()]
+for i in range(1, len(df)):
+    omega = gyro[i] * dt[i]
+    orientations.append(orientations[-1] * R.from_rotvec(omega))
+rotations = np.array([r.as_matrix() for r in orientations])
+
+# -----------------------------------------------------------------
+# PAYLOAD GEOMETRY
+# -----------------------------------------------------------------
+L = CUBE_SIZE / 2
+verts = np.array([
+    [-L, -L, -L], [+L, -L, -L], [+L, +L, -L], [-L, +L, -L],
+    [-L, -L, +L], [+L, -L, +L], [+L, +L, +L], [-L, +L, +L]
+])
+faces = [[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[0,3,7,4]]
+
+# -----------------------------------------------------------------
+# FIGURE SETUP
+# -----------------------------------------------------------------
+plt.style.use("dark_background")
+fig = plt.figure(figsize=(14,7))
+gs = fig.add_gridspec(2,2, width_ratios=[1.05,1.4])
+ax_alt = fig.add_subplot(gs[0,0])
+ax_vel = fig.add_subplot(gs[1,0])
+ax3d  = fig.add_subplot(gs[:,1], projection="3d")
+
+# Basic subplot styling
+for a in (ax_alt, ax_vel):
+    a.grid(True, alpha=0.25)
+    a.set_facecolor("#000010")
+
+ax_alt.set_title("Altitude profile")
+ax_alt.set_ylabel("Altitude (m)")
+ax_vel.set_title("Vertical velocity")
+ax_vel.set_ylabel("Velocity (m/s)")
+ax_vel.set_xlabel("Time (s)")
+
+ax3d.set_xlim([-L*4, L*4]); ax3d.set_ylim([-L*4, L*4]); ax3d.set_zlim([-L*4, L*4])
+ax3d.set_xlabel("X (m)"); ax3d.set_ylabel("Y (m)"); ax3d.set_zlabel("Z (m)")
+ax3d.set_facecolor("#000000")
+
+# Starfield (as scatter collection; we'll keep references for alpha modulation)
+np.random.seed(42)
+star_pos = np.random.uniform(-3, 3, size=(120, 3))
+star_sizes = np.random.uniform(2, 5, size=120)
+star_alphas = np.random.uniform(0.02, 0.08, size=120)
+star_scat = ax3d.scatter(star_pos[:,0], star_pos[:,1], star_pos[:,2],
+                         color=[(1,1,1,a) for a in star_alphas],
+                         s=star_sizes, depthshade=False)
+
+# Telemetry traces
+alt_line, = ax_alt.plot(times, alt, color="#42A5F5", lw=1)
+vel_line, = ax_vel.plot(times, vel, color="#EF5350", lw=1)
+alt_marker, = ax_alt.plot([], [], "o", color="gold")
+vel_marker, = ax_vel.plot([], [], "o", color="gold")
+
+# Payload cube and initial colors (we'll tint facecolors dynamically)
+cube_facecolor = np.array([1.0, 0.84, 0.33])  # gold base
+poly = Poly3DCollection([], facecolors=[cube_facecolor], edgecolors="#333333", lw=0.4, alpha=0.95)
+ax3d.add_collection3d(poly)
+
+# Acceleration vector (quiver as a Line3D-like segment)
+acc_vec = ax3d.quiver(0,0,0,0,0,0, color="cyan", lw=2, arrow_length_ratio=0.3)
+
+# Trail (Line3DCollection)
+dummy_segments = np.array([[[0.0,0.0,0.0],[0.0,0.0,0.0]]])
+trail_segments = Line3DCollection(dummy_segments, colors=[(0.4,0.8,1.0,0.2)], lw=2)
+ax3d.add_collection3d(trail_segments)
+trail_segments.set_segments([])
+
+fig.suptitle("ZR6BN Payload Flight — Cinematic (Troposphere Transition)", fontsize=14, color="white")
+
+# -----------------------------------------------------------------
+# ENVIRONMENT MODEL: altitude -> sky/horizon/haze/payload tint
+# -----------------------------------------------------------------
+def environment_color_profile(h):
+    """
+    Returns:
+      sky_color (r,g,b), horizon_rgba (r,g,b,a), haze_alpha (0..1),
+      star_alpha_scale (0..1), payload_tint (r,g,b, tint_strength)
+    based on altitude h in meters.
+    Realistic transitions:
+      - > STRATOPAUSE: near-black, visible stars, thin horizon
+      - between STRATOPAUSE and MID_TROPO: gradual blueening
+      - below MID_TROPO and above NEAR_SURFACE: haze increases
+      - below NEAR_SURFACE: strong near-surface scattering & ground tint
+    """
+    t_s = np.clip((h - STRATOPAUSE) / (32000 - STRATOPAUSE), 0, 1)  # 1 high (space)
+    # sky: interpolate between near-black (space) and pale sky
+    sky_space = np.array([0.01, 0.02, 0.06])     # deep upper sky (navy-black)
+    sky_tropo = np.array([0.72, 0.9, 0.98])      # bright pale-sky near surface
+    # inversion: when h large -> use space; when h small -> tropo
+    sky_mix = (t_s * sky_space) + ((1 - t_s) * sky_tropo)
+
+    # horizon base color and alpha depend on altitude
+    horizon_base = np.array([0.5, 0.78, 1.0])  # cyan-white
+    # horizon alpha increases rapidly when below ~5000 m
+    horizon_alpha = np.clip((8000 - h) / 8000, 0.0, 0.95)  # starts rising under 8km
+    horizon_rgba = (horizon_base[0], horizon_base[1], horizon_base[2], 0.05 + 0.95*horizon_alpha)
+
+    # haze (aerosol scattering) strength: small above mid_tropo, rises below
+    if h > MID_TROPO:
+        haze = 0.0
+    elif h > NEAR_SURFACE:
+        haze = np.clip((MID_TROPO - h) / (MID_TROPO - NEAR_SURFACE), 0.0, 0.7)
     else:
-        N = len(df)
-        idx_map["LAUNCH"] = 0
-        idx_map["BURST"] = min(int(N * 0.25), N-1)
-        idx_map["LANDING"] = N-1
-    return idx_map
+        haze = 0.9
 
-# Load enhanced text (skips comment lines starting '#')
-def load_enhanced_txt(path: Path):
-    if not path.exists():
-        raise FileNotFoundError(f"Expected file: {path} not found.")
-    with open(path, "r") as f:
-        lines = f.readlines()
-    data_lines = [ln for ln in lines if not ln.lstrip().startswith("#") and ln.strip() != ""]
-    if len(data_lines) == 0:
-        raise RuntimeError("No data lines found in enhanced txt.")
-    df = pd.read_csv(io.StringIO("".join(data_lines)), header=0)
-    if "timestamp" in df.columns:
-        try:
-            # Check if timestamps are already datetime objects before converting
-            if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
-                df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-        except Exception:
-            pass
-    return df
+    # star visibility scale: 1 at high altitude, drops to 0 under troposphere
+    star_scale = np.clip((h - MID_TROPO) / (32000 - MID_TROPO), 0.0, 1.0)
 
-# Kinematic reconstruction functions
-def compute_time_array(df, nominal_rate=NOMINAL_RATE_HZ):
-    if "timestamp" in df.columns and df["timestamp"].notna().sum() > 1:
-        # Use pandas datetime subtraction for precise time difference
-        t = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds().to_numpy()
+    # payload tinting: slight bluish tint as scattering increases
+    tint_strength = np.clip((MID_TROPO - h) / (MID_TROPO), 0.0, 0.6)
+    payload_tint = np.array([0.35, 0.55, 0.95]) * tint_strength  # bluish tint vector
+
+    return tuple(sky_mix), horizon_rgba, haze, star_scale, tuple(payload_tint), tint_strength
+
+# -----------------------------------------------------------------
+# ANIMATION STATE
+# -----------------------------------------------------------------
+trail_buffer = np.zeros((TRAIL_LENGTH, 3))
+impact_frame = -1
+
+# Precompute star base colors (RGBA) to allow alpha scaling per frame
+star_base_colors = [(1.0,1.0,1.0, a) for a in star_alphas]
+
+# -----------------------------------------------------------------
+# UPDATE FUNCTION
+# -----------------------------------------------------------------
+def update(frame):
+    global impact_frame
+
+    # 1) Payload orientation + geometry
+    Rm = rotations[frame]
+    rotated = (Rm @ verts.T).T
+    poly.set_verts([[rotated[i] for i in f] for f in faces])
+
+    # 2) Acceleration vector (body -> world)
+    acc_body = accel[frame]
+    acc_world = Rm @ (acc_body * ACC_SCALE)
+
+    # Update quiver via set_segments on the internal Line3D representation (Matplotlib quiver in 3D is limited)
+    # For compatibility we'll remove/add the quiver by re-creating (safe for Matplotlib 3.10.3)
+    # remove previous by setting to zero-length and then draw new
+    # Note: using ax3d.quiver each frame is acceptable for moderate frame counts; keep as-is.
+    # Remove old by hiding (no deletion required in this context); instead update by re-creating
+    for coll in list(ax3d.collections):
+        # avoid removing the cube and the trail collections by checking types/ids
+        pass
+    # Simpler approach: set acc_vec by reassigning new quiver and removing old (fast enough)
+    try:
+        acc_vec.remove()
+    except Exception:
+        pass
+    # create new quiver for this frame
+    ax3d.quiver(0,0,0, acc_world[0], acc_world[1], acc_world[2],
+               color="cyan", linewidth=1.5, arrow_length_ratio=0.25)
+    # Note: we don't keep handle reference to reduce complexity across frames
+
+    # 3) Trail update (fading blue trail)
+    trail_buffer[:-1] = trail_buffer[1:]
+    trail_buffer[-1] = acc_world
+    segments = [[trail_buffer[i], trail_buffer[i+1]] for i in range(TRAIL_LENGTH - 1)]
+    # gradient: newest bright cyan -> older deep blue (alpha increases for newest)
+    colors = [
+        (0.15 * (1 - i / TRAIL_LENGTH), 0.5 + 0.5*(1 - i / TRAIL_LENGTH), 1.0, 0.08 + 0.9*(1 - i / TRAIL_LENGTH))
+        for i in range(TRAIL_LENGTH - 1)
+    ]
+    trail_segments.set_segments(segments)
+    trail_segments.set_color(colors)
+
+    # 4) Environment: sky color, horizon, haze, stars, payload tint
+    sky_color, horizon_rgba, haze_alpha, star_scale, payload_tint, tint_strength = environment_color_profile(alt[frame])
+    # set figure and axis backgrounds
+    fig.patch.set_facecolor(sky_color)
+    ax3d.set_facecolor(sky_color)
+    # horizon arc (precomputed below) updated by setting color/alpha
+    horizon_strength = horizon_rgba[3]
+    # mix horizon color with sky (slightly brighter)
+    horizon_color = (horizon_rgba[0], horizon_rgba[1], horizon_rgba[2], horizon_rgba[3])
+    horizon_line.set_color(horizon_color)
+
+    # haze effect: adjust axis face alpha by blending with a grey haze overlay
+    if haze_alpha > 0.0:
+        haze_rgb = (0.8, 0.85, 0.9)
+        blended = tuple(sky_color[i] * (1 - haze_alpha*0.5) + haze_rgb[i] * (haze_alpha*0.5) for i in range(3))
+        ax3d.set_facecolor(blended)
     else:
-        # Use nominal rate if timestamps are missing or invalid
-        dt = 1.0 / float(nominal_rate)
-        t = np.arange(len(df)) * dt
-    return t
+        ax3d.set_facecolor(sky_color)
 
-def compute_vertical_velocity(df, t):
-    if "velocity_m_s" in df.columns and df["velocity_m_s"].notna().sum() > 0:
-        # Use existing velocity if available
-        vz = df["velocity_m_s"].fillna(method="ffill").fillna(0.0).to_numpy()
-    elif "linear_accel_z_m_s2" in df.columns:
-        # Integrate acceleration (trapezoidal rule)
-        a = df["linear_accel_z_m_s2"].fillna(0.0).to_numpy()
-        vz = np.zeros_like(a)
-        for i in range(1, len(a)):
-            dt = t[i] - t[i-1]
-            vz[i] = vz[i-1] + 0.5*(a[i] + a[i-1])*dt
-    else:
-        vz = np.zeros(len(df))
-    return vz
+    # stars alpha modulation
+    new_star_rgba = []
+    for i, base in enumerate(star_base_colors):
+        a = base[3] * star_scale
+        new_star_rgba.append((1.0,1.0,1.0,a))
+    # Update star scatter facecolors
+    star_scat.set_facecolors(new_star_rgba)
+    star_scat.set_edgecolors(new_star_rgba)
 
-def integrate_altitude(vz, t):
-    # Integrate velocity (trapezoidal rule) to get altitude
-    z = np.zeros_like(vz)
-    for i in range(1, len(vz)):
-        dt = t[i] - t[i-1]
-        z[i] = z[i-1] + 0.5 * (vz[i] + vz[i-1]) * dt
-    return z
+    # 5) Slight payload tinting due to atmospheric scattering (modify facecolors)
+    tint_rgb = np.array(cube_facecolor) + np.array(payload_tint)
+    tint_rgb = np.clip(tint_rgb, 0, 1)
+    # Use uniform facecolor tint for cube
+    poly.set_facecolor([tuple(tint_rgb.tolist())])
 
-def integrate_gyro_angles(df, t):
-    # Integrate angular rates (Euler integration)
-    n = len(df)
-    gx = df.get("gyro_x_rads", pd.Series(np.zeros(n))).fillna(0).to_numpy()
-    gy = df.get("gyro_y_rads", pd.Series(np.zeros(n))).fillna(0).to_numpy()
-    gz = df.get("gyro_z_rads", pd.Series(np.zeros(n))).fillna(0).to_numpy()
-    roll = np.zeros(n); pitch = np.zeros(n); yaw = np.zeros(n)
-    for i in range(1,n):
-        dt = t[i] - t[i-1]
-        roll[i]  = roll[i-1]  + gx[i] * dt
-        pitch[i] = pitch[i-1] + gy[i] * dt
-        yaw[i]   = yaw[i-1]   + gz[i] * dt
-    return yaw, pitch, roll
+    # 6) Horizon glow intensity increases as altitude decreases
+    # horizon_line color handled above; widen linewidth when near
+    lw = 6.0 * (1.0 + 2.0 * horizon_strength)
+    horizon_line.set_linewidth(lw)
 
-def atmosphere_color(t, cmap_name="plasma"):
-    # Create a normalized time array for color mapping (atmosphere fade effect)
-    tnorm = (t - t[0]) / max(1e-9, (t[-1] - t[0]))
-    cmap = plt.get_cmap(cmap_name)
-    return cmap(tnorm)
+    # 7) Telemetry markers update
+    alt_marker.set_data([times[frame]], [alt[frame]])
+    vel_marker.set_data([times[frame]], [vel[frame]])
 
-def draw_static_right_panel_axes(fig):
-    # Setup for the telemetry panel (charts)
-    right = fig.add_gridspec(5, 2, width_ratios=[1,1], left=0.55, right=0.99, top=0.96, bottom=0.04, hspace=0.6)
-    ax_accel = fig.add_subplot(right[0:2, :])
-    ax_accel.set_title("Acceleration (m/s²) - X (yellow), Y (green), Z (cyan)")
-    ax_accel.set_ylabel("m/s²")
-    ax_gyro = fig.add_subplot(right[2:4, :])
-    ax_gyro.set_title("Gyroscope (deg/s) - X (red), Y (green), Z (blue)")
-    ax_gyro.set_ylabel("deg/s")
-    ax_time = fig.add_subplot(right[4, :])
-    ax_time.set_title("Timestamp / Phase")
-    ax_time.set_yticks([])
-    return ax_accel, ax_gyro, ax_time
+    # 8) Cinematic camera: gentle orbit + slight zoom tied to altitude
+    # zoom: as altitude decreases, move camera slightly closer
+    zoom_factor = 1.0 + 0.8 * (1 - np.clip(alt[frame] / 32000.0, 0, 1))
+    elev = 18 + np.sin(frame * 0.02) * 4.0 + (1 - np.clip(alt[frame] / 32000.0, 0, 1)) * 2.5
+    azim = frame * 0.45 + np.sin(frame * 0.03) * 8.0
+    ax3d.view_init(elev=elev, azim=azim)
 
-def create_figure():
-    # Setup for the main figure and left 3D panel
-    fig = plt.figure(figsize=FIGSIZE)
-    left = fig.add_gridspec(1, 1, left=0.02, right=0.53) # 1 column in the left section
-    ax3d = fig.add_subplot(left[0, 0], projection="3d")
-    ax_accel, ax_gyro, ax_time = draw_static_right_panel_axes(fig)
-    return fig, ax3d, ax_accel, ax_gyro, ax_time
+    # 9) Impact flash + lingering flare
+    if impact_frame == -1 and alt[frame] <= 5:
+        # mark once
+        globals()['impact_frame'] = frame
+        impact_frame_local = frame
+    if 'impact_frame' in globals():
+        elapsed = (frame - globals()['impact_frame']) * (dt.mean() if dt.mean() > 0 else 0.02)
+        if elapsed < 2.0:
+            flash_strength = max(0, 1 - (elapsed / 2.0))
+            flash_color = (1.0, 1.0, 1.0)
+            blended = tuple(flash_color[i] * flash_strength + sky_color[i] * (1 - flash_strength) for i in range(3))
+            fig.patch.set_facecolor(blended)
+            ax3d.set_facecolor(blended)
 
-def make_animation(df, t, z, yaw, pitch, roll, event_indices, out_path=OUT_MP4, fps=FPS):
-    n = len(t)
-    colors = atmosphere_color(t)
-    axx = df.get("accel_x_m_s2", pd.Series(np.zeros(n))).fillna(0).to_numpy()
-    axy = df.get("accel_y_m_s2", pd.Series(np.zeros(n))).fillna(0).to_numpy()
-    axz = df.get("accel_z_m_s2", pd.Series(np.zeros(n))).fillna(0).to_numpy()
-    gxd = df.get("gyro_x_dps", pd.Series(np.zeros(n))).fillna(0).to_numpy()
-    gyd = df.get("gyro_y_dps", pd.Series(np.zeros(n))).fillna(0).to_numpy()
-    gzd = df.get("gyro_z_dps", pd.Series(np.zeros(n))).fillna(0).to_numpy()
+    # 10) Title update
+    fig.suptitle(
+        f"ZR6BN | t={times[frame]:.1f}s | Alt={alt[frame]:.0f} m | "
+        f"Vel={vel[frame]:.1f} m/s | |a|={np.linalg.norm(acc_body):.1f} m/s² | "
+        f"{df['timestamp'].iloc[frame]}",
+        fontsize=12, color="white"
+    )
 
-    fig, ax3d, ax_accel, ax_gyro, ax_time = create_figure()
+    # Return visual artists (Matplotlib ignores extras from 3D collections sometimes)
+    return [poly, trail_segments, alt_marker, vel_marker, horizon_line]
 
-    # 3D Setup
-    ax3d.set_xlim(-100, 100); ax3d.set_ylim(-100, 100)
-    ax3d.set_zlim(np.min(z)-50, np.max(z)+50)
-    ax3d.set_xlabel("X (m)"); ax3d.set_ylabel("Y (m)"); ax3d.set_zlabel("Altitude (m)")
+# -----------------------------------------------------------------
+# HORIZON ARC (flat curved arc beneath payload)
+# -----------------------------------------------------------------
+horizon_radius = 2.5
+theta = np.linspace(-np.pi/1.5, np.pi/1.5, 300)
+x_arc = horizon_radius * np.cos(theta)
+y_arc = horizon_radius * np.sin(theta)
+z_arc = np.zeros_like(x_arc) - 0.2  # slightly below center
+horizon_line, = ax3d.plot(x_arc, y_arc, z_arc, color=(0.3,0.6,1.0,0.0), lw=6, zorder=0)
 
-    # Initialize persistent 3D artists (scatter points are drawn dynamically)
-    past_scatter = ax3d.scatter([], [], [], s=15, c="white", alpha=0.6)
-    future_scatter = ax3d.scatter([], [], [], s=6, c="lightgrey", alpha=0.4)
-    # Persistent rod and cube artists that will be updated using set_data
-    rod_line, = ax3d.plot([], [], [], lw=6, color="#b0b8c6")
-    cube_marker, = ax3d.plot([], [], [], marker="s", markersize=20, linestyle="None", color="#d9c9ff")
+# -----------------------------------------------------------------
+# RUN ANIMATION
+# -----------------------------------------------------------------
+ani = FuncAnimation(
+    fig, update, frames=len(df),
+    interval=dt.mean()*1000/REALTIME_SPEED, blit=False, repeat=False
+)
+plt.tight_layout()
+plt.show()
 
-    # 2D Chart Setup
-    t_sec = t
-    accel_line_x, = ax_accel.plot(t_sec, axx, lw=0.5, color="#ffee58", label="Accel X")
-    accel_line_y, = ax_accel.plot(t_sec, axy, lw=0.5, color="#66bb6a", label="Accel Y")
-    accel_line_z, = ax_accel.plot(t_sec, axz, lw=0.5, color="#4dd0e1", label="Accel Z")
-    ax_accel.legend(loc="upper right", fontsize="small")
-    gyro_line_x, = ax_gyro.plot(t_sec, gxd, lw=0.5, color="#ef5350", label="Gyro X")
-    gyro_line_y, = ax_gyro.plot(t_sec, gyd, lw=0.5, color="#66bb6a", label="Gyro Y")
-    gyro_line_z, = ax_gyro.plot(t_sec, gzd, lw=0.5, color="#42a5f5", label="Gyro Z")
-    ax_gyro.legend(loc="upper right", fontsize="small")
-
-    # Time/Event Markers
-    vline_accel = ax_accel.axvline(x=0.0, color="white", linewidth=1.2)
-    vline_gyro  = ax_gyro.axvline(x=0.0, color="white", linewidth=1.2)
-    time_text = ax_time.text(0.02, 0.5, "", transform=ax_time.transAxes, color="white", fontsize=12)
-
-    event_texts = {}
-    for name, idx in event_indices.items():
-        event_texts[name] = ax3d.text2D(0.02, 0.95 - 0.04*len(event_texts), "", transform=ax3d.transAxes, color="white", fontsize=12)
-
-    # Styling (Dark Theme)
-    fig.patch.set_facecolor("#000000")
-    for ax in [ax_accel, ax_gyro, ax_time]:
-        ax.set_facecolor("#111111")
-        for spine in ax.spines.values():
-            spine.set_color("#444444")
-        ax.tick_params(colors="#cccccc", which="both")
-        ax.xaxis.label.set_color("#cccccc")
-        ax.yaxis.label.set_color("#cccccc")
-        ax.title.set_color("#f0f0f0")
-    ax_time.set_xlim(t_sec[0], t_sec[-1])
-    ax_accel.set_xlim(t_sec[0], t_sec[-1])
-    ax_gyro.set_xlim(t_sec[0], t_sec[-1])
-    
-    # 3D Axis background (pane) color is set inside update for dynamic fade
-
-    def update(i):
-        # Dynamic atmosphere/pane color based on time/altitude
-        col = colors[i]
-        ax3d.xaxis.set_pane_color((col[0]*0.05, col[1]*0.05, col[2]*0.05, 1.0))
-        ax3d.yaxis.set_pane_color((col[0]*0.05, col[1]*0.05, col[2]*0.05, 1.0))
-        ax3d.zaxis.set_pane_color((col[0]*0.07, col[1]*0.07, col[2]*0.07, 1.0))
-
-        # Trail data indexing
-        start_past = max(0, i - DOTS_PAST)
-        past_idx = np.arange(start_past, i+1)
-        future_idx = np.arange(i, min(n, i + DOTS_FUTURE))
-        xs_p = np.zeros_like(past_idx, dtype=float)
-        ys_p = np.zeros_like(past_idx, dtype=float)
-        zs_p = z[past_idx]
-        xs_f = np.zeros_like(future_idx, dtype=float)
-        ys_f = np.zeros_like(future_idx, dtype=float)
-        zs_f = z[future_idx]
-
-        # --- FIX 1: ATTRIBUTEERROR ---
-        # Remove all dynamically created scatter collections from the previous frame.
-        for collection in ax3d.collections[:]:
-            collection.remove()
-        # --- END FIX 1 ---
-        
-        # Redraw scatter plots (past trail and future path)
-        ax3d.scatter(xs_p, ys_p, zs_p, s=20, c=colors[past_idx], alpha=0.9, depthshade=True)
-        ax3d.scatter(xs_f, ys_f, zs_f, s=6, c=colors[future_idx], alpha=0.35, depthshade=False)
-
-        # Update rod and cube position/orientation
-        roll_i = roll[i]; pitch_i = pitch[i]
-        # Simplistic 2D rotation projection for visualization purposes:
-        dx = np.sin(roll_i) * ROD_LENGTH / 2.0
-        dy = np.sin(pitch_i) * ROD_LENGTH / 2.0
-        x_points = np.array([-dx, dx])
-        y_points = np.array([-dy, dy])
-        z_points = np.array([z[i] - ROD_LENGTH/2.0, z[i] + ROD_LENGTH/2.0])
-        
-        # --- FIX 2: 'x must be a sequence' ERROR ---
-        # The correct way to update a 3D line artist is using set_data_3d.
-        rod_line.set_data_3d(x_points, y_points, z_points)
-        
-        # Cube marker update (single point)
-        cube_marker.set_data([0.0], [0.0])
-        cube_marker.set_3d_properties([z[i]])
-        # --- END FIX 2 ---
-
-        # Update 2D chart elements (vertical line) and text
-        curt = t_sec[i]
-        vline_accel.set_xdata(curt)
-        vline_gyro.set_xdata(curt)
-        
-        # Adjust X-axis limits for scrolling effect
-        window_size = 30.0 # Time window to display in the charts (30 seconds)
-        center = curt
-        ax_accel.set_xlim(max(t_sec[0], center - window_size/2), min(t_sec[-1], center + window_size/2))
-        ax_gyro.set_xlim(max(t_sec[0], center - window_size/2), min(t_sec[-1], center + window_size/2))
-
-        # Update time/event text
-        time_str = f"t = {curt:.1f} s"
-        if "timestamp" in df.columns:
-            ts = df['timestamp'].iloc[i]
-            # Format the datetime object nicely if it's not NaT
-            if not pd.isna(ts) and isinstance(ts, pd.Timestamp):
-                time_str += f" | {ts.strftime('%H:%M:%S.%f')[:-3]}" # remove last 3 microseconds
-        time_text.set_text(time_str)
-
-        # Update event markers
-        for name, idx in event_indices.items():
-            txt_obj = event_texts[name]
-            window_s = 3.0
-            if i >= idx - int(window_s*FPS) and i <= idx + int(window_s*FPS):
-                txt_obj.set_text(f"{name} (t={t[idx]:.1f}s)")
-            else:
-                txt_obj.set_text("")
-
-        # Since blit is False, we can return empty.
-        return []
-
-    frames = n
-    interval = 1000.0 / fps # interval in ms
-    # Note: blit=False is used because 3D plots do not support blitting easily
-    anim = animation.FuncAnimation(fig, update, frames=frames, interval=interval, blit=False)
-
-    print(f"[+] Rendering MP4 to: {out_path}  (this may take a while for long datasets)")
-    # Using 'ffmpeg' writer, ensure ffmpeg is installed on your system
-    Writer = animation.writers['ffmpeg']
-    writer = Writer(fps=fps, metadata=dict(artist='BACAR'), bitrate=6000) 
-    
-    try:
-        anim.save(str(out_path), writer=writer)
-        print("[✓] MP4 render complete.")
-    except Exception as save_e:
-        print(f"[!] FFMPEG failed to save the animation. Check if 'ffmpeg' is installed and in your system PATH. Error: {save_e}")
-    
-    plt.close(fig)
-
-def main():
-    print("[...] Loading enhanced MPU6050 data")
-    try:
-        df = load_enhanced_txt(DATA_PATH)
-    except (FileNotFoundError, RuntimeError) as e:
-        print(f"[FATAL] Error loading data: {e}")
-        return
-
-    print("[...] Running kinematic reconstruction")
-    t = compute_time_array(df, nominal_rate=NOMINAL_RATE_HZ)
-    vz = compute_vertical_velocity(df, t)
-    z = integrate_altitude(vz, t)
-    yaw, pitch, roll = integrate_gyro_angles(df, t)
-
-    # Save reconstructed data
-    out_df = df.copy()
-    out_df["recon_time_s"] = t
-    out_df["recon_velocity_m_s"] = vz
-    out_df["recon_altitude_m"] = z
-    out_df.to_csv(OUT_RECON, index=False)
-    print(f"[✓] Saved reconstructed file: {OUT_RECON}")
-
-    # Plot altitude profile
-    try:
-        plt.figure(figsize=(10,4))
-        plt.plot(t, z, linewidth=0.9)
-        plt.xlabel("Time (s)"); plt.ylabel("Altitude (m)")
-        plt.title("Reconstructed Altitude — Kinematic Replay")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(OUT_ALT_PLOT)
-        plt.close()
-        print(f"[✓] Saved altitude profile: {OUT_ALT_PLOT}")
-    except Exception as e:
-        print("[!] Could not save altitude plot:", e)
-
-    # Find event indices
-    event_idx = find_event_indices(df)
-
-    # Make the animation
-    try:
-        make_animation(df, t, z, yaw, pitch, roll, event_idx, out_path=OUT_MP4, fps=FPS)
-    except Exception as e:
-        print(f"[!] Animation rendering failed: {type(e).__name__}: {e}")
-
-if __name__ == "__main__":
-    main()
+# To save a movie (uncomment):
+# ani.save("payload_flight_cinematic_troposphere.mp4", fps=30, dpi=150)
