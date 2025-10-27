@@ -8,13 +8,6 @@ with realistic troposphere transition.
 Compatible with:
   • Matplotlib 3.10.3
   • SciPy 1.16.0
-
-- Reads sensor data from src/logger/data/MPU6050.txt
-- Renders gold payload cube using recorded orientation
-- Simulates blue ionized trail & acceleration vector
-- Adds altitude-driven environment:
-    space → stratosphere → troposphere → near-surface
-- Adds horizon arc, haze, star fade, and impact flash
 """
 
 import os
@@ -82,22 +75,34 @@ alt = np.clip(alt, 0, 32000)
 orientations = [R.identity()]
 
 for i in range(1, len(df)):
-    # Flatten and check gyro sample
     omega = np.array(gyro[i], dtype=float).reshape(-1)
     if omega.size != 3 or not np.all(np.isfinite(omega)):
         omega = np.zeros(3)
     omega = omega * dt[i]
-
     try:
         dR = R.from_rotvec(omega)
     except ValueError:
         dR = R.identity()
-
     orientations.append(orientations[-1] * dR)
 
 rotations = np.array([r.as_matrix() for r in orientations])
 
-
+# -----------------------------------------------------------------
+# PAYLOAD GEOMETRY (define L, verts, faces)
+# -----------------------------------------------------------------
+L = CUBE_SIZE / 2
+verts = np.array([
+    [-L, -L, -L], [+L, -L, -L], [+L, +L, -L], [-L, +L, -L],
+    [-L, -L, +L], [+L, -L, +L], [+L, +L, +L], [-L, +L, +L]
+])
+faces = [
+    [0, 1, 2, 3],
+    [4, 5, 6, 7],
+    [0, 1, 5, 4],
+    [2, 3, 7, 6],
+    [1, 2, 6, 5],
+    [0, 3, 7, 4],
+]
 
 # -----------------------------------------------------------------
 # FIGURE SETUP
@@ -122,6 +127,10 @@ ax_vel.set_xlabel("Time (s)")
 ax3d.set_xlim([-L*4,L*4]); ax3d.set_ylim([-L*4,L*4]); ax3d.set_zlim([-L*4,L*4])
 ax3d.set_xlabel("X (m)"); ax3d.set_ylabel("Y (m)"); ax3d.set_zlabel("Z (m)")
 ax3d.set_facecolor("#000000")
+
+# -----------------------------------------------------------------
+# (rest of your script remains unchanged)
+# -----------------------------------------------------------------
 
 # Stars
 np.random.seed(42)
