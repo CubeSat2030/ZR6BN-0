@@ -80,22 +80,24 @@ alt = np.clip(alt, 0, 32000)
 # ORIENTATION INTEGRATION (safe for SciPy 1.16.0)
 # -----------------------------------------------------------------
 orientations = [R.identity()]
+
 for i in range(1, len(df)):
-    omega = gyro[i]*dt[i]
-    if not np.all(np.isfinite(omega)):
+    # Flatten and check gyro sample
+    omega = np.array(gyro[i], dtype=float).reshape(-1)
+    if omega.size != 3 or not np.all(np.isfinite(omega)):
         omega = np.zeros(3)
-    orientations.append(orientations[-1]*R.from_rotvec(omega))
+    omega = omega * dt[i]
+
+    try:
+        dR = R.from_rotvec(omega)
+    except ValueError:
+        dR = R.identity()
+
+    orientations.append(orientations[-1] * dR)
+
 rotations = np.array([r.as_matrix() for r in orientations])
 
-# -----------------------------------------------------------------
-# PAYLOAD GEOMETRY
-# -----------------------------------------------------------------
-L = CUBE_SIZE/2
-verts = np.array([
-    [-L,-L,-L],[+L,-L,-L],[+L,+L,-L],[-L,+L,-L],
-    [-L,-L,+L],[+L,-L,+L],[+L,+L,+L],[-L,+L,+L]
-])
-faces = [[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[0,3,7,4]]
+
 
 # -----------------------------------------------------------------
 # FIGURE SETUP
