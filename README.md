@@ -1,13 +1,6 @@
-# Error log
-~~~
-[!] FFMPEG failed to save the animation. 
-Check if 'ffmpeg' is installed and in your system PATH. 
-Error: x must be a sequence
-~~~
-
-
 # Project tree
 ~~~
+
 ├── .gitattributes
 ├── README.md
 ├── main.py
@@ -33,15 +26,14 @@ Error: x must be a sequence
 │   │   │   └── mpu_logger.json
 │   │   ├── mpu6050_logger.py
 │   │   └── sound_logger.py
-│   ├── photography/
-│   │   ├── footage/
-│   │   │   ├── .gitkeep
-│   │   │   ├── images/
-│   │   │   │   └── .gitkeep
-│   │   │   └── videos/
-│   │   │       └── .gitkeep
-│   │   ├── image_capture.py
-│   │   └── video_capture.py
+│   ├── media/
+│   │   ├── .gitkeep
+│   │   └── output/
+│   │       ├── .gitkeep
+│   │       ├── image/
+│   │       │   └── .gitkeep
+│   │       └── video/
+│   │           └── .gitkeep
 │   ├── plotter/
 │   │   ├── charts/
 │   │   │   ├── cpu_chart.svg
@@ -53,13 +45,18 @@ Error: x must be a sequence
 │   │   ├── mpu6050_plotter.py
 │   │   └── sound_plotter.py
 │   └── simulation/
-│       ├── output/
-│       │   └── BACAR13_simulation_framecache.mp4
-│       └── payload_flight_simulation.py
+│       ├── .gitkeep
+│       └── scripts/
+│           ├── preprocess.py
+│           ├── render.py
+│           ├── sensor_fusion.py
+│           ├── simulation_main.py
+│           └── trajectory.py
 └── web_ui/
     ├── app_server.py
     └── templates/
         └── dashboard.html
+
 ~~~
 
 
