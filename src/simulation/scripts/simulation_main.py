@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-main.py - Orchestrator for the HAB payload simulation pipeline.
+simulation_main.py - Orchestrator for the HAB payload simulation pipeline.
 
 Features:
  - Runs preprocess -> sensor_fusion -> trajectory -> render in order
@@ -8,8 +8,6 @@ Features:
  - CLI flags for skipping stages, controlling FPS, and changing sample rate
  - Basic logging and error handling
  - Runs the existing scripts via subprocess (keeps each stage isolated)
- - Example:
-     python scripts/main.py --raw ../data/raw_mpu.csv --fps 10
 """
 
 from __future__ import annotations
@@ -24,9 +22,9 @@ import logging
 
 # default paths - relative to repository root (adjust if needed)
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS_DIR = ROOT / "scripts"
-DATA_DIR = ROOT / "data"
-OUT_DIR = ROOT / "out" / "video"
+SCRIPTS_DIR = ROOT / "src" / "simulation" / "scripts"
+DATA_DIR = ROOT / "src" / "logger"/ "data"
+OUT_DIR = ROOT / "src" / "media" / "output" / "video"
 
 DEFAULT_RAW = DATA_DIR / "raw_mpu.csv"
 PROCESSED = DATA_DIR / "processed_mpu.csv"
