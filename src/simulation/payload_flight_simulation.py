@@ -10,7 +10,7 @@ SETPOINT = 10
 SIM_TIME = 100
 INITIAL_X = 0
 INITIAL_Y = -100
-MASS = 1 #kg
+MASS = 0.5 #kg
 MAX_THRUST = 15 #Newtons
 g = -9.81 #Gravitational constant
 V_i = 0 #initial velocity 
@@ -23,7 +23,7 @@ KP = 0.36
 KI = 40.0
 KD = 0.0008099999999999997
 #KD = 0.00128 for higher setpoints
-antiWindup = True
+antiWindup = False
 # KP = 0.6
 # KI = 0.0
 # KD = 0.0
@@ -31,7 +31,7 @@ antiWindup = True
 
 class Simulation(object):
 	def __init__(self):
-		self.Insight = Rocket()
+		self.Insight = Payload()
 		self.pid = PID(KP,KI,KD,SETPOINT)
 		self.screen = turtle.Screen()
 		self.screen.setup(800,600)
@@ -77,7 +77,7 @@ class Simulation(object):
 def graph(x,y1,y2,y3,y4,y5):
 	fig, (ax1, ax2,ax3,ax4,ax5) = plt.subplots(5, sharex=True)
 	#fig.suptitle('antiwindup')
-	ax1.set(ylabel='rocket \nHeight')
+	ax1.set(ylabel='Payload \nHeight')
 	ax1.plot(x,y1)
 	ax2.set(ylabel='KP_error')
 	ax2.plot(x,y2,'tab:red')
@@ -85,19 +85,19 @@ def graph(x,y1,y2,y3,y4,y5):
 	ax3.plot(x,y3,'tab:orange')
 	ax4.set(ylabel='KI_error')
 	ax4.plot(x,y4,'tab:pink')
-	ax5.set(ylabel='rocket \nThrust')
+	ax5.set(ylabel='Payload \nThrust')
 	ax5.plot(x,y5,'tab:brown')
 	plt.show()
 
-class Rocket(object):
+class Payload(object):
 	def __init__(self):
-		global Rocket
-		self.Rocket = turtle.Turtle()
-		self.Rocket.shape('square')
-		self.Rocket.color('black')
-		self.Rocket.penup()
-		self.Rocket.goto(INITIAL_X,INITIAL_Y)
-		self.Rocket.speed(0)
+		global Payload
+		self.Payload = turtle.Turtle()
+		self.Payload.shape('square')
+		self.Payload.color('black')
+		self.Payload.penup()
+		self.Payload.goto(INITIAL_X,INITIAL_Y)
+		self.Payload.speed(0)
 		#physics
 		self.ddy = 0
 		self.dy = V_i
@@ -111,9 +111,9 @@ class Rocket(object):
 	def get_dy(self):
 		return self.dy
 	def set_y(self):
-		self.Rocket.sety(self.y + self.dy * TIME_STEP)
+		self.Payload.sety(self.y + self.dy * TIME_STEP)
 	def get_y(self):
-		self.y = self.Rocket.ycor()
+		self.y = self.Payload.ycor()
 		return self.y
 
 class PID(object):
