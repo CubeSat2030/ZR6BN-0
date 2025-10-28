@@ -1,3 +1,10 @@
+~~~
+
+17:40:04 | ❌ Flight data not found: /home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/scripts/src/logger/data/MPU6050.txt
+
+~~~
+
+
 # Project tree
 ~~~
 
