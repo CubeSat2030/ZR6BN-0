@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-main.py — Mission Orchestrator for HAB Payload Flight Vector Simulation
+main.py — HAB Mission Orchestrator (Post-Flight, Read-Only Logger Data)
 
-Runs the full post-flight simulation pipeline:
-    1. Preprocess   → Clean & resample MPU6050 raw logs
-    2. SensorFusion → Combine accel + gyro → attitude (Euler/quaternion)
-    3. Trajectory   → Reconstruct flight vector from attitude + acceleration
-    4. Render       → Generate cinematic replay MP4
+Purpose:
+    Runs the full post-flight simulation pipeline without ever modifying
+    the original MPU6050 sensor log (read-only flight archive).
+
+Pipeline:
+    1. Verify logger data (read-only)
+    2. Invoke simulation pipeline (simulation_main.py)
+    3. Render replay
 
 Usage:
-    python main.py --force --fps 10
-    python main.py --skip-render  # useful for quick data tests
+    python main.py --fps 10 --force
 """
 
 import os
@@ -19,39 +21,27 @@ import argparse
 import subprocess
 import logging
 from pathlib import Path
-import shutil
 
-# ────────────────────────────────────────────────────────────────
-# PATH SETUP (matches your structure)
-# ────────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────
+# PATHS (read-only and writable directories)
+# ───────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
-SIM = SRC / "simulation"
-SCRIPTS = SIM / "scripts"
 LOGGER_DATA = SRC / "logger" / "data"
+RAW_INPUT = LOGGER_DATA / "MPU6050.txt"
+
+SIM_SCRIPTS = SRC / "simulation" / "scripts"
+SIMULATION_MAIN = SIM_SCRIPTS / "simulation_main.py"
+
 MEDIA = SRC / "media"
 OUTPUT = MEDIA / "output"
 VIDEO_OUT = OUTPUT / "video" / "BACAR13_flight_replay.mp4"
 
-# Expected input
-RAW_INPUT = LOGGER_DATA / "MPU6050.txt"
-
-# Stage outputs
-PROCESSED = SCRIPTS / "processed.csv"
-FUSED = SCRIPTS / "fused.csv"
-TRAJECTORY = SCRIPTS / "trajectory.csv"
-
-# Script paths
-PREPROCESS = SCRIPTS / "preprocess.py"
-FUSION = SCRIPTS / "sensor_fusion.py"
-TRAJECTORY_SCRIPT = SCRIPTS / "trajectory.py"
-RENDER = SCRIPTS / "render.py"
-
-# ────────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────
 # LOGGING
-# ────────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────
 logging.basicConfig(
-    filename="mission_master.log",
+    filename=ROOT / "mission_master.log",
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
@@ -61,96 +51,72 @@ formatter = logging.Formatter("%(asctime)s | %(message)s", "%H:%M:%S")
 console.setFormatter(formatter)
 logging.getLogger("").addHandler(console)
 
-
-# ────────────────────────────────────────────────────────────────
-# HELPERS
-# ────────────────────────────────────────────────────────────────
-def run_stage(name: str, cmd: list[str], skip: bool, output_file: Path | None, force: bool):
-    if skip:
-        logging.info(f"⏭️  Skipping {name} stage (--skip flag)")
-        return
-
-    if output_file and output_file.exists() and not force:
-        logging.info(f"✅ {name} output exists: {output_file.name} (use --force to regenerate)")
-        return
-
-    logging.info(f"🚀 Running {name} stage...")
-    result = subprocess.run(cmd, text=True)
-    if result.returncode != 0:
-        logging.error(f"❌ {name} failed (exit {result.returncode})")
-        sys.exit(result.returncode)
-    logging.info(f"✅ {name} complete")
-
-
+# ───────────────────────────────────────────────
+# UTILITIES
+# ───────────────────────────────────────────────
 def ensure_dirs():
-    for p in [MEDIA, OUTPUT / "video", OUTPUT / "image"]:
-        p.mkdir(parents=True, exist_ok=True)
-    logging.info("📁 Directory check complete")
+    """Ensure only output folders are writable."""
+    (OUTPUT / "video").mkdir(parents=True, exist_ok=True)
+    (OUTPUT / "image").mkdir(parents=True, exist_ok=True)
+    logging.info("📁 Verified output directories")
 
 
-# ────────────────────────────────────────────────────────────────
-# MAIN ORCHESTRATOR
-# ────────────────────────────────────────────────────────────────
+def verify_readonly_source():
+    """Confirm MPU6050.txt exists and is read-only."""
+    if not RAW_INPUT.exists():
+        logging.error(f"❌ Flight data not found: {RAW_INPUT}")
+        sys.exit(1)
+
+    # Make sure the file is read-only
+    try:
+        if os.access(RAW_INPUT, os.W_OK):
+            logging.warning(f"⚠️ {RAW_INPUT.name} appears writable — locking it down.")
+            RAW_INPUT.chmod(0o444)
+        logging.info(f"🛰️  Verified read-only flight log: {RAW_INPUT.name}")
+    except Exception as e:
+        logging.warning(f"Could not verify file permissions: {e}")
+
+
+def run_simulation(fps: int, force: bool):
+    """Run post-flight simulation pipeline (simulation_main.py)."""
+    if not SIMULATION_MAIN.exists():
+        logging.error(f"Simulation entrypoint missing: {SIMULATION_MAIN}")
+        sys.exit(1)
+
+    env = os.environ.copy()
+    env["HAB_SIM_FPS"] = str(fps)
+    env["HAB_SIM_FORCE"] = "1" if force else "0"
+    env["HAB_FLIGHT_MODE"] = "POST"  # signal downstream modules
+
+    logging.info("🚀 Launching post-flight simulation pipeline...")
+    result = subprocess.run([sys.executable, str(SIMULATION_MAIN)], env=env)
+    if result.returncode != 0:
+        logging.error(f"❌ Simulation pipeline failed (exit {result.returncode})")
+        sys.exit(result.returncode)
+    logging.info("✅ Simulation pipeline complete")
+
+
+# ───────────────────────────────────────────────
+# MAIN ENTRY
+# ───────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(description="HAB Payload Flight Vector Simulation")
-    parser.add_argument("--fps", type=int, default=10, help="Output video FPS (default: 10)")
-    parser.add_argument("--force", action="store_true", help="Force rerun all stages")
-    parser.add_argument("--skip-preprocess", action="store_true")
-    parser.add_argument("--skip-fusion", action="store_true")
-    parser.add_argument("--skip-trajectory", action="store_true")
-    parser.add_argument("--skip-render", action="store_true")
-    parser.add_argument("--ffmpeg", default="ffmpeg", help="Path to ffmpeg binary")
+    parser = argparse.ArgumentParser(description="HAB Post-Flight Orchestrator")
+    parser.add_argument("--fps", type=int, default=10, help="Render FPS for replay video")
+    parser.add_argument("--force", action="store_true", help="Force rerun of derived data")
+    parser.add_argument("--skip-sim", action="store_true", help="Skip simulation pipeline")
     args = parser.parse_args()
 
     ensure_dirs()
+    verify_readonly_source()
 
-    if not RAW_INPUT.exists():
-        logging.error(f"Raw input not found: {RAW_INPUT}")
-        sys.exit(1)
+    if not args.skip_sim:
+        run_simulation(args.fps, args.force)
+    else:
+        logging.info("⏭️  Skipping simulation (--skip-sim)")
 
-    # Pass fps as environment variable for render.py
-    env = os.environ.copy()
-    env["HAB_SIM_FPS"] = str(args.fps)
-
-    # ──────────────────────
-    # PIPELINE EXECUTION
-    # ──────────────────────
-    run_stage(
-        "Preprocess",
-        [sys.executable, str(PREPROCESS)],
-        args.skip_preprocess,
-        PROCESSED,
-        args.force,
-    )
-
-    run_stage(
-        "Sensor Fusion",
-        [sys.executable, str(FUSION)],
-        args.skip_fusion,
-        FUSED,
-        args.force,
-    )
-
-    run_stage(
-        "Trajectory Reconstruction",
-        [sys.executable, str(TRAJECTORY_SCRIPT)],
-        args.skip_trajectory,
-        TRAJECTORY,
-        args.force,
-    )
-
-    run_stage(
-        "Render",
-        [sys.executable, str(RENDER)],
-        args.skip_render,
-        VIDEO_OUT,
-        args.force,
-    )
-
-    logging.info("🎯 Mission simulation pipeline complete")
-    print(f"\nFinal video: {VIDEO_OUT if VIDEO_OUT.exists() else 'not generated'}")
+    logging.info("🎯 Mission orchestrator complete")
+    print(f"\n🎬 Final video: {VIDEO_OUT if VIDEO_OUT.exists() else 'not generated'}")
 
 
-# ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     main()
