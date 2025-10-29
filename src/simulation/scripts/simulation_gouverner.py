@@ -82,22 +82,36 @@ from pathlib import Path
 # Paths
 # =========================================================================
 
+# =========================================================================
+# Paths
+# =========================================================================
+
 # --- Configuration ---
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Corrected: Go up three levels to reach the project root directory
+# from: [PROJECT_ROOT]/src/simulation/scripts/simulation_gouverner.py
+# up 1: [PROJECT_ROOT]/src/simulation/scripts/
+# up 2: [PROJECT_ROOT]/src/simulation/
+# up 3: [PROJECT_ROOT]/src/
+# up 4: [PROJECT_ROOT]/
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+
+# SRC_DIR is correctly defined as the 'src' folder inside the project root
 SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger" 
 DATA_DIR = LOG_DIR / "data" 
-DATA_FILE = DATA_DIR / "MPU6050.txt"
+
+# This now resolves correctly to [PROJECT_ROOT]/src/logger/data/MPU6050.txt
+DATA_FILE = DATA_DIR / "MPU6050.txt" 
+
 PLOT_DIR = SRC_DIR / "plotter"
 SIM_DIR = SRC_DIR / "simulation"
-SIMULATION_MAIN = SIM_DIR / "scripts" / "simulation_main.py"
+SIMULATION_MAIN = SIM_DIR / "scripts" / "simulation_gouverner.py"
 SIMULATION_PIPELINE_DIR = SIM_DIR / "scripts" / "simulation_pipeline"
 CHARTS_DIR = PLOT_DIR / "charts" 
-OUTPUT = SIM_DIR / "output"
+OUTPUT = SIM_DIR / "output" # This output path is inside src/simulation/ which seems wrong for a simulation file, but kept as per your original structure
 VIDEO_OUT = OUTPUT / "video" / "flight_replay.mp4"
 # =========================================================================
-
 
 # ───────────────────────────────────────────────
 # Script  path Config
