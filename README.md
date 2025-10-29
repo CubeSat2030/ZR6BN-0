@@ -13,6 +13,7 @@
 ├── main.py
 ├── mission_master.log
 ├── requirements.txt
+├── simulation_gouverner.log
 ├── src/
 │   ├── .gitkeeep
 │   ├── logger/
@@ -54,11 +55,12 @@
 │   └── simulation/
 │       ├── .gitkeep
 │       └── scripts/
-│           ├── preprocess.py
-│           ├── render.py
-│           ├── sensor_fusion.py
-│           ├── simulation_main.py
-│           └── trajectory.py
+│           ├── simulation_gouverner.py
+│           └── simulation_pipeline/
+│               ├── preprocess.py
+│               ├── render.py
+│               ├── sensor_fusion.py
+│               └── trajectory.py
 └── web_ui/
     ├── app_server.py
     └── templates/
