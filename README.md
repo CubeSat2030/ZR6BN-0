@@ -1,6 +1,5 @@
 ~~~
-pandas.errors.ParserError: Expected 7 fields in line 3, saw 16. Error could possibly be due to quotes being ignored when a multi-char delimiter is used.
-~~~
+2025-10-29 17:24:48,975 | ERROR | 🚨 Simulation aborted due to failure in: Fusing sensor data (orientation)~~~
 
 
 # Project tree
