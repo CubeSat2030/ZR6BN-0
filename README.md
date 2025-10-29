@@ -1,5 +1,5 @@
 ~~~
-ValueError: need at least one array to concatenate
+simulation.py: error: the following arguments are required: --input/-i
 ~~~
 
 
