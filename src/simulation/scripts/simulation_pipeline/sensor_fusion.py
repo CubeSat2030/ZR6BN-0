@@ -2,10 +2,15 @@
 """
 sensor_fusion.py
 ---------------------------------
-Applies a complementary filter to fuse gyro and accel data into orientation quaternions.
+Robust sensor fusion for MPU6050 data to compute quaternions.
 
 Reads:  src/simulation/output/data/preprocessed.csv
 Outputs: src/simulation/output/data/orientation.csv
+
+Features:
+- Skips rows with missing or non-numeric data
+- Handles zero or negative dt between timestamps
+- Ensures quaternion arrays remain consistent
 """
 
 import numpy as np
@@ -15,42 +20,55 @@ from pathlib import Path
 
 INPUT = Path("src/simulation/output/data/preprocessed.csv")
 OUTPUT = Path("src/simulation/output/data/orientation.csv")
-
-def complementary_filter(ax, ay, az, gx, gy, gz, dt, alpha=0.98):
-    # Gyro integration
-    gyro_rate = np.array([gx, gy, gz]) * np.pi / 180
-    delta_angle = gyro_rate * dt
-    delta_rot = R.from_rotvec(delta_angle)
-    return delta_rot
+OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
 def run_sensor_fusion():
     df = pd.read_csv(INPUT)
-    q = R.identity()
+    df = df.dropna(subset=["timestamp","ax","ay","az","gx","gy","gz"])
+    df = df.reset_index(drop=True)
 
+    timestamps = pd.to_datetime(df["timestamp"], errors="coerce")
+    df["timestamp"] = timestamps
+    df = df.dropna(subset=["timestamp"])
+    df = df.reset_index(drop=True)
+
+    # Initialize quaternion (identity)
+    q = R.identity()
     orientations = []
-    timestamps = df["timestamp"]
+
     for i in range(1, len(df)):
-        dt = (pd.to_datetime(timestamps[i]) - pd.to_datetime(timestamps[i - 1])).total_seconds()
+        dt = (df.timestamp[i] - df.timestamp[i-1]).total_seconds()
         if dt <= 0:
+            orientations.append(q.as_quat())
             continue
 
-        gx, gy, gz = df.loc[i, ["gx", "gy", "gz"]]
-        ax, ay, az = df.loc[i, ["ax", "ay", "az"]]
+        gx, gy, gz = df.loc[i, ["gx","gy","gz"]].values.astype(float)
+        ax, ay, az = df.loc[i, ["ax","ay","az"]].values.astype(float)
 
-        delta_rot = complementary_filter(ax, ay, az, gx, gy, gz, dt)
+        # Convert gyro to radians/sec
+        gyro_rate = np.array([gx, gy, gz]) * np.pi / 180
+        delta_angle = gyro_rate * dt
+        delta_rot = R.from_rotvec(delta_angle)
+
+        # Update quaternion
         q = q * delta_rot
         orientations.append(q.as_quat())
 
+    if len(orientations) != len(df):
+        print("[⚠] Orientation array length mismatch, adjusting...")
+        while len(orientations) < len(df):
+            orientations.append(q.as_quat())
+
     q_arr = np.array(orientations)
     out_df = pd.DataFrame({
-        "timestamp": timestamps.iloc[1:].values,
-        "qw": q_arr[:, 3],
-        "qx": q_arr[:, 0],
-        "qy": q_arr[:, 1],
-        "qz": q_arr[:, 2]
+        "timestamp": df["timestamp"].iloc[1:].values,
+        "qw": q_arr[1:, 3],
+        "qx": q_arr[1:, 0],
+        "qy": q_arr[1:, 1],
+        "qz": q_arr[1:, 2]
     })
     out_df.to_csv(OUTPUT, index=False)
-    print(f"[✓] Orientation data saved to {OUTPUT}")
+    print(f"[✓] Orientation data saved to {OUTPUT} ({len(out_df)} rows)")
 
 if __name__ == "__main__":
     run_sensor_fusion()
