@@ -1,5 +1,6 @@
 ~~~
-2025-10-29 17:24:48,975 | ERROR | 🚨 Simulation aborted due to failure in: Fusing sensor data (orientation)~~~
+2025-10-29 17:24:48,975 | ERROR | 🚨 Simulation aborted due to failure in: Fusing sensor data (orientation)
+~~~
 
 
 # Project tree
