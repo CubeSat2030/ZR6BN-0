@@ -3,9 +3,7 @@
 render_vectors.py
 ---------------------------------
 3D cinematic replay of HAB payload flight with control rod direction indicators.
-
-Reads:  src/simulation/output/data/trajectory.csv
-Outputs: src/media/output/video/hab_sim_control_vectors.mp4
+Handles empty trajectory gracefully.
 """
 
 import numpy as np
@@ -21,10 +19,22 @@ OUTPUT = Path("src/media/output/video/hab_sim_control_vectors.mp4")
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
 def render_simulation():
-    df = pd.read_csv(INPUT)
-    fps = 30
-    interval = 1 / fps
+    if not INPUT.exists():
+        print(f"[❌] Trajectory file not found: {INPUT}")
+        return
 
+    df = pd.read_csv(INPUT)
+    if df.empty:
+        print(f"[❌] Trajectory file is empty: {INPUT}")
+        return
+
+    # Ensure all required columns exist
+    required_cols = ["px","py","pz","qx","qy","qz","qw"]
+    if not all(col in df.columns for col in required_cols):
+        print(f"[❌] Trajectory CSV missing required columns: {required_cols}")
+        return
+
+    fps = 30
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection="3d")
     ax.set_xlim(-5, 5)
@@ -43,8 +53,12 @@ def render_simulation():
     with writer.saving(fig, str(OUTPUT), dpi=150):
         for _, row in df.iterrows():
             pos = np.array([row.px, row.py, row.pz])
-            rot = R.from_quat([row.qx, row.qy, row.qz, row.qw])
-            fwd = rot.apply([0, 0, 1])
+            quat = [row.qx, row.qy, row.qz, row.qw]
+            if any(np.isnan(pos)) or any(np.isnan(quat)):
+                continue  # skip bad rows
+
+            rot = R.from_quat(quat)
+            fwd = rot.apply([0,0,1])
             rod_len = 0.6
 
             rod_start = pos
