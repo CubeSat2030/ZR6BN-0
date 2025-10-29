@@ -1,18 +1,74 @@
 #!/usr/bin/env python3
 """
-simulation_gouverner.py 
-Purpose:
-    Runs the full post-flight simulation pipeline without ever modifying
-    the original MPU6050 sensor log (read-only flight archive)
+project tree:
 
-Pipeline:
-    1. Verify logger data (read-only)
-    2. Run the simulation pipeline scripts located in (simulation_pipeline folder)
-    3. Render replay
+├── .gitattributes
+├── README.md
+├── main.py
+├── mission_master.log
+├── requirements.txt
+├── simulation_gouverner.log
+├── src/
+│   ├── .gitkeeep
+│   ├── logger/
+│   │   ├── __pycache__/
+│   │   │   └── heartbeat.cpython-313.pyc
+│   │   ├── calibrate_sound.py
+│   │   ├── cpu_logger.py
+│   │   ├── data/
+│   │   │   ├── CPU_TEMP.txt
+│   │   │   ├── LATEST_SENSOR_DATA.json
+│   │   │   ├── LATEST_SYSTEM_STATUS.json
+│   │   │   ├── MPU6050.txt
+│   │   │   ├── sound_data_D0.txt
+│   │   │   └── sound_data_D0_backup.txt
+│   │   ├── heartbeat.py
+│   │   ├── heartbeats/
+│   │   │   ├── cpu_logger.json
+│   │   │   └── mpu_logger.json
+│   │   ├── mpu6050_logger.py
+│   │   └── sound_logger.py
+│   ├── media/
+│   │   ├── .gitkeep
+│   │   └── output/
+│   │       ├── .gitkeep
+│   │       ├── image/
+│   │       │   └── .gitkeep
+│   │       └── video/
+│   │           └── .gitkeep
+│   ├── plotter/
+│   │   ├── charts/
+│   │   │   ├── cpu_chart.svg
+│   │   │   ├── cpu_chart_backup.svg
+│   │   │   ├── mpu_chart.svg
+│   │   │   ├── mpu_chart_backup.svg
+│   │   │   └── mpu_phases.svg
+│   │   ├── cpu_plotter.py
+│   │   ├── mpu6050_plotter.py
+│   │   └── sound_plotter.py
+│   └── simulation/
+│       ├── .gitkeep
+│       └── scripts/
+│           ├── simulation_gouverner.py
+│           └── simulation_pipeline/
+│               ├── preprocess.py
+│               ├── render.py
+│               ├── sensor_fusion.py
+│               └── trajectory.py
+└── web_ui/
+    ├── app_server.py
+    └── templates/
+        └── dashboard.html
 
-Usage:
-    python simulation_gouverner.py --fps 10 --force
+
 """
+        
+
+# About the script
+# simulation_gouverner.py 
+# Purpose:
+#    Runs the full post-flight simulation pipeline without ever modifying
+#    the original MPU6050 sensor log (read-only flight archive)
 
 import os
 import sys
