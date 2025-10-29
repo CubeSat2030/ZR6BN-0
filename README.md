@@ -1,5 +1,20 @@
 ~~~
-2025-10-29 17:24:48,975 | ERROR | 🚨 Simulation aborted due to failure in: Fusing sensor data (orientation)
+IndexError: too many indices for array: array is 1-dimensional, but 2 were indexed
+2025-10-29 17:30:21,259 | WARNING | ⚠️  Retrying Fusing sensor data (orientation) after 3 seconds...
+2025-10-29 17:30:24,260 | INFO | 🚀 Starting stage: Fusing sensor data (orientation)
+2025-10-29 17:30:24,570 | ERROR | ❌ Stage failed: Fusing sensor data (orientation)
+2025-10-29 17:30:24,570 | ERROR | ↳ STDOUT:
+
+2025-10-29 17:30:24,570 | ERROR | ↳ STDERR:
+Traceback (most recent call last):
+  File "/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/scripts/simulation_pipeline/sensor_fusion.py", line 74, in <module>
+    run_sensor_fusion()
+  File "/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/scripts/simulation_pipeline/sensor_fusion.py", line 65, in run_sensor_fusion
+    "qw": q_arr[1:, 3],
+          ~~~~~^^^^^^^
+IndexError: too many indices for array: array is 1-dimensional, but 2 were indexed
+2025-10-29 17:30:24,570 | ERROR | 🚨 Simulation aborted due to failure in: Fusing sensor data (orientation)
+2025-10-29 17:30:24,570 | INFO | 🏁 Simulation pipeline completed in 0.06 minutes.
 ~~~
 
 
