@@ -30,6 +30,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from tqdm import tqdm
 import warnings
 
@@ -91,9 +92,9 @@ def quat_to_euler(q):
 def quat_to_rotmat(q):
     w, x, y, z = q
     return np.array([
-        [1 - 2*(y*y+z*z), 2*(x*y - z*w), 2*(x*z + y*w)],
-        [2*(x*y + z*w), 1 - 2*(x*x+z*z), 2*(y*z - x*w)],
-        [2*(x*z - y*w), 2*(y*z + x*w), 1 - 2*(x*x+y*y)]
+        [1 - 2*(y*y+z*z), 2*(x*y - z*w),     2*(x*z + y*w)],
+        [2*(x*y + z*w),   1 - 2*(x*x+z*z),   2*(y*z - x*w)],
+        [2*(x*z - y*w),   2*(y*z + x*w),     1 - 2*(x*x+y*y)]
     ])
 
 # ========================================================
@@ -114,8 +115,12 @@ def load_data(path):
         return None
 
     t = find_col(['timestamp', 'time', 't'])
-    ax, ay, az = (find_col(['ax','accel_x','a_x']), find_col(['ay','accel_y','a_y']), find_col(['az','accel_z','a_z']))
-    gx, gy, gz = (find_col(['gx','gyro_x','g_x']), find_col(['gy','gyro_y','g_y']), find_col(['gz','gyro_z','g_z']))
+    ax = find_col(['ax','accel_x','a_x'])
+    ay = find_col(['ay','accel_y','a_y'])
+    az = find_col(['az','accel_z','a_z'])
+    gx = find_col(['gx','gyro_x','g_x'])
+    gy = find_col(['gy','gyro_y','g_y'])
+    gz = find_col(['gz','gyro_z','g_z'])
 
     if None in (t, ax, ay, az, gx, gy, gz):
         raise ValueError("Missing one or more required columns (timestamp, ax, ay, az, gx, gy, gz).")
@@ -130,8 +135,10 @@ def load_data(path):
         'gz': df[gz].astype(float)
     })
 
+    # Convert ms → s if timestamps look large
     if data['t'].median() > 1e5:
         data['t'] /= 1000.0
+
     data = data.sort_values('t').reset_index(drop=True)
     return data
 
@@ -141,8 +148,8 @@ def load_data(path):
 def cube_vertices(size=1.0):
     s = size/2
     return np.array([
-        [-s,-s,-s],[s,-s,-s],[s,s,-s],[-s,s,-s],
-        [-s,-s,s],[s,-s,s],[s,s,s],[-s,s,s]
+        [-s,-s,-s],[ s,-s,-s],[ s, s,-s],[ -s, s,-s],
+        [-s,-s, s],[ s,-s, s],[ s, s, s],[ -s, s, s]
     ])
 
 CUBE_FACES = [(0,1,2,3),(4,5,6,7),(0,1,5,4),(2,3,7,6),(1,2,6,5),(0,3,7,4)]
@@ -155,7 +162,12 @@ def transform_vertices(verts, R, trans=np.zeros(3)):
 # ========================================================
 def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8):
     t = data['t'].values
-    dt = np.median(np.diff(t))
+    if len(t) < 2:
+        raise ValueError("Insufficient samples to simulate (need at least 2 timestamps).")
+    dt = float(np.median(np.diff(t)))
+    if dt <= 0:
+        raise ValueError("Non-positive time step detected.")
+
     gyro_rad = np.deg2rad(data[['gx','gy','gz']].values)
     accel = data[['ax','ay','az']].values
 
@@ -168,12 +180,15 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
     eulers = np.array([quat_to_euler(q) for q in quats])
 
     fig = plt.figure(figsize=(16,9))
-    ax3d = fig.add_subplot(1,2,1,projection='3d')
+    ax3d = fig.add_subplot(1,2,1, projection='3d')
     ax2d = fig.add_subplot(1,2,2)
 
+    # 3D view setup
     ax3d.set_xlim(-1,1); ax3d.set_ylim(-1,1); ax3d.set_zlim(-1,1)
     ax3d.set_box_aspect([1,1,1])
-    ax2d.set_xlim(t[0],t[-1])
+
+    # Telemetry view setup
+    ax2d.set_xlim(t[0], t[-1])
     ax2d.set_xlabel('Time (s)')
 
     accel_mag = np.linalg.norm(accel, axis=1)
@@ -185,17 +200,21 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
     ax2d.plot(t, eulers[:,2], label='yaw (rad)')
     ax2d.legend(fontsize='small')
 
+    # Persistent vertical cursor line
+    vline = ax2d.axvline(t[0], color='k', lw=0.6, alpha=0.6)
+
     writer = animation.FFMpegWriter(fps=fps, bitrate=6000)
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
     cube = cube_vertices(cube_size)
 
-    total_frames = int((t[-1]-t[0])*fps)
+    total_frames = max(1, int(round((t[-1] - t[0]) * fps)))
     print(f"Rendering {total_frames} frames...")
 
     with writer.saving(fig, output_path, dpi=150):
-        for i, ti in enumerate(tqdm(np.linspace(t[0],t[-1],total_frames))):
-            idx = np.searchsorted(t, ti)
-            q = quats[min(idx,len(quats)-1)]
+        for ti in tqdm(np.linspace(t[0], t[-1], total_frames, endpoint=True)):
+            idx = np.searchsorted(t, ti, side='left')
+            idx = min(idx, len(quats) - 1)
+            q = quats[idx]
             R = quat_to_rotmat(q)
             verts = transform_vertices(cube, R)
             rod = np.array([[0,0,0],[0,0,rod_length]]).dot(R.T)
@@ -203,15 +222,17 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
             ax3d.cla()
             for face in CUBE_FACES:
                 quad = verts[list(face)]
-                ax3d.add_collection3d(matplotlib.art3d.Poly3DCollection([quad], alpha=0.8))
-            ax3d.plot(rod[:,0], rod[:,1], rod[:,2], lw=2.0)
+                poly = Poly3DCollection([quad], alpha=0.8, facecolor='#6fa8dc', edgecolor='#1c4587')
+                ax3d.add_collection3d(poly)
+            ax3d.plot(rod[:,0], rod[:,1], rod[:,2], lw=2.0, color='#073763')
             ax3d.set_xlim(-1,1); ax3d.set_ylim(-1,1); ax3d.set_zlim(-1,1)
             ax3d.set_box_aspect([1,1,1])
             ax3d.set_title(f"t={ti:.2f}s")
 
-            ax2d.axvline(ti, color='k', lw=0.6, alpha=0.6)
+            # Update the vertical line position
+            vline.set_xdata([ti, ti])
+
             writer.grab_frame(facecolor=fig.get_facecolor())
-            ax2d.lines.pop()  # remove old vline
 
     print(f"✅ Simulation complete: {output_path}")
 
@@ -252,3 +273,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+``` [9F742443-6C92-4C44-BF58-8F5A7C53B6F1](https://github.com/Dec-twinkle/handeye_sim/tree/32d081ca4bbdbd1fd9e0938bda8e6255778a9b96/method%2FtranformUtils.py?citationMarker=9F742443-6C92-4C44-BF58-8F5A7C53B6F1&citationId=FC71EAE0-140A-4E2E-A158-25591ED35A9D&citationTitle=github.com&citationFullTitle=github.com&chatItemId=CTzkEUd1aQPFQN2QjvaNG)
