@@ -64,7 +64,7 @@ class MadgwickAHRS:
 
         # Gradient measured from accelerometer
         s1 = _4q1*q3q3 + _2q3*ax + _4q1*q2q2 - _2q2*ay
-        s2 = _4q2*q4q4 - _2q4*ax + 4*q1q1*q2 - _2q1*ay - _4q2 + 8*q2q2*q2 + 8*q2q3*q3 + _4q2*az
+        s2 = _4q2*q4q4 - _2q4*ax + 4*q1q1*q2 - _2q1*ay - _4q2 + 8*q2q2*q2 + 8*_2q3*q3 + _4q2*az
         s3 = 4*q1q1*q3 + _2q1*ax + _4q3*q4q4 - _2q4*ay - _4q3 + 8*q2q2*q3 + 8*q3*q3*q3 + _4q3*az
         s4 = 4*q2q2*q4 - _2q2*ax + 4*q3q3*q4 - _2q3*ay
         s = np.array([s1, s2, s3, s4])
