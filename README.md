@@ -1,7 +1,9 @@
 ~~~
+
  File "/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/scripts/simulation.py", line 135, in load_data
     raise ValueError("Missing one or more required columns (timestamp, ax, ay, az, gx, gy, gz).")
 ValueError: Missing one or more required columns (timestamp, ax, ay, az, gx, gy, gz).
+
 ~~~
 
 
