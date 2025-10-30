@@ -1,35 +1,9 @@
 ~~~
 
-source /home/nathan/bin/activate
-/home/nathan/bin/python /home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/scripts/simulation.py
-(base) nathan@exodos:~/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1$ source /home/nathan/bin/activate
-(nathan) (base) nathan@exodos:~/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1$ /home/nathan/bin/python /home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/scripts/simulation.py
-No --input specified, using default: src/logger/data/MPU6050.txt
-
-=== Payload Flight Vector Simulation ===
-Input : src/logger/data/MPU6050.txt
-Output: output/payload_simulation.mp4
-FPS   : 30
-========================================
-
-Traceback (most recent call last):
-  File "/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/scripts/simulation.py", line 306, in <module>
-    main()
-  File "/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/scripts/simulation.py", line 301, in main
-    data = load_data(args.input)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/nathan/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1/src/simulation/scripts/simulation.py", line 127, in load_data
-    data = df[['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz']].astype(float)
-           ~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/nathan/lib/python3.12/site-packages/pandas/core/frame.py", line 4119, in __getitem__
-    indexer = self.columns._get_indexer_strict(key, "columns")[1]
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/nathan/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 6212, in _get_indexer_strict
-    self._raise_if_missing(keyarr, indexer, axis_name)
-  File "/home/nathan/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 6261, in _raise_if_missing
-    raise KeyError(f"None of [{key}] are in the [{axis_name}]")
-KeyError: "None of [Index(['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz'], dtype='object')] are in the [columns]"
-(nathan) (base) nathan@exodos:~/Desktop/workspace/Nathan-Busse/user-data/calling/private/portfolio/projects/kabot-1$ 
+  File "/home/nathan/lib/python3.12/site-packages/pandas/core/nanops.py", line 787, in nanmedian
+    raise TypeError(f"Cannot convert {values} to numeric")
+TypeError: Cannot convert ['timestamp' '2025-10-11T08:00:00' '2025-10-11T08:00:01' ...
+ '2025-10-11T10:59:58' '2025-10-11T10:59:59' '2025-10-11T11:00:00'] to numeric
 
 ~~~
 
