@@ -109,14 +109,30 @@ def quat_to_rotmat(q):
 # ========================================================
 
 def load_data(path):
+    """
+    Load MPU6050 log with or without headers.
+    Expected 7 columns:
+        t, ax, ay, az, gx, gy, gz
+    """
     try:
         df = pd.read_csv(path, comment='#', sep=None, engine='python')
     except Exception:
-        # Fallback for space-delimited files that sep=None fails on
         df = pd.read_csv(path, delim_whitespace=True, comment='#')
 
-    cols = {c.lower(): c for c in df.columns}
+    # If file has no header row (numeric column names 0..6)
+    if all(str(c).isdigit() for c in df.columns) or len(df.columns) == 7:
+        df.columns = ['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz']
 
+    # Normalize types
+    data = df[['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz']].astype(float)
+
+    # Convert ms → seconds if needed
+    if data['t'].median() > 1e5:
+        data['t'] /= 1000.0
+
+    data = data.sort_values('t').reset_index(drop=True)
+    return data
+    
     def find_col(names):
         for n in names:
             if n in cols:
