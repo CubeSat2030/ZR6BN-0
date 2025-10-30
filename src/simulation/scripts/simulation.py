@@ -5,14 +5,12 @@ simulation.py
 Full HAB Payload Flight Vector Simulation from MPU6050 data
 
 Features:
-
-• Loads post-flight MPU6050 data (timestamp, ax, ay, az, gx, gy, gz)
-• Computes orientation via Madgwick AHRS filter
-• Split-screen render:
-    Left  → 3D payload cube + rod
-    Right → Scrolling telemetry (accel mag, gyro mag, Euler angles)
-• Exports directly to MP4 (no realtime playback required)
-
+ - Loads post-flight MPU6050 data (timestamp, ax, ay, az, gx, gy, gz)
+ - Computes orientation via Madgwick AHRS filter
+ - Split-screen render:
+      Left  → 3D payload cube + rod
+      Right → Scrolling telemetry (accel mag, gyro mag, Euler angles)
+ - Exports directly to MP4 (no realtime playback required)
 
 Default paths:
     Input : src/logger/data/MPU6050.txt
@@ -31,7 +29,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import animation
-from mpl_toolkits.mplot3d import Axes3D, art3d  # noqa: F401
+from mpl_toolkits.mplot3d import Axes3D, art3d
 from tqdm import tqdm
 import warnings
 
@@ -57,20 +55,17 @@ class MadgwickAHRS:
         ax, ay, az = self._normalize(accel)
         gx, gy, gz = gyro
 
-        # Gradient descent step
         _2q1, _2q2, _2q3, _2q4 = 2*q1, 2*q2, 2*q3, 2*q4
         _4q1, _4q2, _4q3 = 4*q1, 4*q2, 4*q3
         q1q1, q2q2, q3q3, q4q4 = q1*q1, q2*q2, q3*q3, q4*q4
 
-        # Gradient measured from accelerometer
         s1 = _4q1*q3q3 + _2q3*ax + _4q1*q2q2 - _2q2*ay
-        s2 = _4q2*q4q4 - _2q4*ax + 4*q1q1*q2 - _2q1*ay - _4q2 + 8*q2q2*q2 + 8*_2q3*q3 + _4q2*az
-        s3 = 4*q1q1*q3 + _2q1*ax + _4q3*q4q4 - _2q4*ay - _4q3 + 8*q2q2*q3 + 8*q3*q3*q3 + _4q3*az
-        s4 = 4*q2q2*q4 - _2q2*ax + 4*q3q3*q4 - _2q3*ay
+        s2 = _4q2*q4q4 - _2q4*ax + 4*q1q1*q2 - _2q1*ay - _4q2 + 8*q2*q2*q2 + 8*_2q3*q3 + _4q2*az
+        s3 = 4*q1q1*q3 + _2q1*ax + _4q3*q4q4 - _2q4*ay - _4q3 + 8*q2*q2*q3 + 8*q3*q3*q3 + _4q3*az
+        s4 = 4*q2*q2*q4 - _2q2*ax + 4*q3*q3*q4 - _2q3*ay
         s = np.array([s1, s2, s3, s4])
         s = self._normalize(s)
 
-        # Gyroscope integration
         q_dot = 0.5 * np.array([
             -q2*gx - q3*gy - q4*gz,
              q1*gx + q3*gz - q4*gy,
@@ -96,6 +91,7 @@ def quat_to_euler(q):
     yaw   = np.arctan2(2*(w*z + x*y), 1 - 2*(y*y + z*z))
     return roll, pitch, yaw
 
+
 def quat_to_rotmat(q):
     w, x, y, z = q
     return np.array([
@@ -104,8 +100,9 @@ def quat_to_rotmat(q):
         [2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y)]
     ])
 
+
 # ========================================================
-# Data loading
+# Data loading (final version)
 # ========================================================
 
 def load_data(path):
@@ -115,58 +112,21 @@ def load_data(path):
         t, ax, ay, az, gx, gy, gz
     """
     try:
-        df = pd.read_csv(path, comment='#', sep=None, engine='python')
+        df = pd.read_csv(path, comment='#', sep=None, header=None, engine='python')
     except Exception:
-        df = pd.read_csv(path, delim_whitespace=True, comment='#')
+        df = pd.read_csv(path, delim_whitespace=True, comment='#', header=None)
 
-    # If file has no header row (numeric column names 0..6)
-    if all(str(c).isdigit() for c in df.columns) or len(df.columns) == 7:
-        df.columns = ['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz']
+    if df.shape[1] < 7:
+        raise ValueError(f"Expected 7 columns, found {df.shape[1]} — check file format.")
 
-    # Normalize types
-    data = df[['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz']].astype(float)
+    df = df.iloc[:, :7]
+    df.columns = ['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz']
 
-    # Convert ms → seconds if needed
-    if data['t'].median() > 1e5:
-        data['t'] /= 1000.0
+    if df['t'].median() > 1e5:
+        df['t'] /= 1000.0
 
-    data = data.sort_values('t').reset_index(drop=True)
-    return data
-    
-    def find_col(names):
-        for n in names:
-            if n in cols:
-                return cols[n]
-        return None
-
-    t  = find_col(['timestamp', 'time', 't'])
-    ax = find_col(['ax', 'accel_x', 'a_x'])
-    ay = find_col(['ay', 'accel_y', 'a_y'])
-    az = find_col(['az', 'accel_z', 'a_z'])
-    gx = find_col(['gx', 'gyro_x', 'g_x'])
-    gy = find_col(['gy', 'gyro_y', 'g_y'])
-    gz = find_col(['gz', 'gyro_z', 'g_z'])
-
-    if None in (t, ax, ay, az, gx, gy, gz):
-        raise ValueError("Missing one or more required columns (timestamp, ax, ay, az, gx, gy, gz).")
-
-    data = pd.DataFrame({
-        't':  df[t].astype(float),
-        'ax': df[ax].astype(float),
-        'ay': df[ay].astype(float),
-        'az': df[az].astype(float),
-        'gx': df[gx].astype(float),
-        'gy': df[gy].astype(float),
-        'gz': df[gz].astype(float)
-    })
-
-    # Convert timestamp from ms to s if necessary
-    if data['t'].median() > 1e5:
-        data['t'] /= 1000.0
-    
-    # Ensure data is sorted by time
-    data = data.sort_values('t').reset_index(drop=True)
-    return data
+    df = df.sort_values('t').reset_index(drop=True)
+    return df
 
 
 # ========================================================
@@ -180,11 +140,15 @@ def cube_vertices(size=1.0):
         [-s, -s,  s], [ s, -s,  s], [ s,  s,  s], [-s,  s,  s]
     ])
 
-CUBE_FACES = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
-              (2, 3, 7, 6), (1, 2, 6, 5), (0, 3, 7, 4)]
+CUBE_FACES = [
+    (0, 1, 2, 3), (4, 5, 6, 7),
+    (0, 1, 5, 4), (2, 3, 7, 6),
+    (1, 2, 6, 5), (0, 3, 7, 4)
+]
 
 def transform_vertices(verts, R, trans=np.zeros(3)):
     return verts.dot(R.T) + trans
+
 
 # ========================================================
 # Simulation + rendering
@@ -196,7 +160,6 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
     gyro_rad = np.deg2rad(data[['gx', 'gy', 'gz']].values)
     accel = data[['ax', 'ay', 'az']].values
 
-    # --- Run AHRS algorithm ---
     madgwick = MadgwickAHRS(sample_period=dt, beta=0.1)
     quats = []
     for g, a in zip(gyro_rad, accel):
@@ -204,17 +167,13 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
         quats.append(madgwick.quaternion())
     quats = np.array(quats)
     eulers = np.array([quat_to_euler(q) for q in quats])
-    
-    # --- Setup plots ---
+
     fig = plt.figure(figsize=(16, 9))
     ax3d = fig.add_subplot(1, 2, 1, projection='3d')
     ax2d = fig.add_subplot(1, 2, 2)
 
-    # 3D plot setup
     ax3d.set_xlim(-1, 1); ax3d.set_ylim(-1, 1); ax3d.set_zlim(-1, 1)
     ax3d.set_box_aspect([1, 1, 1])
-
-    # 2D plot setup
     ax2d.set_xlim(t[0], t[-1])
     ax2d.set_xlabel('Time (s)')
 
@@ -227,7 +186,6 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
     ax2d.plot(t, eulers[:, 2], label='yaw (rad)')
     ax2d.legend(fontsize='small')
 
-    # --- Render animation ---
     writer = animation.FFMpegWriter(fps=fps, bitrate=6000)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     cube = cube_vertices(cube_size)
@@ -237,16 +195,13 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
 
     with writer.saving(fig, output_path, dpi=150):
         for ti in tqdm(np.linspace(t[0], t[-1], total_frames)):
-            # Find closest data index
             idx = np.searchsorted(t, ti)
             q = quats[min(idx, len(quats) - 1)]
             R = quat_to_rotmat(q)
-            
-            # Get geometry
+
             verts = transform_vertices(cube, R)
             rod = np.array([[0, 0, 0], [0, 0, rod_length]]).dot(R.T)
 
-            # Draw 3D plot
             ax3d.cla()
             for face in CUBE_FACES:
                 quad = verts[list(face)]
@@ -256,10 +211,9 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
             ax3d.set_box_aspect([1, 1, 1])
             ax3d.set_title(f"t={ti:.2f}s")
 
-            # Draw 2D plot vline
             ax2d.axvline(ti, color='k', lw=0.6, alpha=0.6)
             writer.grab_frame(facecolor=fig.get_facecolor())
-            ax2d.lines.pop()  # remove old vline
+            ax2d.lines.pop()
 
     print(f"✅ Simulation complete: {output_path}")
 
@@ -274,6 +228,7 @@ def parse_args():
     p.add_argument('--output', '-o', default='output/payload_simulation.mp4', help='Output MP4 path.')
     p.add_argument('--fps', type=int, default=30)
     return p.parse_args()
+
 
 def main():
     args = parse_args()
