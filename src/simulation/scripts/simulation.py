@@ -102,26 +102,46 @@ def quat_to_rotmat(q):
 
 
 # ========================================================
-# Data loading (final version)
+# Data loading (FIXED version)
 # ========================================================
 
 def load_data(path):
     """
-    Load MPU6050 log with or without headers.
-    Expected 7 columns:
-        t, ax, ay, az, gx, gy, gz
+    Load MPU6050 log.
+    Expected 7 columns: t, ax, ay, az, gx, gy, gz.
+    Handles files with or without headers and converts datetime strings to float timestamps.
     """
     try:
+        # Try reading with different delimiters, assuming no header initially
         df = pd.read_csv(path, comment='#', sep=None, header=None, engine='python')
     except Exception:
+        # Fallback for common space-separated files
         df = pd.read_csv(path, delim_whitespace=True, comment='#', header=None)
 
     if df.shape[1] < 7:
         raise ValueError(f"Expected 7 columns, found {df.shape[1]} — check file format.")
-
+    
+    # Trim to 7 columns and assign expected names
     df = df.iloc[:, :7]
     df.columns = ['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz']
 
+    # --- FIX for Datetime/Header Error ---
+    
+    # 1. Attempt to convert 't' column to datetime objects
+    df['t_dt'] = pd.to_datetime(df['t'], errors='coerce')
+    
+    # 2. Drop rows where 't_dt' is NaT (this removes the header row)
+    df.dropna(subset=['t_dt'], inplace=True)
+    
+    # 3. Convert the datetime objects to numerical POSIX timestamps (seconds since epoch)
+    df['t'] = df['t_dt'].astype(np.int64) / 10**9
+    
+    # Remove the temporary datetime column
+    df.drop(columns=['t_dt'], inplace=True)
+    
+    # --- End of FIX ---
+
+    # Original scaling check (kept for logs that might use numeric milliseconds)
     if df['t'].median() > 1e5:
         df['t'] /= 1000.0
 
@@ -151,14 +171,18 @@ def transform_vertices(verts, R, trans=np.zeros(3)):
 
 
 # ========================================================
-# Simulation + rendering
+# Simulation + rendering (FINAL FIXED version)
 # ========================================================
 
 def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8):
     t = data['t'].values
     dt = np.median(np.diff(t))
-    gyro_rad = np.deg2rad(data[['gx', 'gy', 'gz']].values)
-    accel = data[['ax', 'ay', 'az']].values
+    
+    # FIX: Explicitly cast data to float
+    gyro_data = data[['gx', 'gy', 'gz']].astype(float).values
+    accel = data[['ax', 'ay', 'az']].astype(float).values
+    
+    gyro_rad = np.deg2rad(gyro_data)
 
     madgwick = MadgwickAHRS(sample_period=dt, beta=0.1)
     quats = []
@@ -186,6 +210,7 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
     ax2d.plot(t, eulers[:, 2], label='yaw (rad)')
     ax2d.legend(fontsize='small')
 
+    # Note: Respecting 10GB RAM constraint by keeping DPI and bitrate moderate.
     writer = animation.FFMpegWriter(fps=fps, bitrate=6000)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     cube = cube_vertices(cube_size)
@@ -205,15 +230,28 @@ def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8
             ax3d.cla()
             for face in CUBE_FACES:
                 quad = verts[list(face)]
-                ax3d.add_collection3d(art3d.Poly3DCollection([quad], alpha=0.8))
-            ax3d.plot(rod[:, 0], rod[:, 1], rod[:, 2], lw=2.0)
+                # Add patches using a color map or static color
+                ax3d.add_collection3d(art3d.Poly3DCollection([quad], alpha=0.8, color='lightblue'))
+            ax3d.plot(rod[:, 0], rod[:, 1], rod[:, 2], lw=2.0, color='red')
+            
+            # Re-set plot limits and aspect ratio (needed after cla())
             ax3d.set_xlim(-1, 1); ax3d.set_ylim(-1, 1); ax3d.set_zlim(-1, 1)
             ax3d.set_box_aspect([1, 1, 1])
             ax3d.set_title(f"t={ti:.2f}s")
+            ax3d.set_xlabel('X'); ax3d.set_ylabel('Y'); ax3d.set_zlabel('Z')
+            ax3d.view_init(elev=20, azim=45) # Set a fixed viewpoint
 
-            ax2d.axvline(ti, color='k', lw=0.6, alpha=0.6)
+            # --- FINAL DEFINITIVE FIX for TypeError: 'Line2D' object is not subscriptable ---
+            
+            # Capture the Line2D artist object directly.
+            time_marker_artist = ax2d.axvline(ti, color='k', lw=0.6, alpha=0.6)
+            
             writer.grab_frame(facecolor=fig.get_facecolor())
-            ax2d.lines.pop()
+            
+            # Call remove() directly on the artist object.
+            # This is correct for Matplotlib versions that return the object directly.
+            time_marker_artist.remove()
+            # ---------------------------------------------------------------------------------
 
     print(f"✅ Simulation complete: {output_path}")
 
@@ -254,6 +292,10 @@ def main():
     print("========================================\n")
 
     data = load_data(args.input)
+    
+    num_samples = len(data)
+    print(f"Data loaded: {num_samples} samples over {data['t'].iloc[-1] - data['t'].iloc[0]:.2f} seconds.")
+
     simulate_and_render(data, args.output, fps=args.fps)
 
 
