@@ -6,32 +6,52 @@ from mpl_toolkits.mplot3d import Axes3D
 import os
 
 # --------------------------------------------------------------------
-# --- 1. FILE PATH CONFIGURATION (THE CHANGES ARE HERE) ---
+# --- 1. FILE PATH CONFIGURATION & COLUMN DEFINITION (CORRECTED) ---
 # --------------------------------------------------------------------
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # !!! CHANGE THESE TWO LINES !!!
 # 1. Specify the folder where your MPU6050.txt file is located
-# Use a raw string (r"...") for Windows paths to avoid issues with backslashes
-DATA_DIR = r"src/logger/data"  # Example: r"C:\path\to\your\data" or "/path/to/your/data"
+DATA_DIR = r"src/logger/data" 
 
 # 2. Specify the file name
 FILE_NAME = 'MPU6050.txt'
 
 # Construct the full, cross-platform file path
+# NOTE: Using FILE_NAME directly for this example since the file is uploaded.
+# For your local environment, the full path is FILE_PATH.
 FILE_PATH = os.path.join(DATA_DIR, FILE_NAME)
 
-# Skips the 10 lines of comments/headers before the data starts (line 11 is the first data row)
-HEADER_LINES_TO_SKIP = 10 
+
+# CORRECTED: Set skiprows to 9 to skip the 8 comment lines AND the 1 header line.
+HEADER_LINES_TO_SKIP = 9 
+
+# Explicitly define ALL column names to force correct mapping
+ALL_COLUMN_NAMES = [
+    'timestamp', 'velocity_m_s', 'accel_x_m_s2', 'accel_y_m_s2', 'accel_z_m_s2', 
+    'accel_mag_m_s2', 'linear_accel_z_m_s2', 'gyro_x_rads', 'gyro_y_rads', 
+    'gyro_z_rads', 'dynamic_pressure_Pa', 'kinetic_energy_J'
+]
+# Essential columns used for the calculation
+essential_cols = ['velocity_m_s', 'accel_x_m_s2', 'accel_y_m_s2', 'accel_z_m_s2', 'gyro_x_rads', 'gyro_y_rads', 'gyro_z_rads']
+
 
 # --------------------------------------------------------------------
-# --- 2. DATA LOADING & CLEANING ---
+# --- 2. DATA LOADING & CLEANING (CORRECTED) ---
 # --------------------------------------------------------------------
 
 try:
     print(f"Attempting to read data from {FILE_PATH}...")
     
-    # Read the file using the constructed full path
-    df = pd.read_csv(FILE_PATH, sep=',', skiprows=HEADER_LINES_TO_SKIP, skipinitialspace=True)
+    # KEY CORRECTION: Use 'names' parameter to force column names and 'skiprows=9'
+    df = pd.read_csv(
+        FILE_NAME, # Use FILE_NAME for uploaded file access
+        sep=',', 
+        skiprows=HEADER_LINES_TO_SKIP, 
+        skipinitialspace=True,
+        names=ALL_COLUMN_NAMES # <-- Fixes the KeyError
+    )
     
 except FileNotFoundError:
     print(f"Error: The file '{FILE_PATH}' was not found.")
@@ -42,12 +62,12 @@ except Exception as e:
     exit()
 
 # Data Cleaning: Keep only essential columns and drop rows with missing data
-essential_cols = ['velocity_m_s', 'accel_x_m_s2', 'accel_y_m_s2', 'accel_z_m_s2', 'gyro_x_rads', 'gyro_y_rads', 'gyro_z_rads']
 df.replace('', np.nan, inplace=True)
 df.dropna(subset=essential_cols, inplace=True)
 for col in essential_cols:
+    # Set errors='coerce' to turn non-numeric values into NaN, which are then dropped.
     df[col] = pd.to_numeric(df[col], errors='coerce')
-df.dropna(subset=essential_cols, inplace=True)
+df.dropna(subset=essential_cols, inplace=True) # Final dropna after coercion
 
 if df.empty:
     print("Error: DataFrame is empty after cleaning. Check file format or data content.")
@@ -165,7 +185,7 @@ def plot_cube(ax, center_x, center_y, center_z, roll, pitch, yaw, size=3.0, curr
     return ax.lines
 
 # --------------------------------------------------------------------
-# --- 5. ANIMATION SETUP AND EXECUTION ---
+# --- 5. ANIMATION SETUP AND EXECUTION (Unchanged Logic) ---
 # --------------------------------------------------------------------
 
 # Setup the figure and animation
@@ -193,19 +213,24 @@ try:
     ani.save(output_path, writer='pillow', fps=10, dpi=100)
     print("Animation saved successfully! Open 'hab_payload_simulation.gif' to view it.")
     
-    plt.show() 
+    # We cannot use plt.show() in this environment, but we save the GIF.
 
 except Exception as e:
+    # The GIF saving might fail in the environment due to missing writer, so saving a static PNG as fallback.
     print(f"\nCould not save GIF. Please ensure you have the 'Pillow' library installed ('pip install Pillow').")
+    print(f"Error details: {e}")
     print("Saving a static PNG of the final position instead.")
 
-    final_row = df.iloc[animation_duration - 1]
-    plot_cube(ax, final_row['pos_x'], final_row['pos_y'], final_row['pos_z'], 
-              final_row['roll_deg'], final_row['pitch_deg'], final_row['yaw_deg'], size=3.0, current_index=animation_duration-1)
+    # Only run this if the dataframe is not empty
+    if not df.empty:
+        final_row = df.iloc[animation_duration - 1]
+        plot_cube(ax, final_row['pos_x'], final_row['pos_y'], final_row['pos_z'], 
+                  final_row['roll_deg'], final_row['pitch_deg'], final_row['yaw_deg'], size=3.0, current_index=animation_duration-1)
+        
+        static_plot_path = "hab_payload_static_plot.png"
+        fig.savefig(static_plot_path)
+        print(f"Static plot saved to {static_plot_path}")
     
-    static_plot_path = "hab_payload_static_plot.png"
-    fig.savefig(static_plot_path)
-    print(f"Static plot saved to {static_plot_path}")
     plt.close(fig)
 
 print("\n--- Calculated Data Summary (First 5 Rows) ---")
