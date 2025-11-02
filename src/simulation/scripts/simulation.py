@@ -1,237 +1,217 @@
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
+import time
 import os
 
-# --------------------------------------------------------------------
-# --- 1. FILE PATH CONFIGURATION & COLUMN DEFINITION (CORRECTED) ---
-# --------------------------------------------------------------------
+# --- Configuration ---
+# Set the base directory relative to the script location
+SCRIPT_DIR = os.path.dirname(__file__)
+BASE_DIR = os.path.join(SCRIPT_DIR, '..', '..', '..')
+DATA_FILE_PATH = os.path.join(BASE_DIR, 'src', 'logger', 'data', 'MPU6050.txt')
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# --- 1. Data Parsing & Orientation Calculation ---
 
-# !!! CHANGE THESE TWO LINES !!!
-# 1. Specify the folder where your MPU6050.txt file is located
-DATA_DIR = r"src/logger/data" 
-
-# 2. Specify the file name
-FILE_NAME = 'MPU6050.txt'
-
-# Construct the full, cross-platform file path
-# NOTE: Using FILE_NAME directly for this example since the file is uploaded.
-# For your local environment, the full path is FILE_PATH.
-FILE_PATH = os.path.join(DATA_DIR, FILE_NAME)
-
-
-# CORRECTED: Set skiprows to 9 to skip the 8 comment lines AND the 1 header line.
-HEADER_LINES_TO_SKIP = 9 
-
-# Explicitly define ALL column names to force correct mapping
-ALL_COLUMN_NAMES = [
-    'timestamp', 'velocity_m_s', 'accel_x_m_s2', 'accel_y_m_s2', 'accel_z_m_s2', 
-    'accel_mag_m_s2', 'linear_accel_z_m_s2', 'gyro_x_rads', 'gyro_y_rads', 
-    'gyro_z_rads', 'dynamic_pressure_Pa', 'kinetic_energy_J'
-]
-# Essential columns used for the calculation
-essential_cols = ['velocity_m_s', 'accel_x_m_s2', 'accel_y_m_s2', 'accel_z_m_s2', 'gyro_x_rads', 'gyro_y_rads', 'gyro_z_rads']
-
-
-# --------------------------------------------------------------------
-# --- 2. DATA LOADING & CLEANING (CORRECTED) ---
-# --------------------------------------------------------------------
-
-try:
-    print(f"Attempting to read data from {FILE_PATH}...")
+def load_and_process_data(file_path):
+    """
+    Reads MPU6050 data and calculates Euler angles (Roll, Pitch, Yaw)
+    from the angular velocity (gyroscope) readings.
     
-    # KEY CORRECTION: Use 'names' parameter to force column names and 'skiprows=9'
-    df = pd.read_csv(
-        FILE_NAME, # Use FILE_NAME for uploaded file access
-        sep=',', 
-        skiprows=HEADER_LINES_TO_SKIP, 
-        skipinitialspace=True,
-        names=ALL_COLUMN_NAMES # <-- Fixes the KeyError
-    )
+    MPU6050.txt is assumed to have data rows like:
+    [Time_ms], [Ax], [Ay], [Az], [Gx], [Gy], [Gz], ...
+    Where Gx, Gy, Gz are angular velocities (rad/s or deg/s).
+    We'll assume 'deg/s' and a fixed sample rate (dt).
     
-except FileNotFoundError:
-    print(f"Error: The file '{FILE_PATH}' was not found.")
-    print("Please check your DATA_DIR and FILE_NAME settings.")
-    exit()
-except Exception as e:
-    print(f"An error occurred while reading or parsing the file: {e}")
-    exit()
+    NOTE: A simple integration (summation) will cause drift. 
+    A real-world HAB would use a **Complementary Filter** or **Kalman Filter** combining both accelerometer and gyroscope data to calculate accurate orientation.
+    """
+    
+    print(f"Loading data from: {file_path}")
+    
+    # Placeholder for the data columns we need: Time, Gx, Gy, Gz
+    # Assuming Gx, Gy, Gz are columns 5, 6, 7 (index 4, 5, 6)
+    try:
+        # Load columns assuming they are space or comma separated
+        data = np.loadtxt(file_path, delimiter=',') 
+    except FileNotFoundError:
+        print(f"ERROR: Data file not found at {file_path}")
+        return None, None
+    except ValueError:
+        print("ERROR: Data format error. Ensure the MPU6050 data is numeric and separated correctly.")
+        return None, None
+        
+    # Assuming the following column order (adjust if needed):
+    # Time (s), Ax, Ay, Az, Gx (Roll Rate), Gy (Pitch Rate), Gz (Yaw Rate)
+    # Get Gyro rates (assuming columns 4, 5, 6 correspond to Gx, Gy, Gz)
+    try:
+        time_data = data[:, 0]
+        gyro_rates = data[:, 4:7] # Gx, Gy, Gz in deg/s
+    except IndexError:
+        print("ERROR: Data file does not have enough columns (expecting at least 7).")
+        return None, None
 
-# Data Cleaning: Keep only essential columns and drop rows with missing data
-df.replace('', np.nan, inplace=True)
-df.dropna(subset=essential_cols, inplace=True)
-for col in essential_cols:
-    # Set errors='coerce' to turn non-numeric values into NaN, which are then dropped.
-    df[col] = pd.to_numeric(df[col], errors='coerce')
-df.dropna(subset=essential_cols, inplace=True) # Final dropna after coercion
+    # Calculate time step (dt)
+    dt_samples = np.diff(time_data)
+    # Use the median time step, or assume a fixed one if file doesn't have time
+    dt = np.median(dt_samples) if len(dt_samples) > 0 else 0.01  # Default to 10ms
+    
+    # Simple Numerical Integration (Euler Integration) to get angles
+    # Angles = cumulative sum of (rate * dt)
+    roll = np.cumsum(gyro_rates[:, 0] * dt) # Roll = integral of Gx
+    pitch = np.cumsum(gyro_rates[:, 1] * dt) # Pitch = integral of Gy
+    yaw = np.cumsum(gyro_rates[:, 2] * dt) # Yaw = integral of Gz
+    
+    # Convert from degrees to radians for trigonometric functions
+    roll_rad = np.deg2rad(roll)
+    pitch_rad = np.deg2rad(pitch)
+    yaw_rad = np.deg2rad(yaw)
+    
+    orientation_data = np.vstack([roll_rad, pitch_rad, yaw_rad]).T
+    
+    return orientation_data, time_data
 
-if df.empty:
-    print("Error: DataFrame is empty after cleaning. Check file format or data content.")
-    exit()
+# --- 2. 3D Cube Definition ---
 
-print(f"Successfully loaded {len(df)} data points.")
-
-
-# --------------------------------------------------------------------
-# --- 3. ATTITUDE AND TRAJECTORY ESTIMATION (Unchanged Logic) ---
-# --------------------------------------------------------------------
-
-# Constants for Complementary Filter
-dt = 1.0    
-alpha = 0.98 
-
-# Initial values
-roll_angle, pitch_angle, yaw_angle = 0.0, 0.0, 0.0
-pos_z = 0.0
-
-rolls, pitches, yaws, positions_z = [], [], [], []
-
-for _, row in df.iterrows():
-    ax, ay, az = row['accel_x_m_s2'], row['accel_y_m_s2'], row['accel_z_m_s2']
-    gx, gy, gz = row['gyro_x_rads'], row['gyro_y_rads'], row['gyro_z_rads']
-
-    roll_accel = np.degrees(np.arctan2(ay, az))
-    pitch_accel = np.degrees(np.arctan2(-ax, np.sqrt(ay**2 + az**2)))
-
-    roll_gyro = np.degrees(gx) * dt
-    pitch_gyro = np.degrees(gy) * dt
-    yaw_gyro = np.degrees(gz) * dt
-
-    roll_angle = alpha * (roll_angle + roll_gyro) + (1 - alpha) * roll_accel
-    pitch_angle = alpha * (pitch_angle + pitch_gyro) + (1 - alpha) * pitch_accel
-    yaw_angle = yaw_angle + yaw_gyro
-
-    pos_z += row['velocity_m_s'] * dt
-
-    rolls.append(roll_angle)
-    pitches.append(pitch_angle)
-    yaws.append(yaw_angle)
-    positions_z.append(pos_z)
-
-df['roll_deg'] = rolls
-df['pitch_deg'] = pitches
-df['yaw_deg'] = yaws
-df['pos_z'] = positions_z
-df['pos_x'] = 0.0 
-df['pos_y'] = 0.0
-
-
-# --------------------------------------------------------------------
-# --- 4. 3D VISUALIZATION FUNCTIONS (Unchanged Logic) ---
-# --------------------------------------------------------------------
-
-def rotation_matrix(roll, pitch, yaw):
-    R_x = np.array([
-        [1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]
-    ])
-    R_y = np.array([
-        [np.cos(pitch), 0, np.sin(pitch)], [0, 1, 0], [-np.sin(pitch), 0, np.cos(pitch)]
-    ])
-    R_z = np.array([
-        [np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]
-    ])
-    return R_z @ R_y @ R_x
-
-def plot_cube(ax, center_x, center_y, center_z, roll, pitch, yaw, size=3.0, current_index=0):
+def get_cube_vertices(scale=1.0):
+    """Define the vertices of a unit cube centered at the origin."""
     v = np.array([
-        [-0.5, -0.5, -0.5], [ 0.5, -0.5, -0.5], [ 0.5,  0.5, -0.5], [-0.5,  0.5, -0.5],
-        [-0.5, -0.5,  0.5], [ 0.5, -0.5,  0.5], [ 0.5,  0.5,  0.5], [-0.5,  0.5,  0.5]
-    ]) * size
-    
-    roll_rad, pitch_rad, yaw_rad = np.radians(roll), np.radians(pitch), np.radians(yaw)
-    R = rotation_matrix(roll_rad, pitch_rad, yaw_rad)
-    v_rotated = (R @ v.T).T + np.array([center_x, center_y, center_z])
-    
-    edges = [
-        [0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], 
-        [0, 4], [1, 5], [2, 6], [3, 7]
+        [-1, -1, -1], [ 1, -1, -1], [ 1,  1, -1], [-1,  1, -1],
+        [-1, -1,  1], [ 1, -1,  1], [ 1,  1,  1], [-1,  1,  1]
+    ])
+    # Scale and make it half size for unit cube to fit easily in plot
+    return v * scale / 2.0 
+
+def get_cube_faces():
+    """Define the faces (triangles) that make up the cube."""
+    return [
+        [0, 1, 2, 3], [4, 5, 6, 7], # Back and Front
+        [0, 1, 5, 4], [2, 3, 7, 6], # Bottom and Top
+        [1, 2, 6, 5], [4, 7, 3, 0]  # Right and Left
     ]
+
+# --- 3. Rotation Logic (Applying Roll, Pitch, Yaw) ---
+
+def rotate_cube(vertices, roll, pitch, yaw):
+    """Applies rotation matrices for Roll (X), Pitch (Y), and Yaw (Z) to the vertices."""
     
+    # Roll Rotation Matrix (X-axis)
+    R_roll = np.array([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+
+    # Pitch Rotation Matrix (Y-axis)
+    R_pitch = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+
+    # Yaw Rotation Matrix (Z-axis)
+    R_yaw = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+    
+    # Combine rotations (order matters: R = R_yaw * R_pitch * R_roll)
+    R = np.dot(R_yaw, np.dot(R_pitch, R_roll))
+    
+    # Apply rotation to all vertices
+    rotated_vertices = np.dot(vertices, R.T)
+    return rotated_vertices
+
+# --- 4. Matplotlib Animation ---
+
+def animate_payload(i, orientation_data, cube_plot):
+    """
+    Updates the cube's position and orientation for the animation frame 'i'.
+    """
+    if i >= len(orientation_data):
+        return cube_plot # Stop the animation when data runs out
+        
+    roll, pitch, yaw = orientation_data[i]
+    
+    # 1. Rotate the base cube
+    base_vertices = get_cube_vertices(scale=2)
+    rotated_vertices = rotate_cube(base_vertices, roll, pitch, yaw)
+    
+    # 2. Update the cube's vertices in the plot (Matplotlib requires a special update)
+    # The cube faces are defined by polygons (Poly3DCollection).
+    
+    # This is complex in Matplotlib. For simplicity with the limited API:
+    # We will just re-draw the cube's bounding box or line segments for each frame.
+    
+    # Clear the previous plot and re-draw the cube's edges (simpler approach)
+    ax = cube_plot[0].axes
     ax.clear()
+    ax.set_xlim([-1.5, 1.5])
+    ax.set_ylim([-1.5, 1.5])
+    ax.set_zlim([-1.5, 1.5])
+    ax.set_title(f'HAB Payload Orientation (Frame: {i+1})')
     
-    X_grid, Y_grid = np.meshgrid(np.linspace(-5, 5, 5), np.linspace(-5, 5, 5))
-    Z_grid = np.zeros_like(X_grid)
-    ax.plot_surface(X_grid, Y_grid, Z_grid, alpha=0.1, color='lightblue', rstride=1, cstride=1)
+    # Draw the rotated cube's edges
+    faces = get_cube_faces()
+    for face in faces:
+        x = [rotated_vertices[v][0] for v in face + [face[0]]] # Close the loop
+        y = [rotated_vertices[v][1] for v in face + [face[0]]]
+        z = [rotated_vertices[v][2] for v in face + [face[0]]]
+        ax.plot(x, y, z, color='b')
+
+    # Draw a prominent axis on the cube to show orientation (e.g., the "nose")
+    # Z-axis line from center to (0,0,1)
+    nose_vector = np.array([0, 0, 1.5]) 
+    rotated_nose = np.dot(nose_vector, rotate_cube(np.identity(3), roll, pitch, yaw))
+
+    ax.plot([0, rotated_nose[0][2]], [0, rotated_nose[1][2]], [0, rotated_nose[2][2]], color='r', linewidth=3)
     
-    for edge in edges:
-        p1, p2 = v_rotated[edge[0]], v_rotated[edge[1]]
-        ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], 'r-', linewidth=3)
-        
-    p1_front, p2_front = v_rotated[1], v_rotated[2]
-    ax.plot([p1_front[0], p2_front[0]], [p1_front[1], p2_front[1]], [p1_front[2], p2_front[2]], 'g-', linewidth=5, label='Payload Front (X+)')
+    return cube_plot
 
-    ax.plot(df['pos_x'][:current_index+1], df['pos_y'][:current_index+1], df['pos_z'][:current_index+1], 'b--', linewidth=1)
+def run_simulation():
+    # Load and process data
+    orientation_data, time_data = load_and_process_data(DATA_FILE_PATH)
+    if orientation_data is None:
+        return
 
-    limit_range = 5
-    ax.set_xlim([-limit_range, limit_range])
-    ax.set_ylim([-limit_range, limit_range])
+    # --- Setup 3D Plot ---
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_title("HAB Payload MPU6050 3D Orientation Simulation 🛰️")
+    ax.set_xlabel("X-Axis (Roll)")
+    ax.set_ylabel("Y-Axis (Pitch)")
+    ax.set_zlabel("Z-Axis (Yaw)")
     
-    min_z = min(df['pos_z'].min(), 0) - 5
-    max_z = max(df['pos_z'].max(), 5) + 5
-    ax.set_zlim([min_z, max_z])
+    # Set limits for the plot to keep the cube centered and visible
+    ax.set_xlim([-1.5, 1.5])
+    ax.set_ylim([-1.5, 1.5])
+    ax.set_zlim([-1.5, 1.5])
     
-    ax.set_xlabel("X (m)")
-    ax.set_ylabel("Y (m)")
-    ax.set_zlabel("Z (Altitude, m)")
+    # Initial draw of the cube (placeholder for the FuncAnimation update)
+    # Matplotlib's Poly3DCollection is complex to update, so we use a list of lines/plots.
+    # We pass an empty list of plots to the animation, and `animate_payload` will clear and redraw.
+    initial_cube_plot = [ax.plot([0],[0],[0], color='b')[0]] # Dummy plot element
     
-    ax.view_init(elev=20, azim=120)
-    title = f"HAB Payload Simulation (Time: {current_index}s, Alt: {center_z:.2f}m)\nRoll:{roll:.1f}° Pitch:{pitch:.1f}° Yaw:{yaw:.1f}°"
-    ax.set_title(title, fontsize=10)
-    
-    return ax.lines
+    # Calculate the interval for the animation based on the median time step
+    if time_data is not None and len(time_data) > 1:
+        # Time data is in seconds, convert the median delta time to milliseconds
+        # for the animation interval.
+        median_dt_ms = np.median(np.diff(time_data)) * 1000 
+    else:
+        median_dt_ms = 10.0 # Default to 10ms refresh rate
 
-# --------------------------------------------------------------------
-# --- 5. ANIMATION SETUP AND EXECUTION (Unchanged Logic) ---
-# --------------------------------------------------------------------
+    # Create the animation
+    ani = FuncAnimation(
+        fig, 
+        animate_payload, 
+        fargs=(orientation_data, initial_cube_plot),
+        frames=len(orientation_data),
+        interval=median_dt_ms, 
+        repeat=False
+    )
 
-# Setup the figure and animation
-fig = plt.figure(figsize=(10, 8))
-ax = fig.add_subplot(111, projection='3d')
+    plt.show()
 
-animation_duration = min(60, len(df))
-
-def animate(i):
-    data_row = df.iloc[i]
-    x, y, z = data_row['pos_x'], data_row['pos_y'], data_row['pos_z']
-    roll, pitch, yaw = data_row['roll_deg'], data_row['pitch_deg'], data_row['yaw_deg']
-    
-    return plot_cube(ax, x, y, z, roll, pitch, yaw, size=3.0, current_index=i)
-
-# Create the animation
-ani = FuncAnimation(fig, animate, frames=animation_duration, interval=100, blit=False, repeat=False)
-
-# Save and show the animation
-output_path = "hab_payload_simulation.gif"
-print(f"\nSaving Animation to {output_path}...")
-
-try:
-    # Requires Pillow library: pip install Pillow
-    ani.save(output_path, writer='pillow', fps=10, dpi=100)
-    print("Animation saved successfully! Open 'hab_payload_simulation.gif' to view it.")
-    
-    # We cannot use plt.show() in this environment, but we save the GIF.
-
-except Exception as e:
-    # The GIF saving might fail in the environment due to missing writer, so saving a static PNG as fallback.
-    print(f"\nCould not save GIF. Please ensure you have the 'Pillow' library installed ('pip install Pillow').")
-    print(f"Error details: {e}")
-    print("Saving a static PNG of the final position instead.")
-
-    # Only run this if the dataframe is not empty
-    if not df.empty:
-        final_row = df.iloc[animation_duration - 1]
-        plot_cube(ax, final_row['pos_x'], final_row['pos_y'], final_row['pos_z'], 
-                  final_row['roll_deg'], final_row['pitch_deg'], final_row['yaw_deg'], size=3.0, current_index=animation_duration-1)
-        
-        static_plot_path = "hab_payload_static_plot.png"
-        fig.savefig(static_plot_path)
-        print(f"Static plot saved to {static_plot_path}")
-    
-    plt.close(fig)
-
-print("\n--- Calculated Data Summary (First 5 Rows) ---")
-print(df[['pos_z', 'roll_deg', 'pitch_deg', 'yaw_deg']].head().to_markdown(index=False, floatfmt=".2f"))
+if __name__ == '__main__':
+    run_simulation()
