@@ -1,304 +1,210 @@
-# Stable and working simulation.py
-#!/usr/bin/env python3
-"""
-simulation.py
-
-Full HAB Payload Flight Vector Simulation from MPU6050 data
-
-Features:
- - Loads post-flight MPU6050 data (timestamp, ax, ay, az, gx, gy, gz)
- - Computes orientation via Madgwick AHRS filter
- - Split-screen render:
-      Left  → 3D payload cube + rod
-      Right → Scrolling telemetry (accel mag, gyro mag, Euler angles)
- - Exports directly to MP4 (no realtime playback required)
-
-Default paths:
-    Input : src/logger/data/MPU6050.txt
-    Output: output/payload_simulation.mp4
-
-Usage:
-    python simulation.py
-"""
-
-import os
-import sys
-import argparse
-import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
+import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import animation
-from mpl_toolkits.mplot3d import Axes3D, art3d
-from tqdm import tqdm
-import warnings
+from matplotlib.animation import FuncAnimation
+from mpl_toolkits.mplot3d import Axes3D
+import os
 
-warnings.filterwarnings("ignore", category=UserWarning)
+# --- 1. FILE CONTENT & DATA LOADING ---
 
-# ========================================================
-# Madgwick AHRS (minimal IMU version)
-# ========================================================
+FILE_NAME = 'MPU6050.txt'
+# Skips the 10 lines of comments/headers before the data starts (line 11 is the first data row)
+HEADER_LINES_TO_SKIP = 10 
 
-class MadgwickAHRS:
-    def __init__(self, sample_period=1/256.0, beta=0.1):
-        self.sample_period = sample_period
-        self.beta = beta
-        self.q = np.array([1.0, 0.0, 0.0, 0.0], dtype=float)
+try:
+    # This directly reads the file by name from your local disk.
+    df = pd.read_csv(FILE_NAME, sep=',', skiprows=HEADER_LINES_TO_SKIP, skipinitialspace=True)
+    
+except FileNotFoundError:
+    print(f"Error: The file '{FILE_NAME}' was not found.")
+    print("Please ensure the script is run in the same directory as MPU6050.txt.")
+    exit()
+except Exception as e:
+    print(f"An error occurred while reading or parsing the file: {e}")
+    exit()
 
-    @staticmethod
-    def _normalize(v):
-        n = np.linalg.norm(v)
-        return v if n == 0 else v / n
+# Data Cleaning: Keep only essential columns and drop rows with missing data
+essential_cols = ['velocity_m_s', 'accel_x_m_s2', 'accel_y_m_s2', 'accel_z_m_s2', 'gyro_x_rads', 'gyro_y_rads', 'gyro_z_rads']
+df.replace('', np.nan, inplace=True)
+df.dropna(subset=essential_cols, inplace=True)
+for col in essential_cols:
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+df.dropna(subset=essential_cols, inplace=True)
 
-    def update_imu(self, gyro, accel):
-        q1, q2, q3, q4 = self.q
-        ax, ay, az = self._normalize(accel)
-        gx, gy, gz = gyro
+if df.empty:
+    print("Error: DataFrame is empty after cleaning. Check file format or data content.")
+    exit()
 
-        _2q1, _2q2, _2q3, _2q4 = 2*q1, 2*q2, 2*q3, 2*q4
-        _4q1, _4q2, _4q3 = 4*q1, 4*q2, 4*q3
-        q1q1, q2q2, q3q3, q4q4 = q1*q1, q2*q2, q3*q3, q4*q4
-
-        s1 = _4q1*q3q3 + _2q3*ax + _4q1*q2q2 - _2q2*ay
-        s2 = _4q2*q4q4 - _2q4*ax + 4*q1q1*q2 - _2q1*ay - _4q2 + 8*q2*q2*q2 + 8*_2q3*q3 + _4q2*az
-        s3 = 4*q1q1*q3 + _2q1*ax + _4q3*q4q4 - _2q4*ay - _4q3 + 8*q2*q2*q3 + 8*q3*q3*q3 + _4q3*az
-        s4 = 4*q2*q2*q4 - _2q2*ax + 4*q3*q3*q4 - _2q3*ay
-        s = np.array([s1, s2, s3, s4])
-        s = self._normalize(s)
-
-        q_dot = 0.5 * np.array([
-            -q2*gx - q3*gy - q4*gz,
-             q1*gx + q3*gz - q4*gy,
-             q1*gy - q2*gz + q4*gx,
-             q1*gz + q2*gy - q3*gx
-        ]) - self.beta * s
-
-        self.q += q_dot * self.sample_period
-        self.q = self._normalize(self.q)
-
-    def quaternion(self):
-        return self.q.copy()
+print(f"Successfully loaded {len(df)} data points from {FILE_NAME}.")
 
 
-# ========================================================
-# Quaternion helpers
-# ========================================================
+# --- 2. ATTITUDE AND TRAJECTORY ESTIMATION ---
 
-def quat_to_euler(q):
-    w, x, y, z = q
-    roll  = np.arctan2(2*(w*x + y*z), 1 - 2*(x*x + y*y))
-    pitch = np.arcsin(np.clip(2*(w*y - z*x), -1, 1))
-    yaw   = np.arctan2(2*(w*z + x*y), 1 - 2*(y*y + z*z))
-    return roll, pitch, yaw
+# Constants for Complementary Filter
+dt = 1.0    # Time step (data is 1 second resolution)
+alpha = 0.98 # Filter constant: 98% trust on gyroscope, 2% on accelerometer
+
+# Initial values
+roll_angle, pitch_angle, yaw_angle = 0.0, 0.0, 0.0
+pos_z = 0.0
+
+rolls, pitches, yaws, positions_z = [], [], [], []
+
+for _, row in df.iterrows():
+    # Sensor Readings
+    ax, ay, az = row['accel_x_m_s2'], row['accel_y_m_s2'], row['accel_z_m_s2']
+    gx, gy, gz = row['gyro_x_rads'], row['gyro_y_rads'], row['gyro_z_rads']
+
+    # 1. Accelerometer-derived Angles (Roll/Pitch from gravity)
+    # Standard calculation for sensor with Z-axis up
+    roll_accel = np.degrees(np.arctan2(ay, az))
+    pitch_accel = np.degrees(np.arctan2(-ax, np.sqrt(ay**2 + az**2)))
+
+    # 2. Gyroscope Integration (delta angle)
+    roll_gyro = np.degrees(gx) * dt
+    pitch_gyro = np.degrees(gy) * dt
+    yaw_gyro = np.degrees(gz) * dt
+
+    # 3. Complementary Filter Fusion
+    roll_angle = alpha * (roll_angle + roll_gyro) + (1 - alpha) * roll_accel
+    pitch_angle = alpha * (pitch_angle + pitch_gyro) + (1 - alpha) * pitch_accel
+    # Yaw is pure integration (no magnetometer for absolute reference)
+    yaw_angle = yaw_angle + yaw_gyro
+
+    # 4. Trajectory (Z-axis position)
+    # Integrated velocity gives position
+    pos_z += row['velocity_m_s'] * dt
+
+    rolls.append(roll_angle)
+    pitches.append(pitch_angle)
+    yaws.append(yaw_angle)
+    positions_z.append(pos_z)
+
+# Add results back to DataFrame
+df['roll_deg'] = rolls
+df['pitch_deg'] = pitches
+df['yaw_deg'] = yaws
+df['pos_z'] = positions_z
+df['pos_x'] = 0.0 
+df['pos_y'] = 0.0
 
 
-def quat_to_rotmat(q):
-    w, x, y, z = q
-    return np.array([
-        [1 - 2*(y*y + z*z), 2*(x*y - z*w),     2*(x*z + y*w)],
-        [2*(x*y + z*w),     1 - 2*(x*x + z*z), 2*(y*z - x*w)],
-        [2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y)]
+# --- 3. 3D VISUALIZATION FUNCTIONS ---
+
+def rotation_matrix(roll, pitch, yaw):
+    """Generates the 3D rotation matrix (Z-Y-X extrinsic order)."""
+    R_x = np.array([
+        [1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]
     ])
-
-
-# ========================================================
-# Data loading (FIXED version)
-# ========================================================
-
-def load_data(path):
-    """
-    Load MPU6050 log.
-    Expected 7 columns: t, ax, ay, az, gx, gy, gz.
-    Handles files with or without headers and converts datetime strings to float timestamps.
-    """
-    try:
-        # Try reading with different delimiters, assuming no header initially
-        df = pd.read_csv(path, comment='#', sep=None, header=None, engine='python')
-    except Exception:
-        # Fallback for common space-separated files
-        df = pd.read_csv(path, delim_whitespace=True, comment='#', header=None)
-
-    if df.shape[1] < 7:
-        raise ValueError(f"Expected 7 columns, found {df.shape[1]} — check file format.")
-    
-    # Trim to 7 columns and assign expected names
-    df = df.iloc[:, :7]
-    df.columns = ['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz']
-
-    # --- FIX for Datetime/Header Error ---
-    
-    # 1. Attempt to convert 't' column to datetime objects
-    df['t_dt'] = pd.to_datetime(df['t'], errors='coerce')
-    
-    # 2. Drop rows where 't_dt' is NaT (this removes the header row)
-    df.dropna(subset=['t_dt'], inplace=True)
-    
-    # 3. Convert the datetime objects to numerical POSIX timestamps (seconds since epoch)
-    df['t'] = df['t_dt'].astype(np.int64) / 10**9
-    
-    # Remove the temporary datetime column
-    df.drop(columns=['t_dt'], inplace=True)
-    
-    # --- End of FIX ---
-
-    # Original scaling check (kept for logs that might use numeric milliseconds)
-    if df['t'].median() > 1e5:
-        df['t'] /= 1000.0
-
-    df = df.sort_values('t').reset_index(drop=True)
-    return df
-
-
-# ========================================================
-# Geometry helpers
-# ========================================================
-
-def cube_vertices(size=1.0):
-    s = size / 2
-    return np.array([
-        [-s, -s, -s], [ s, -s, -s], [ s,  s, -s], [-s,  s, -s],
-        [-s, -s,  s], [ s, -s,  s], [ s,  s,  s], [-s,  s,  s]
+    R_y = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)], [0, 1, 0], [-np.sin(pitch), 0, np.cos(pitch)]
     ])
+    R_z = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]
+    ])
+    return R_z @ R_y @ R_x
 
-CUBE_FACES = [
-    (0, 1, 2, 3), (4, 5, 6, 7),
-    (0, 1, 5, 4), (2, 3, 7, 6),
-    (1, 2, 6, 5), (0, 3, 7, 4)
-]
-
-def transform_vertices(verts, R, trans=np.zeros(3)):
-    return verts.dot(R.T) + trans
-
-
-# ========================================================
-# Simulation + rendering (FINAL FIXED version)
-# ========================================================
-
-def simulate_and_render(data, output_path, fps=30, cube_size=0.4, rod_length=0.8):
-    t = data['t'].values
-    dt = np.median(np.diff(t))
+def plot_cube(ax, center_x, center_y, center_z, roll, pitch, yaw, size=3.0, current_index=0):
+    """Draws and rotates the 3D cube representing the payload."""
     
-    # FIX: Explicitly cast data to float
-    gyro_data = data[['gx', 'gy', 'gz']].astype(float).values
-    accel = data[['ax', 'ay', 'az']].astype(float).values
+    # Vertices of a unit cube
+    v = np.array([
+        [-0.5, -0.5, -0.5], [ 0.5, -0.5, -0.5], [ 0.5,  0.5, -0.5], [-0.5,  0.5, -0.5],
+        [-0.5, -0.5,  0.5], [ 0.5, -0.5,  0.5], [ 0.5,  0.5,  0.5], [-0.5,  0.5,  0.5]
+    ]) * size
     
-    gyro_rad = np.deg2rad(gyro_data)
-
-    madgwick = MadgwickAHRS(sample_period=dt, beta=0.1)
-    quats = []
-    for g, a in zip(gyro_rad, accel):
-        madgwick.update_imu(g, a)
-        quats.append(madgwick.quaternion())
-    quats = np.array(quats)
-    eulers = np.array([quat_to_euler(q) for q in quats])
-
-    fig = plt.figure(figsize=(16, 9))
-    ax3d = fig.add_subplot(1, 2, 1, projection='3d')
-    ax2d = fig.add_subplot(1, 2, 2)
-
-    ax3d.set_xlim(-1, 1); ax3d.set_ylim(-1, 1); ax3d.set_zlim(-1, 1)
-    ax3d.set_box_aspect([1, 1, 1])
-    ax2d.set_xlim(t[0], t[-1])
-    ax2d.set_xlabel('Time (s)')
-
-    accel_mag = np.linalg.norm(accel, axis=1)
-    gyro_mag = np.linalg.norm(gyro_rad, axis=1)
-    ax2d.plot(t, accel_mag, label='|a| (raw)')
-    ax2d.plot(t, gyro_mag, label='|ω| (rad/s)', linestyle='--')
-    ax2d.plot(t, eulers[:, 0], label='roll (rad)', linestyle='-.')
-    ax2d.plot(t, eulers[:, 1], label='pitch (rad)', linestyle=':')
-    ax2d.plot(t, eulers[:, 2], label='yaw (rad)')
-    ax2d.legend(fontsize='small')
-
-    # Note: Respecting 10GB RAM constraint by keeping DPI and bitrate moderate.
-    writer = animation.FFMpegWriter(fps=fps, bitrate=6000)
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    cube = cube_vertices(cube_size)
-
-    total_frames = int((t[-1] - t[0]) * fps)
-    print(f"Rendering {total_frames} frames...")
-
-    with writer.saving(fig, output_path, dpi=150):
-        for ti in tqdm(np.linspace(t[0], t[-1], total_frames)):
-            idx = np.searchsorted(t, ti)
-            q = quats[min(idx, len(quats) - 1)]
-            R = quat_to_rotmat(q)
-
-            verts = transform_vertices(cube, R)
-            rod = np.array([[0, 0, 0], [0, 0, rod_length]]).dot(R.T)
-
-            ax3d.cla()
-            for face in CUBE_FACES:
-                quad = verts[list(face)]
-                # Add patches using a color map or static color
-                ax3d.add_collection3d(art3d.Poly3DCollection([quad], alpha=0.8, color='lightblue'))
-            ax3d.plot(rod[:, 0], rod[:, 1], rod[:, 2], lw=2.0, color='red')
-            
-            # Re-set plot limits and aspect ratio (needed after cla())
-            ax3d.set_xlim(-1, 1); ax3d.set_ylim(-1, 1); ax3d.set_zlim(-1, 1)
-            ax3d.set_box_aspect([1, 1, 1])
-            ax3d.set_title(f"t={ti:.2f}s")
-            ax3d.set_xlabel('X'); ax3d.set_ylabel('Y'); ax3d.set_zlabel('Z')
-            ax3d.view_init(elev=20, azim=45) # Set a fixed viewpoint
-
-            # --- FINAL DEFINITIVE FIX for TypeError: 'Line2D' object is not subscriptable ---
-            
-            # Capture the Line2D artist object directly.
-            time_marker_artist = ax2d.axvline(ti, color='k', lw=0.6, alpha=0.6)
-            
-            writer.grab_frame(facecolor=fig.get_facecolor())
-            
-            # Call remove() directly on the artist object.
-            # This is correct for Matplotlib versions that return the object directly.
-            time_marker_artist.remove()
-            # ---------------------------------------------------------------------------------
-
-    print(f"✅ Simulation complete: {output_path}")
-
-
-# ========================================================
-# CLI + defaults
-# ========================================================
-
-def parse_args():
-    p = argparse.ArgumentParser(description="Generate payload flight simulation MP4 from MPU6050 log.")
-    p.add_argument('--input', '-i', help='Path to MPU6050 log file.')
-    p.add_argument('--output', '-o', default='output/payload_simulation.mp4', help='Output MP4 path.')
-    p.add_argument('--fps', type=int, default=30)
-    return p.parse_args()
-
-
-def main():
-    args = parse_args()
-
-    if not args.input:
-        default_path = 'src/logger/data/MPU6050.txt'
-        if os.path.exists(default_path):
-            args.input = default_path
-            print(f"No --input specified, using default: {default_path}")
-        else:
-            print("Error: No input provided and default file not found.")
-            sys.exit(1)
-
-    output_dir = os.path.dirname(args.output)
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-        print(f"Created output directory: {output_dir}")
-
-    print("\n=== Payload Flight Vector Simulation ===")
-    print(f"Input : {args.input}")
-    print(f"Output: {args.output}")
-    print(f"FPS   : {args.fps}")
-    print("========================================\n")
-
-    data = load_data(args.input)
+    roll_rad, pitch_rad, yaw_rad = np.radians(roll), np.radians(pitch), np.radians(yaw)
+    R = rotation_matrix(roll_rad, pitch_rad, yaw_rad)
+    v_rotated = (R @ v.T).T + np.array([center_x, center_y, center_z])
     
-    num_samples = len(data)
-    print(f"Data loaded: {num_samples} samples over {data['t'].iloc[-1] - data['t'].iloc[0]:.2f} seconds.")
+    edges = [
+        [0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], 
+        [0, 4], [1, 5], [2, 6], [3, 7]
+    ]
+    
+    ax.clear()
+    
+    # Draw the ground plane (Z=0)
+    X_grid, Y_grid = np.meshgrid(np.linspace(-5, 5, 5), np.linspace(-5, 5, 5))
+    Z_grid = np.zeros_like(X_grid)
+    ax.plot_surface(X_grid, Y_grid, Z_grid, alpha=0.1, color='lightblue', rstride=1, cstride=1)
+    
+    # Draw the cube
+    for edge in edges:
+        p1, p2 = v_rotated[edge[0]], v_rotated[edge[1]]
+        ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], 'r-', linewidth=3)
+        
+    # Mark the X+ direction (front)
+    p1_front, p2_front = v_rotated[1], v_rotated[2]
+    ax.plot([p1_front[0], p2_front[0]], [p1_front[1], p2_front[1]], [p1_front[2], p2_front[2]], 'g-', linewidth=5, label='Payload Front (X+)')
 
-    simulate_and_render(data, args.output, fps=args.fps)
+    # Draw the trajectory
+    ax.plot(df['pos_x'][:current_index+1], df['pos_y'][:current_index+1], df['pos_z'][:current_index+1], 'b--', linewidth=1)
 
+    # Set plot limits
+    limit_range = 5
+    ax.set_xlim([-limit_range, limit_range])
+    ax.set_ylim([-limit_range, limit_range])
+    
+    min_z = min(df['pos_z'].min(), 0) - 5
+    max_z = max(df['pos_z'].max(), 5) + 5
+    ax.set_zlim([min_z, max_z])
+    
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Y (m)")
+    ax.set_zlabel("Z (Altitude, m)")
+    
+    ax.view_init(elev=20, azim=120)
+    title = f"HAB Payload Simulation (Time: {current_index}s, Alt: {center_z:.2f}m)\nRoll:{roll:.1f}° Pitch:{pitch:.1f}° Yaw:{yaw:.1f}°"
+    ax.set_title(title, fontsize=10)
+    
+    return ax.lines
 
-if __name__ == '__main__':
-    main()
+# --- 4. ANIMATION SETUP AND EXECUTION ---
+
+# Setup the figure and animation
+fig = plt.figure(figsize=(10, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+# Animate for the first 60 seconds (or the full length of the data)
+animation_duration = min(60, len(df))
+
+def animate(i):
+    """Update function for the animation."""
+    data_row = df.iloc[i]
+    x, y, z = data_row['pos_x'], data_row['pos_y'], data_row['pos_z']
+    roll, pitch, yaw = data_row['roll_deg'], data_row['pitch_deg'], data_row['yaw_deg']
+    
+    return plot_cube(ax, x, y, z, roll, pitch, yaw, size=3.0, current_index=i)
+
+# Create the animation
+ani = FuncAnimation(fig, animate, frames=animation_duration, interval=100, blit=False, repeat=False)
+
+# Save and show the animation
+output_path = "hab_payload_simulation.gif"
+print(f"\nSaving Animation to {output_path}...")
+
+try:
+    # Requires Pillow library: pip install Pillow
+    ani.save(output_path, writer='pillow', fps=10, dpi=100)
+    print("Animation saved successfully! Open 'hab_payload_simulation.gif' to view it.")
+    
+    # After saving, we show the plot/animation
+    plt.show() 
+
+except Exception as e:
+    print(f"\nCould not save GIF. Please ensure you have the 'Pillow' library installed ('pip install Pillow').")
+    print("Saving a static PNG of the final position instead.")
+
+    # Fallback to a static plot
+    final_row = df.iloc[animation_duration - 1]
+    plot_cube(ax, final_row['pos_x'], final_row['pos_y'], final_row['pos_z'], 
+              final_row['roll_deg'], final_row['pitch_deg'], final_row['yaw_deg'], size=3.0, current_index=animation_duration-1)
+    
+    static_plot_path = "hab_payload_static_plot.png"
+    fig.savefig(static_plot_path)
+    print(f"Static plot saved to {static_plot_path}")
+    plt.close(fig)
+
+print("\n--- Calculated Data Summary (First 5 Rows) ---")
+print(df[['pos_z', 'roll_deg', 'pitch_deg', 'yaw_deg']].head().to_markdown(index=False, floatfmt=".2f"))
