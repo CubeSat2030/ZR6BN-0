@@ -17,7 +17,7 @@ kabot-1(our root folder)
 
            |
 
-           |--> simulation--> scripts--> simulation.py 
+           |--> simulation--> scripts--> simulation.cpp 
 
                                                       |-->  simulation_pipeline_scripts--> cube.cpp
 
