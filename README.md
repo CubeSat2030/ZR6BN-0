@@ -1,9 +1,34 @@
 ~~~
+create a 3D fly-through simulation based on motion data, stored in the .txt file called MPU6050.
 
- File "/home/nathan/lib/python3.12/site-packages/pandas/core/nanops.py", line 787, in nanmedian
-    raise TypeError(f"Cannot convert {values} to numeric")
-TypeError: Cannot convert ['timestamp' '2025-10-11T08:00:00' '2025-10-11T08:00:01' ...
- '2025-10-11T10:59:58' '2025-10-11T10:59:59' '2025-10-11T11:00:00'] to numeric
+
+Here is the file structure:
+
+
+kabot-1(our root folder)
+
+ |
+
+ |
+
+ |-->   src--> logger--> data-|
+
+           |                                        |_MPU6050.txt
+
+           |
+
+           |--> simulation--> scripts--> simulation.py 
+
+                                                      |-->  simulation_pipeline_scripts--> cube.cpp
+
+                                                                                                               |--> physics.cpp
+
+                                                                                                               |--> graphics.cpp
+
+                                                                                                                |--> render.cpp
+
+
+
 
 ~~~
 
