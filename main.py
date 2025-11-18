@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 # --- Configuration ---
 
 LOGGING_PROCESSES = [
-    ("CPU Temp Logger", "src/logger/cpu_logger.py", "src/logger/heartbeats/cpu_logger.json"),
+#    ("CPU Temp Logger", "src/logger/cpu_logger.py", "src/logger/heartbeats/cpu_logger.json"),
     ("MPU Logger", "src/logger/mpu6050_logger.py", "src/logger/heartbeats/mpu_logger.json"),
     ("Sound Logger", "src/logger/sound_logger.py", "src/logger/heartbeats/sound_logger.json"),
 ]
