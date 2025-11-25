@@ -616,12 +616,39 @@ def api_wipe_data():
         else:
             return jsonify({"success": False, "message": message}), 500
 
+
+#------------------------------------------------PRESENTATION MODE-----------------------------------------------------------------------------
 # This new route is for the presenttion mode.
 # Rather than a power point presentation we thought of  something original and innovative we called Presentaion mode:
 # What is presentation mode and how will presentation mode work?:
 # Presentation mode is when the payload will be used  when presenting our mission report live on 26 November 2025 @ 19:00PM SAST. 
-
-
+# 
+# What is Presentation Mode?
+#
+# Presentation Mode is an add-on to  the active web_ui interface. 
+# Presentation Mode is an entire different web user interface .
+#
+# How does Presentation Mode work?
+#
+# PresentationMode.html and Dashboard.html work together as follows:
+# Dashboard.html is our PARENT.
+# PresentationMode.html is our CHILD.
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#----------------------------------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
     countdown_thread.start()
