@@ -616,6 +616,11 @@ def api_wipe_data():
         else:
             return jsonify({"success": False, "message": message}), 500
 
+# This new route is for the presenttion mode.
+# Rather than a power point presentation we thought of  something original and innovative we called Presentaion mode:
+# What is presentation mode and how will presentation mode work?:
+# Presentation mode is when the payload will be used  when presenting our mission report live on 26 November 2025 @ 19:00PM SAST. 
+
 
 if __name__ == "__main__":
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
