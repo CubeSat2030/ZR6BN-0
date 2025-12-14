@@ -3,6 +3,12 @@
 # =========================================================================
 # FIX: Added threading.Lock around all access to the global RUNNING_PROCESSES
 # dictionary to prevent Internal Server Errors (500) due to race conditions.
+# FIX: Refactored buzzer logic to be non-blocking and fixed the missing
+#      buzzer_double_beep function implementation and auto-start solid beep.
+# FIX: Handled KeyError in index() by using .get('chart_file') for simulation script.
+# FIX: Enhanced wipe_data_and_charts() to delete data, heartbeats, and media footage.
+# FIX: Added dedicated run_simulation function and API route to handle the 
+#      non-plotter "simulation" script which generates a video.
 # =========================================================================
 
 import subprocess
@@ -12,7 +18,7 @@ import time
 import signal
 import os
 import threading
-import shutil # <--- ADDED for data wipe
+import shutil
 from flask import Flask, render_template, jsonify, send_from_directory, abort
 
 try:
@@ -32,10 +38,16 @@ BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 
 SRC_DIR = BASE_DIR / "src"
-LOG_DIR = SRC_DIR / "logger" # Data folder location: src/logger/
+LOG_DIR = SRC_DIR / "logger" 
 PLOT_DIR = SRC_DIR / "plotter"
-CHARTS_DIR = PLOT_DIR / "charts" # Charts folder location: src/plotter/charts/
+SIM_DIR = SRC_DIR / "simulation"
+CHARTS_DIR = PLOT_DIR / "charts" 
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
+
+# --- NEW PATHS FOR DATA WIPE ---
+DATA_DIR = LOG_DIR / "data"
+HEARTBEATS_DIR = LOG_DIR / "heartbeats"
+FOOTAGE_DIR = SRC_DIR / "photography" / "footage"
 
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -43,6 +55,10 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 AUTO_START_TIMEOUT = 60 # Seconds
 LAST_CONNECTION_TIME = time.time()
 BUZZER_THREAD_STOP = threading.Event()
+# New global to track the last time a beep happened for the non-blocking loop
+LAST_BEEP_TIME = 0 
+# New global to track the state of the 3-second solid beep for auto-start
+SOLID_BEEP_START_TIME = None
 
 # --- Flask App Initialization ---
 app = Flask(__name__, template_folder=str(TEMPLATES_DIR))
@@ -57,10 +73,10 @@ SCRIPTS_CONFIG = {
         "is_main_controller": True
     },
     "dht": {
-        "title": "DHT Sensor Logger",
-        "log_script": LOG_DIR / "dht_logger.py",
-        "plot_script": PLOT_DIR / "dht_plotter.py",
-        "chart_file": "dht_chart.svg"
+        "title": "CPU temp Logger",
+        "log_script": LOG_DIR / "cpu_logger.py",
+        "plot_script": PLOT_DIR / "cpu_plotter.py",
+        "chart_file": "cpu_chart.svg"
     },
     "mpu": {
         "title": "MPU-6050 Logger",
@@ -68,6 +84,12 @@ SCRIPTS_CONFIG = {
         "plot_script": PLOT_DIR / "mpu6050_plotter.py",
         "chart_file": "mpu_chart.svg"
     },
+    "simulation": {
+        "title": "Payload Flight Simulation",
+        "sim_script": SIM_DIR / "payload_flight_simulation.py",
+        "video_file": "payload_flight_simulation.mp4"
+    }
+        },
     "sound": {
         "title": "Sound Logger",
         "log_script": LOG_DIR / "sound_logger.py",
@@ -144,7 +166,14 @@ def start_script(name):
         return False, "Unknown script name." 
     
     config = SCRIPTS_CONFIG[name]
-    script_path = str(config['log_script']) 
+    # NOTE: The simulation script uses 'sim_script', the loggers use 'log_script'.
+    # We prioritize 'log_script' if present, otherwise fall back to 'sim_script'.
+    script_path_key = 'log_script' if 'log_script' in config else ('sim_script' if 'sim_script' in config else None)
+    
+    if not script_path_key:
+        return False, f"Configuration for '{name}' is missing a script path (log_script or sim_script)."
+
+    script_path = str(config[script_path_key]) 
     
     with PROCESS_LOCK: # Acquire lock for process manipulation
         if name in RUNNING_PROCESSES and RUNNING_PROCESSES[name].poll() is None:
@@ -202,7 +231,6 @@ def run_plotter(name):
     if name not in SCRIPTS_CONFIG or 'plot_script' not in SCRIPTS_CONFIG[name]:
         return False, "Unknown or non-plotter script name."
     
-    # ... (Plotter logic remains unchanged as it doesn't touch RUNNING_PROCESSES)
     config = SCRIPTS_CONFIG[name]
     script_path = str(config['plot_script']) 
     chart_file = config['chart_file']
@@ -213,7 +241,7 @@ def run_plotter(name):
             capture_output=True,
             text=True,
             check=False,
-            timeout=300, # Gives each plotter scripts a timeout of 5 minutes each to prevent any deadlocks. 
+            timeout=3000, 
             cwd=str(BASE_DIR) 
         )
         
@@ -228,49 +256,104 @@ def run_plotter(name):
     except Exception as e:
         return False, f"Failed to run plotter {name}: {str(e)}"
 
+# --- NEW FUNCTION FOR SIMULATION VIDEO GENERATION ---
+def run_simulation(name):
+    """Runs the simulation script synchronously to generate the video."""
+    if is_main_controller_active():
+        return False, "Flight Controller (main.py) is running. Simulation is disabled."
+        
+    if name not in SCRIPTS_CONFIG or 'sim_script' not in SCRIPTS_CONFIG[name]:
+        # This will catch the error if the name is correct but sim_script is missing
+        return False, "Unknown or non-simulation script name."
+    
+    config = SCRIPTS_CONFIG[name]
+    script_path = str(config['sim_script'])
+    video_file = config['video_file']
+    
+    # Define the output path for the video (same directory as the script)
+    video_path = SIM_DIR / video_file
+    
+    try:
+        # Increased timeout to 1200 seconds (20 minutes) for rendering
+        print(f"[SIMULATION] Starting video generation for {video_file}...")
+        result = subprocess.run(
+            [sys.executable, script_path],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=1200, 
+            cwd=str(BASE_DIR) 
+        )
+        
+        if result.returncode == 0 and os.path.exists(video_path):
+            return True, f"Simulation video generated successfully: {video_file}"
+        else:
+            error_msg = result.stderr.strip() or f"Simulation failed with exit code {result.returncode}."
+            return False, f"Simulation failed: {error_msg}"
+
+    except subprocess.TimeoutExpired:
+        return False, f"Simulation timed out after 20 minutes."
+    except Exception as e:
+        return False, f"Failed to run simulation: {str(e)}"
+# --- END NEW FUNCTION ---
+
+
 def wipe_data_and_charts():
-    """Deletes all .txt files in LOG_DIR and the entire CHARTS_DIR."""
+    """Deletes all logged data, heartbeats, footage, and charts."""
     if is_main_controller_active():
         return False, "Flight Controller (main.py) is running. Data wipe is disabled."
 
-    log_success = True
-    chart_success = True
+    success = True
+    total_deleted_items = 0
     
-    # 1. Delete all .txt files in the log directory (src/logger/)
-    log_file_count = 0
-    try:
-        for file in LOG_DIR.glob("*.txt"):
-            if file.is_file():
-                os.remove(file)
-                log_file_count += 1
-        print(f"[DATA WIPE] Deleted {log_file_count} log files from {LOG_DIR}")
-    except Exception as e:
-        log_success = False
-        print(f"[DATA WIPE ERROR] Failed to delete log files: {e}")
+    # List of files/patterns to clean
+    files_to_clean = [
+        (LOG_DIR.glob("*.txt"), "log files in src/logger/"), # Legacy .txt in logger/
+        (DATA_DIR.glob("*"), "data files in src/logger/data/"),
+        (HEARTBEATS_DIR.glob("*.json"), "heartbeat files in src/logger/heartbeats/"),
+    ]
+    
+    # 1. Delete specific files first
+    for file_pattern, desc in files_to_clean:
+        try:
+            item_count = 0
+            for item in file_pattern:
+                if item.is_file():
+                    os.remove(item)
+                    item_count += 1
+            total_deleted_items += item_count
+            print(f"[DATA WIPE] Deleted {item_count} {desc}")
+        except Exception as e:
+            success = False
+            print(f"[DATA WIPE ERROR] Failed to delete {desc}: {e}")
 
-    # 2. Delete the entire charts directory (src/plotter/charts/) and recreate it
-    chart_file_count = 0
-    try:
-        if CHARTS_DIR.exists():
-            # Count files before deletion (approximate)
-            chart_file_count = len(list(CHARTS_DIR.glob("*.svg")))
-            shutil.rmtree(CHARTS_DIR)
-            print(f"[DATA WIPE] Deleted {chart_file_count} charts and the directory {CHARTS_DIR}")
-        
-        # Always attempt to recreate the directory for future plotting
-        CHARTS_DIR.mkdir(parents=True, exist_ok=True)
-        
-    except Exception as e:
-        chart_success = False
-        print(f"[DATA WIPE ERROR] Failed to delete/recreate charts directory: {e}")
-        
-    if log_success and chart_success:
-        return True, f"Successfully wiped {log_file_count} log files and {chart_file_count} chart files."
+    # 2. Delete and recreate directories for charts and footage (more robust wipe)
+    folders_to_recreate = [
+        (CHARTS_DIR, "charts"),
+        (FOOTAGE_DIR / "images", "images"),
+        (FOOTAGE_DIR / "videos", "videos"),
+    ]
+
+    for folder, name in folders_to_recreate:
+        try:
+            if folder.exists():
+                # Count files recursively before deletion
+                item_count = len(list(folder.rglob('*'))) 
+                shutil.rmtree(folder)
+                total_deleted_items += item_count
+                print(f"[DATA WIPE] Deleted {item_count} items in {name} directory.")
+            
+            # Always attempt to recreate the directory for future use
+            folder.mkdir(parents=True, exist_ok=True)
+            
+        except Exception as e:
+            success = False
+            print(f"[DATA WIPE ERROR] Failed to delete/recreate {name} directory: {e}")
+            
+    if success:
+        return True, f"Successfully wiped {total_deleted_items} data, heartbeat, media, and chart files."
     else:
-        msg = "Partial success/failure during wipe: "
-        if not log_success: msg += "Failed to clean log files. "
-        if not chart_success: msg += "Failed to clean charts folder. "
-        return False, msg.strip()
+        return False, "Wipe completed with errors. Check server logs for details."
 
 
 # =========================================================================
@@ -278,140 +361,147 @@ def wipe_data_and_charts():
 # =========================================================================
 
 def reset_auto_start_timer():
-    """Stops the buzzer and resets the auto-start timer."""
-    global LAST_CONNECTION_TIME
+    """Stops the buzzer, resets the auto-start timer, and clears the solid beep state."""
+    global LAST_CONNECTION_TIME, SOLID_BEEP_START_TIME
     if BUZZER_AVAILABLE:
         BUZZER.off() 
-    
+        SOLID_BEEP_START_TIME = None # Clear solid beep state
+
     if not is_main_controller_active():
         LAST_CONNECTION_TIME = time.time()
+        
+def double_beep_and_wait(total_duration=10.0, beep_delay=0.1):
+    """Executes the two rapid beeps and waits for the remaining duration (non-blocking)."""
+    global LAST_BEEP_TIME
+    
+    if not BUZZER_AVAILABLE:
+        # For the non-buzzer case, simply set the last beep time to simulate a completed cycle
+        LAST_BEEP_TIME = time.time()
+        return
 
-#  Start of double beep function...
-#
-#
-# Commented the buzzer_double_beep function 
-# because it unnessacery use of ram and it gets annoying  and impacts performance while using the web ui.
-#
-# def buzzer_double_beep(delay_between_beeps=0.1, total_duration=60.0): # 10.0s total pulse  pause interval
-#   Executes the two rapid beeps and waits for the remaining duration.
-#
-#    if not BUZZER_AVAILABLE:
-#        time.sleep(total_duration)
-#        return
-#        
-#    start_wait = time.time()
-#    
-#    # Beep 1
-#    BUZZER.on()
-#    time.sleep(delay_between_beeps)
-#    BUZZER.off()
-#    
-#    # Short pause
-#    time.sleep(delay_between_beeps)
-#    
-#    # Beep 2
-#    BUZZER.on()
-#    time.sleep(delay_between_beeps)
-#    BUZZER.off()
-#    
-#    # Wait for the remaining time
-#    remaining_wait = total_duration - (time.time() - start_wait)
-#    if remaining_wait >
-#
-#
-# End of double beep function...
+    # Check if a cycle has finished
+    if time.time() - LAST_BEEP_TIME >= total_duration:
+        start_time = time.time()
+        
+        # Beep 1
+        BUZZER.on()
+        time.sleep(beep_delay)
+        BUZZER.off()
+        
+        # Short pause
+        time.sleep(beep_delay)
+        
+        # Beep 2
+        BUZZER.on()
+        time.sleep(beep_delay)
+        BUZZER.off()
+        
+        # Update LAST_BEEP_TIME based on the start of the cycle
+        LAST_BEEP_TIME = start_time
+        
+    # The countdown thread's main loop handles the required time.sleep(0.1)
 
 def start_buzzer_countdown():
-#-------------TODO---------------
-# Replace the use of delays to  simulate the rapid countdown affect with poll frequencies.
-# The benafit of using polling frequencies is that it does not delay the entire program thus not causing any
-#  conflicts and  thus optimizes the overall code and performance.
-# The use of polling frequencies will also allow me to acheive much more fluide countdown sfx
     """
     Runs in a background thread. Manages the countdown, buzzer beeping, 
     and automatically launches main.py if the timer expires.
+    
+    Uses a polling frequency (0.1s sleep) to avoid blocking the thread
+    with long delays.
     """
-    global LAST_CONNECTION_TIME
-    global BUZZER_THREAD_STOP
+    global LAST_CONNECTION_TIME, LAST_BEEP_TIME, SOLID_BEEP_START_TIME
+    
+    # Use a small sleep interval to create a high-frequency polling loop
+    LOOP_SLEEP_INTERVAL = 0.1 
     
     while not BUZZER_THREAD_STOP.is_set():
+        current_time = time.time()
         
-        if is_main_controller_active(): # if main.py is running the buzzer must remain silent.
+        if is_main_controller_active():
+            # If main.py is running, turn off the buzzer and reset times
             if BUZZER_AVAILABLE:
                 BUZZER.off()
-            time.sleep(5)
+            SOLID_BEEP_START_TIME = None
+            LAST_BEEP_TIME = current_time # Reset heartbeat tracking
+            time.sleep(5) # Longer sleep when active
             continue
-            
-        time_elapsed = time.time() - LAST_CONNECTION_TIME
+        
+        time_elapsed = current_time - LAST_CONNECTION_TIME
         time_remaining = AUTO_START_TIMEOUT - time_elapsed
         
+        # --- AUTO-START TRIGGERED AND SOLID BEEP LOGIC ---
         if time_remaining <= 0:
-            # --- AUTO-START TRIGGERED: SOLID BEEP FOR 3 SECONDS ---
-            print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
-            
-            if BUZZER_AVAILABLE:
-               # BUZZER.on() # Solid beep ON
-               # time.sleep(3.0) # Wait for 3 seconds
-                BUZZER.off() # Solid beep OFF
-            
-            # The start_script call is now thread-safe
-            success, message = start_script('main') 
-            
-            if success:
-                print(f"[AUTO-START SUCCESS] {message}")
-            else:
-                print(f"[AUTO-START FAILURE] {message}")
-            
-            time.sleep(5) 
-            
-        elif time_remaining < AUTO_START_TIMEOUT - 5: 
-            # --- COUNTDOWN BEEPING ---
-            
-            if time_remaining <= 5:
-                # SUPER SUPER FAST BEEP
-                delay = 0.0625
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-     
-            
-            if time_remaining <= 10:
-                # SUPER FAST BEEP
-                delay = 0.125
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-     
-            
-            if time_remaining <= 20:
-                # FAST BEEP
-                delay = 0.25
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
+            if SOLID_BEEP_START_TIME is None:
+                # First time hitting timeout: initiate auto-start and solid beep
+                print("\n[AUTO-START] Timeout reached. Launching Flight Controller...")
                 
-            elif time_remaining <= 30:
-                # MEDIUM BEEP
-                delay = 0.5
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(delay)
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay)
-
-            else:
-                # SLOW BEEP
-                delay = 1.0 
-                if BUZZER_AVAILABLE: BUZZER.off()
-                time.sleep(0.1) 
-                if BUZZER_AVAILABLE: BUZZER.on()
-                time.sleep(delay - 0.1)
+                # The start_script call is now thread-safe
+                success, message = start_script('main') 
+                
+                if success:
+                    print(f"[AUTO-START SUCCESS] {message}")
+                else:
+                    print(f"[AUTO-START FAILURE] {message}")
+                    
+                if BUZZER_AVAILABLE:
+                    BUZZER.on() # Solid beep ON
+                    SOLID_BEEP_START_TIME = current_time
+                    
+            # Keep solid beep on for 3 seconds
+            if SOLID_BEEP_START_TIME is not None and current_time - SOLID_BEEP_START_TIME >= 3.0:
+                if BUZZER_AVAILABLE:
+                    BUZZER.off() # Solid beep OFF
+                    SOLID_BEEP_START_TIME = None # Clear state
             
-        else: 
-            # --- CONNECTION STANDBY HEARTBEAT ---
-            buzzer_double_beep(delay_between_beeps=0.1, total_duration=10.0)
+            time.sleep(LOOP_SLEEP_INTERVAL)
+            continue 
+
+        # --- COUNTDOWN/HEARTBEAT BEEPING LOGIC ---
+        
+        # Determine the period for the beep cycle (off-time + on-time)
+        cycle_period = 0.0 # Default to no regular cycle
+        if time_remaining <= 5:
+            # SUPER SUPER FAST BEEP (0.0625s ON, 0.0625s OFF) = 0.125s cycle
+            cycle_period = 0.125
+            beep_duration = 0.0625
+        elif time_remaining <= 10:
+            # SUPER FAST BEEP (0.125s ON, 0.125s OFF) = 0.25s cycle
+            cycle_period = 0.25
+            beep_duration = 0.125
+        elif time_remaining <= 20:
+            # FAST BEEP (0.25s ON, 0.25s OFF) = 0.5s cycle
+            cycle_period = 0.5
+            beep_duration = 0.25
+        elif time_remaining <= 30:
+            # MEDIUM BEEP (0.5s ON, 0.5s OFF) = 1.0s cycle
+            cycle_period = 1.0
+            beep_duration = 0.5
+        elif time_remaining < AUTO_START_TIMEOUT - 5: 
+            # SLOW BEEP (0.1s ON, 0.9s OFF) = 1.0s cycle
+            cycle_period = 1.0
+            beep_duration = 0.1
+        else:
+            # CONNECTION STANDBY HEARTBEAT (Double Beep cycle)
+            double_beep_and_wait(total_duration=10.0, beep_delay=0.1)
+            time.sleep(LOOP_SLEEP_INTERVAL)
+            continue
+            
+        # Execute the regular countdown beep based on the calculated period/duration
+        if cycle_period > 0 and BUZZER_AVAILABLE:
+            time_since_last_beep = current_time - LAST_BEEP_TIME
+            
+            # Check if the buzzer should be ON
+            if time_since_last_beep < beep_duration:
+                BUZZER.on()
+            # Check if the buzzer should be OFF
+            elif time_since_last_beep < cycle_period:
+                BUZZER.off()
+            # Check if it's time for the next cycle to start
+            else:
+                LAST_BEEP_TIME = current_time # Start a new cycle
+                BUZZER.on() # Immediately start ON for the new cycle
+
+        time.sleep(LOOP_SLEEP_INTERVAL)
 
 
 @app.before_request
@@ -421,7 +511,7 @@ def update_last_connection_time():
 
 
 # =========================================================================
-# FLASK API ROUTES (UNCHANGED)
+# FLASK API ROUTES (PATCHED)
 # =========================================================================
 
 @app.route("/")
@@ -429,9 +519,11 @@ def index():
     serializable_config = {}
     for key, config in SCRIPTS_CONFIG.items():
         if not config.get('is_main_controller'):
+            # PATCH: Safely retrieve 'chart_file' to avoid KeyError for the 'simulation' script
+            chart_file = config.get("chart_file")
             serializable_config[key] = {
                 "title": config["title"],
-                "chart_file": config["chart_file"] 
+                "chart_file": chart_file
             }
     return render_template("dashboard.html", scripts_config=serializable_config)
 
@@ -464,10 +556,30 @@ def api_chart_generate(name):
     success, message = run_plotter(name)
     return jsonify({"success": success, "message": message})
 
+# --- NEW API ROUTE FOR SIMULATION VIDEO GENERATION ---
+@app.route('/api/simulation/<name>', methods=['POST'])
+def api_simulation_generate(name):
+    """API endpoint to generate the flight simulation video."""
+    if is_main_controller_active():
+        return jsonify({"success": False, "message": "Flight Controller is active. Cannot run simulation."}), 403
+        
+    success, message = run_simulation(name)
+    return jsonify({"success": success, "message": message})
+# --- END NEW API ROUTE ---
+
 @app.route("/chart/<path:filename>")
 def get_chart_display(filename):
     if ".." in filename or "/" in filename: abort(400)
     return send_from_directory(CHARTS_DIR, filename, as_attachment=False)
+
+# --- NEW ROUTE FOR SERVING SIMULATION VIDEO ---
+@app.route("/video/<path:filename>")
+def get_video_display(filename):
+    """Serves the simulation video from the simulation directory."""
+    if ".." in filename or "/" in filename: abort(400)
+    # The SIM_DIR is src/simulation
+    return send_from_directory(SIM_DIR, filename, as_attachment=False)
+# --- END NEW ROUTE ---
 
 @app.route("/download/chart/<filename>")
 def download_chart(filename):
@@ -499,7 +611,7 @@ def api_system_control(action):
         return jsonify({"success": False, "message": f"Failed to execute command: {str(e)}"}), 500
 
 @app.route('/api/control/wipe_data', methods=['POST'])
-def api_wipe_data(): # <--- NEW ROUTE for data wipe
+def api_wipe_data(): 
     """API endpoint to wipe all logged data and generated charts."""
     success, message = wipe_data_and_charts()
     if success:
@@ -512,6 +624,38 @@ def api_wipe_data(): # <--- NEW ROUTE for data wipe
             return jsonify({"success": False, "message": message}), 500
 
 
+#------------------------------------------------PRESENTATION MODE-----------------------------------------------------------------------------
+# This new route is for the presenttion mode.
+# Rather than a power point presentation we thought of  something original and innovative we called Presentaion mode:
+# What is presentation mode and how will presentation mode work?:
+# Presentation mode is when the payload will be used  when presenting our mission report live on 26 November 2025 @ 19:00PM SAST. 
+# 
+# What is Presentation Mode?
+#
+# Presentation Mode is an add-on to  the active web_ui interface. 
+# Presentation Mode is an entire different web user interface .
+#
+# How does Presentation Mode work?
+#
+# PresentationMode.html and Dashboard.html work together as follows:
+# Dashboard.html is our PARENT.
+# PresentationMode.html is our CHILD.
+# 
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#----------------------------------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
     countdown_thread.start()
