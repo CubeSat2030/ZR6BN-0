@@ -1,5 +1,5 @@
 # =========================================================================
-# Kabot-1 Mission: Sound Logger & Buzzer Signaling (gpiozero)
+# Kabot-1 Mission: Sound Logger & Buzzer Signaling (busio removed)
 # =========================================================================
 # Purpose: Log sound amplitude (RMS + dB SPL) using ADS1115 and signal 
 #          mission status using a high-level gpiozero buzzer interface.
@@ -16,11 +16,11 @@ import math
 from datetime import datetime
 
 # --- Third-Party Libraries ---
-# Import gpiozero for high-level buzzer control (Requires: pip3 install gpiozero)
+# Import gpiozero for high-level buzzer control
 from gpiozero import Buzzer
-# Import ADC libraries (Requires: pip3 install adafruit-circuitpython-ads1x15)
-import board
-import busio
+# Import board for direct I2C access (avoids explicit 'busio' import)
+import board 
+# Import ADC libraries 
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
@@ -45,7 +45,6 @@ SOUND_DATA_FILE = os.path.join(DATA_DIR, "SOUND.csv")
 LIVE_DATA_FILE = os.path.join(DATA_DIR, "LATEST_SENSOR_DATA.json")
 
 # Calibrated Reference Voltage (MUST be updated after running --calibrate)
-# Placeholder value. Use the computed value after calibration.
 V_REF = 1.0e-5 
 
 # Logging Loop Parameters
@@ -56,6 +55,7 @@ N_SAMPLES = SAMPLE_RATE * WINDOW_SEC
 # --- Initialize Hardware ---
 # 1. gpiozero Buzzer
 try:
+    # Initialization using gpiozero (preferred method)
     buzzer = Buzzer(BUZZER_PIN)
 except Exception as e:
     print(f"Error initializing Buzzer on GPIO {BUZZER_PIN}: {e}")
@@ -63,13 +63,19 @@ except Exception as e:
 
 # 2. I2C and ADC
 try:
-    i2c = busio.I2C(board.SCL, board.SDA)
+    # --- I2C Initialization without busio ---
+    # Use the board module's default I2C object directly
+    i2c = board.I2C() 
+    # --- DFRobot ADS1115 Initialization ---
     ads = ADS.ADS1115(i2c)
     ads.gain = ADC_GAIN 
     chan = AnalogIn(ads, ADC_CHANNEL) 
 except Exception as e:
     print(f"Error initializing I2C or ADC: {e}")
+    print("Ensure I2C is enabled on your Raspberry Pi (via raspi-config).")
     sys.exit(1)
+    
+# 
 
 # --- Utility Functions ---
 
@@ -117,7 +123,6 @@ def calibrate(spl_ref=94.0):
     print("!!! Start the known sound tone (e.g., 94 dB SPL) now !!!")
     
     samples = []
-    start_time = time.monotonic()
     SAMPLE_PERIOD = 1.0 / SAMPLE_RATE
     
     for i in range(N_SAMPLES):
@@ -134,6 +139,7 @@ def calibrate(spl_ref=94.0):
     
     rms = compute_rms(samples)
     
+    # Formula: V_REF = RMS / (10^(SPL_ref / 20))
     if rms > 0:
         v_ref_computed = rms / (10**(spl_ref / 20))
     else:
@@ -191,6 +197,7 @@ def main_loop():
             
             # Compute dB SPL relative to V_REF
             if rms > 0 and V_REF > 0:
+                # Formula: dB = 20 * log10(V_measured / V_ref)
                 db_spl = 20 * math.log10(rms / V_REF)
             else:
                 db_spl = -math.inf 
