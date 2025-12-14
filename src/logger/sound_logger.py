@@ -1,5 +1,5 @@
 # =========================================================================
-# Kabot-1 Mission: Sound Logger & Buzzer Signaling (busio removed)
+# Kabot-1 Mission: Sound Logger & Buzzer Signaling (Final Revision)
 # =========================================================================
 # Purpose: Log sound amplitude (RMS + dB SPL) using ADS1115 and signal 
 #          mission status using a high-level gpiozero buzzer interface.
@@ -16,16 +16,17 @@ import math
 from datetime import datetime
 
 # --- Third-Party Libraries ---
-# Import gpiozero for high-level buzzer control
+# Import gpiozero for high-level buzzer control (Requires: pip3 install gpiozero)
 from gpiozero import Buzzer
-# Import board for direct I2C access (avoids explicit 'busio' import)
+# Import board for direct I2C access (Requires: pip3 install Adafruit-Blinka)
 import board 
-# Import ADC libraries 
+# Import ADC libraries (Requires: pip3 install adafruit-circuitpython-ads1x15)
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
 # Assume write_heartbeat is available in current environment
 try:
+    # NOTE: This utility file must be present for flight logging to work.
     from heartbeat import write_heartbeat 
 except ImportError:
     def write_heartbeat(filename):
@@ -36,7 +37,6 @@ FLIGHT_MODE = True  # Set to True for minimal console output
 
 # Hardware Pinouts
 BUZZER_PIN = 21     # GPIO Pin for the passive/active buzzer
-ADC_CHANNEL = ADS.P0 # ADC A0 pin connected to the microphone
 ADC_GAIN = 1        # Sets the full-scale range to +/- 4.096V (ADS1115 default)
 
 # Logging Setup
@@ -45,6 +45,7 @@ SOUND_DATA_FILE = os.path.join(DATA_DIR, "SOUND.csv")
 LIVE_DATA_FILE = os.path.join(DATA_DIR, "LATEST_SENSOR_DATA.json")
 
 # Calibrated Reference Voltage (MUST be updated after running --calibrate)
+# This value relates measured RMS voltage to 0 dB SPL.
 V_REF = 1.0e-5 
 
 # Logging Loop Parameters
@@ -55,7 +56,6 @@ N_SAMPLES = SAMPLE_RATE * WINDOW_SEC
 # --- Initialize Hardware ---
 # 1. gpiozero Buzzer
 try:
-    # Initialization using gpiozero (preferred method)
     buzzer = Buzzer(BUZZER_PIN)
 except Exception as e:
     print(f"Error initializing Buzzer on GPIO {BUZZER_PIN}: {e}")
@@ -63,19 +63,18 @@ except Exception as e:
 
 # 2. I2C and ADC
 try:
-    # --- I2C Initialization without busio ---
-    # Use the board module's default I2C object directly
+    # I2C Initialization using board (no busio needed)
     i2c = board.I2C() 
-    # --- DFRobot ADS1115 Initialization ---
+    # DFRobot ADS1115 Initialization 
     ads = ADS.ADS1115(i2c)
     ads.gain = ADC_GAIN 
-    chan = AnalogIn(ads, ADC_CHANNEL) 
+    # FIX: Use ADS.A0 (Analog Channel 0) instead of the erroneous ADS.P0
+    chan = AnalogIn(ads, ADS.A0) 
 except Exception as e:
     print(f"Error initializing I2C or ADC: {e}")
     print("Ensure I2C is enabled on your Raspberry Pi (via raspi-config).")
     sys.exit(1)
     
-# 
 
 # --- Utility Functions ---
 
@@ -109,7 +108,7 @@ def compute_rms(samples):
     N = len(samples)
     if N == 0:
         return 0.0
-    # Uses generator expression (no intermediate list) for efficiency
+    # Uses generator expression for memory efficiency and math.fsum for accuracy
     sum_of_squares = math.fsum(v**2 for v in samples)
     return math.sqrt(sum_of_squares / N)
 
@@ -139,7 +138,7 @@ def calibrate(spl_ref=94.0):
     
     rms = compute_rms(samples)
     
-    # Formula: V_REF = RMS / (10^(SPL_ref / 20))
+    # Calibration formula: V_REF = RMS / (10^(SPL_ref / 20))
     if rms > 0:
         v_ref_computed = rms / (10**(spl_ref / 20))
     else:
