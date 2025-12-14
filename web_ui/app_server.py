@@ -89,6 +89,13 @@ SCRIPTS_CONFIG = {
         "sim_script": SIM_DIR / "payload_flight_simulation.py",
         "video_file": "payload_flight_simulation.mp4"
     }
+        },
+    "sound": {
+        "title": "Sound Logger",
+        "log_script": LOG_DIR / "sound_logger.py",
+        "plot_script": PLOT_DIR / "sound_plotter.py",
+        "chart_file": "sound_chart.svg"
+    }
 }
 
 # =========================================================================
