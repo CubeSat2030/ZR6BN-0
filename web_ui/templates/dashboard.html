@@ -33,24 +33,6 @@
         .btn:disabled { cursor: not-allowed; opacity: 0.5; }
         .status-box { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; background-color: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; min-height: 80px; padding: 0.5rem; }
         .chart-container img { border-radius: 6px; border: 1px solid var(--border); background-color: var(--bg-dark); height: auto; width: 100%; }
-        
-        /* --- NEW VIDEO CONTAINER STYLES --- */
-        .video-container { 
-            position: relative; 
-            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */ 
-            height: 0; 
-            overflow: hidden;
-        }
-        .video-container video {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border-radius: 6px; 
-            border: 1px solid var(--border); 
-            background-color: var(--bg-dark);
-        }
 
         /* Logger/Card Pulsing indicators */
         .pulse-active-green { animation: pulse-shadow-green 1.5s infinite; }
@@ -139,7 +121,6 @@
                     <h2 class="text-xl font-bold text-white mb-4">Manual Loggers</h2>
                     <div id="scripts-container" class="space-y-4">
                         {% for name, config in scripts_config.items() %}
-                        {% if config.chart_file %}
                         <div id="script-{{ name }}" class="card p-3 border border-gray-700/50">
                             <h3 class="font-semibold text-white">{{ config.title }}</h3>
                             <div class="flex items-center text-sm my-2">
@@ -151,7 +132,6 @@
                                 <button onclick="controlScript('{{ name }}', 'stop')" class="stop-btn btn text-xs bg-gray-600 hover:bg-gray-700 text-white font-semibold py-1 px-2 rounded">Stop</button>
                             </div>
                         </div>
-                        {% endif %}
                         {% endfor %}
                     </div>
                 </section>
@@ -159,38 +139,23 @@
             <div id="chart-section" class="lg:col-span-2 flex flex-col gap-6">
                  <section class="card p-5">
                     <h2 class="text-xl font-bold text-white mb-4">Post-Flight Analysis</h2>
-                    <p class="text-gray-400 mb-4">Generate and view charts/simulations from logged data. Generation is disabled when the Flight Controller is active.</p>
+                    <p class="text-gray-400 mb-4">Generate and view charts from logged sensor data. Chart generation is disabled when the Flight Controller is active.</p>
                     <div id="chart-controls" class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
                         {% for name, config in scripts_config.items() %}
-                        {% if config.chart_file %}
                         <button id="gen-{{ name }}" onclick="generateChart('{{ name }}')" class="btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 rounded-lg">Generate {{ config.title }} Chart</button>
-                        {% elif name == 'simulation' %}
-                        <button id="gen-simulation" onclick="generateSimulation('simulation')" class="btn bg-pink-600 hover:bg-pink-700 text-white font-semibold py-2 px-3 rounded-lg">Generate Flight Simulation</button>
-                        {% endif %}
                         {% endfor %}
                     </div>
-                    <div class="status-box text-sm text-gray-400" id="chart-status-output">Chart/Simulation generation status will appear here...</div>
+                    <div class="status-box text-sm text-gray-400" id="chart-status-output">Chart generation status will appear here...</div>
                 </section>
                 <section class="card p-5">
                     <div class="grid grid-cols-1 md:grid-cols-1 gap-6">
                         {% for name, config in scripts_config.items() %}
                         <div class="chart-container">
-                            <div class="flex justify-between items-center mb-2">
+                             <div class="flex justify-between items-center mb-2">
                                 <h3 class="text-lg font-semibold text-white">{{ config.title }}</h3>
-                                {% if config.chart_file %}
                                 <a id="download-{{ name }}" href="/download/chart/{{ config.chart_file }}" class="hidden btn text-xs bg-gray-600 hover:bg-gray-700 text-white font-semibold py-1 px-3 rounded">Download</a>
-                                {% endif %}
                             </div>
-
-                            {% if config.chart_file %}
                             <img id="{{ name }}_chart" src="https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated" alt="{{ config.title }} Chart">
-                            
-                            {% elif name == 'simulation' %}
-                            <div class="video-container" id="video-{{ name }}">
-                                <video id="{{ name }}_video" controls loop preload="none" style="display:none;"></video>
-                                <img id="{{ name }}_placeholder" src="https://placehold.co/600x400/0d1117/30363d?text=No+Video+Generated" alt="{{ config.title }} Placeholder">
-                            </div>
-                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
@@ -232,8 +197,7 @@
     const POLLING_INTERVAL_MS = 2000;
 
     function showAlert(message, type = 'success') {
-        // CORRECTED: Ensure the object syntax is valid: { property: value, property: value }
-        const colors = { success: 'bg-green-600/90 border-green-700 text-white', error: 'bg-red-600/90 border-red-700 text-white', info: 'bg-blue-600/90 border-blue-700 text-white' };
+        const colors = { success: 'bg-green-600/90 border-green-700 text-white', error: 'bg-red-600/90 border-red-700 text-white', info: 'bg-blue-600/90 border-blue-700 text-white', };
         const alertDiv = document.createElement('div');
         alertDiv.className = `p-3 border-l-4 rounded-lg shadow-lg ${colors[type]} transition-opacity duration-300`;
         alertDiv.innerHTML = `<p class="font-medium">${message}</p>`;
@@ -283,34 +247,20 @@
         }
         for (const key in SCRIPTS_CONFIG) {
             const item = status[key]; if (!item) continue; const config = SCRIPTS_CONFIG[key]; const card = document.getElementById(`script-${key}`);
-            
-            // Handle logger scripts (which have a card)
-            if (card) { 
-                const circle = card.querySelector('.status-circle'); const text = card.querySelector('.status-text');
-                const startBtn = card.querySelector('.start-btn'); const stopBtn = card.querySelector('.stop-btn');
-                if (item.running) {
-                    circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-green-500 pulse-active-green';
-                    text.textContent = `Running (PID: ${item.pid})`; text.classList.add('text-green-400');
-                    text.classList.remove('text-gray-400'); card.classList.add('shadow-lg', 'pulse-active-green');
-                } else {
-                    circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-gray-500';
-                    text.textContent = 'Stopped'; text.classList.remove('text-green-400'); text.classList.add('text-gray-400');
-                    card.classList.remove('shadow-lg', 'pulse-active-green');
-                }
-                if (!mainActive && !isConnectionLost) { startBtn.disabled = item.running; stopBtn.disabled = !item.running; }
-            }
-            
-            // Handle generation buttons
+            if (!card) continue; const circle = card.querySelector('.status-circle'); const text = card.querySelector('.status-text');
+            const startBtn = card.querySelector('.start-btn'); const stopBtn = card.querySelector('.stop-btn');
             const chartGenBtn = document.getElementById(`gen-${key}`);
-            if (chartGenBtn) chartGenBtn.disabled = mainActive || isConnectionLost;
-            
-            // Refresh chart/video
-            if (config.chart_file) {
-                refreshChartImage(key, `/chart/${config.chart_file}`);
-            } else if (key === 'simulation' && config.video_file) {
-                 // The video should only load after a generation attempt, not on every status update
-                 // refreshVideo(key, `/video/${config.video_file}`);
+            if (item.running) {
+                circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-green-500 pulse-active-green';
+                text.textContent = `Running (PID: ${item.pid})`; text.classList.add('text-green-400');
+                text.classList.remove('text-gray-400'); card.classList.add('shadow-lg', 'pulse-active-green');
+            } else {
+                circle.className = 'status-circle w-3 h-3 rounded-full mr-2 bg-gray-500';
+                text.textContent = 'Stopped'; text.classList.remove('text-green-400'); text.classList.add('text-gray-400');
+                card.classList.remove('shadow-lg', 'pulse-active-green');
             }
+            if (!mainActive && !isConnectionLost) { startBtn.disabled = item.running; stopBtn.disabled = !item.running; if (chartGenBtn) chartGenBtn.disabled = false; }
+            refreshChartImage(key, `/chart/${config.chart_file}`);
         }
     }
 
@@ -426,33 +376,6 @@
             statusOutput.classList.remove('text-yellow-400', 'text-green-400'); statusOutput.classList.add('text-red-400');
         } finally { genBtn.innerHTML = originalText; fetchStatus(); }
     }
-    
-    // --- NEW FUNCTION TO GENERATE SIMULATION ---
-    async function generateSimulation(name) {
-        const genBtn = document.getElementById(`gen-${name}`);
-        const videoFile = SCRIPTS_CONFIG[name].video_file;
-        statusOutput.textContent = `Requesting ${name.toUpperCase()} video generation. This may take a few minutes...`;
-        statusOutput.classList.remove('text-red-400', 'text-green-400'); statusOutput.classList.add('text-yellow-400');
-        document.querySelectorAll('#chart-controls button').forEach(b => b.disabled = true);
-        const originalText = genBtn.innerHTML;
-        genBtn.innerHTML = `<div class="loading-ring mr-2"></div> Generating Video...`;
-        try {
-            // Note: Use /api/simulation route
-            const response = await fetch(`/api/simulation/${name}`, { method: 'POST' });
-            const result = await response.json();
-            if (response.ok && result.success) {
-                statusOutput.textContent = `Success: ${result.message}\nRefreshing video player...`;
-                statusOutput.classList.remove('text-yellow-400', 'text-red-400'); statusOutput.classList.add('text-green-400');
-                // Note: Use refreshVideo function
-                refreshVideo(name, `/video/${videoFile}`);
-            } else { throw new Error(result.message || 'Unknown simulation error.'); }
-        } catch (error) {
-            statusOutput.textContent = `Error: ${error.message}`;
-            statusOutput.classList.remove('text-yellow-400', 'text-green-400'); statusOutput.classList.add('text-red-400');
-        } finally { genBtn.innerHTML = originalText; fetchStatus(); }
-    }
-    // --- END NEW FUNCTION ---
-
     function refreshChartImage(sensor, url) {
         const imgElement = document.getElementById(`${sensor}_chart`);
         const downloadLink = document.getElementById(`download-${sensor}`);
@@ -464,22 +387,6 @@
         };
     }
     
-    // --- NEW FUNCTION TO REFRESH VIDEO PLAYER ---
-    function refreshVideo(name, url) {
-        const videoElement = document.getElementById(`${name}_video`);
-        const placeholderImg = document.getElementById(`${name}_placeholder`);
-        
-        if (videoElement) {
-            // Use query parameter to force video player to re-load from server, preventing cache issues.
-            videoElement.src = `${url}?t=${new Date().getTime()}`;
-            videoElement.style.display = 'block';
-            placeholderImg.style.display = 'none';
-            videoElement.load();
-            // Removed videoElement.play() for better browser compatibility
-        }
-    }
-    // --- END NEW FUNCTION ---
-    
     // --- MODIFIED systemControl function to handle wipe_data action ---
     async function systemControl(action) {
         let confirmationMessage = '';
@@ -488,7 +395,7 @@
         } else if (action === 'reboot') {
             confirmationMessage = 'Are you absolutely sure you want to <strong>REBOOT</strong> Kabot-1?';
         } else if (action === 'wipe_data') { // <--- NEW WIPE DATA LOGIC
-            confirmationMessage = 'Are you absolutely sure you want to <strong>PERMANENTLY DELETE</strong> all log (.txt), chart (.svg), and video files? This cannot be undone.';
+            confirmationMessage = 'Are you absolutely sure you want to <strong>PERMANENTLY DELETE</strong> all log (.txt) and chart (.svg) data? This cannot be undone.';
         } else {
             openSystemControlModal(); 
             return;
@@ -501,8 +408,8 @@
             document.body.appendChild(modal);
             document.getElementById('cancel-btn').onclick = () => { modal.remove(); resolve(false); };
             document.getElementById('confirm-btn').onclick = () => { modal.remove(); resolve(true); };
-        }); // <-- CRITICAL FIX: Missing closing parenthesis/bracket for the Promise
-        
+        });
+
         if (!isConfirmed) { openSystemControlModal(); return; }
         
         document.querySelectorAll('.btn').forEach(b => b.disabled = true);
@@ -521,16 +428,6 @@
                     // Data Wipe: re-enable buttons and fetch status to update charts
                     document.querySelectorAll('.btn').forEach(b => b.disabled = false);
                     fetchStatus(); 
-                    
-                    // Force refresh of video placeholder after wipe
-                    const simConfig = SCRIPTS_CONFIG['simulation'];
-                    if (simConfig && simConfig.video_file) {
-                        const videoElement = document.getElementById('simulation_video');
-                        const placeholderImg = document.getElementById('simulation_placeholder');
-                        if(videoElement) videoElement.style.display = 'none';
-                        if(placeholderImg) placeholderImg.style.display = 'block';
-                        if(placeholderImg) placeholderImg.src = `https://placehold.co/600x400/0d1117/30363d?text=No+Video+Generated&t=${new Date().getTime()}`;
-                    }
                 }
             } else { 
                 showAlert(`System control failed: ${result.message}`, 'error'); 
@@ -547,11 +444,7 @@
     function openSystemControlModal() { document.getElementById('system-control-modal').classList.remove('hidden'); }
     function closeSystemControlModal() { document.getElementById('system-control-modal').classList.add('hidden'); }
     function handleModalSystemControl(action) { closeSystemControlModal(); systemControl(action); }
-    document.addEventListener('DOMContentLoaded', () => { 
-        fetchStatus(); 
-        statusIntervalId = setInterval(fetchStatus, POLLING_INTERVAL_MS); 
-        monitorIntervalId = setInterval(monitorConnection, 1000); 
-    });
+    document.addEventListener('DOMContentLoaded', () => { fetchStatus(); statusIntervalId = setInterval(fetchStatus, POLLING_INTERVAL_MS); monitorIntervalId = setInterval(monitorConnection, 1000); });
 </script>
 
 </body>
