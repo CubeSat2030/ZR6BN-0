@@ -1,9 +1,9 @@
 # =========================================================================
-# Kabot-1 Mission: Sound Logger & Buzzer Signaling (Index Fix)
+# Kabot-1 Mission: Sound Logger & Buzzer Signaling (1-Minute Cycle)
 # =========================================================================
-# Purpose: Log sound amplitude (RMS + dB SPL) using ADS1115.
-# Fix: Replaced the problematic channel constant (ADS.P0/A0) with the 
-#      guaranteed working channel index (0) in the AnalogIn constructor.
+# Purpose: Log sound amplitude (RMS + dB SPL) in discrete 1-second captures,
+#          signaling with a beep, then sleeping for the remainder of the minute.
+# Cycle: [BEEP + CAPTURE (1s)] -> [SILENCE/SLEEP (59s)]
 # =========================================================================
 
 import time
@@ -16,7 +16,6 @@ from datetime import datetime
 # --- Third-Party Libraries ---
 from gpiozero import Buzzer
 import board 
-# We only need the ADS1115 class now, the constant imports are gone.
 import adafruit_ads1x15.ads1115 as ADS 
 from adafruit_ads1x15.analog_in import AnalogIn
 
@@ -29,6 +28,10 @@ except ImportError:
 
 # --- Configuration & Constants ---
 FLIGHT_MODE = True  # Set to True for minimal console output
+
+# NEW CONFIG: The time between the start of two consecutive captures
+CYCLE_INTERVAL_SEC = 60.0 # 1 minute
+CAPTURE_DURATION_SEC = 1.0 # The duration of the RMS window
 
 # Hardware Pinouts
 BUZZER_PIN = 21     
@@ -44,8 +47,7 @@ V_REF = 1.0e-5
 
 # Logging Loop Parameters
 SAMPLE_RATE = 100    
-WINDOW_SEC = 1       
-N_SAMPLES = SAMPLE_RATE * WINDOW_SEC
+N_SAMPLES = int(SAMPLE_RATE * CAPTURE_DURATION_SEC) # 100 samples for the 1s window
 
 # --- Initialize Hardware ---
 # 1. gpiozero Buzzer
@@ -60,17 +62,13 @@ try:
     i2c = board.I2C() 
     ads = ADS.ADS1115(i2c)
     ads.gain = ADC_GAIN 
-    
-    # GUARANTEED FIX: Use channel index 0 (for A0) instead of a constant
-    chan = AnalogIn(ads, 0) 
+    chan = AnalogIn(ads, 0) # Guaranteed Fix: Use channel index 0 (for A0)
     
 except Exception as e:
     print(f"Error initializing I2C or ADC: {e}")
-    print("Ensure I2C is enabled and dependencies are installed.")
     sys.exit(1)
     
-# --- Utility Functions ---
-
+# --- Utility Functions (Unchanged) ---
 def buzz(duration_sec=0.1, delay_sec=0.1, repeats=1):
     """Activates the buzzer for signaling using gpiozero."""
     for _ in range(repeats):
@@ -81,7 +79,7 @@ def buzz(duration_sec=0.1, delay_sec=0.1, repeats=1):
             time.sleep(delay_sec)
 
 def write_live_data(data):
-    """Update centralized JSON file for dashboard."""
+    # ... (function body remains the same) ...
     full_data = {}
     if os.path.exists(LIVE_DATA_FILE):
         try:
@@ -97,20 +95,18 @@ def write_live_data(data):
         pass 
 
 def compute_rms(samples):
-    """Compute RMS from a list of voltage samples using efficient generator."""
+    # ... (function body remains the same) ...
     N = len(samples)
     if N == 0:
         return 0.0
     sum_of_squares = math.fsum(v**2 for v in samples)
     return math.sqrt(sum_of_squares / N)
 
-# --- Calibration Mode ---
-
+# --- Calibration Mode (Unchanged) ---
 def calibrate(spl_ref=94.0):
-    """Calibrate V_REF using a known SPL tone (e.g., 94 dB)."""
-    
+    # ... (function body remains the same) ...
     print("\n--- Sound Sensor Calibration Mode ---")
-    print(f"Targeting {N_SAMPLES} samples over {WINDOW_SEC} second(s).")
+    print(f"Targeting {N_SAMPLES} samples over {CAPTURE_DURATION_SEC} second(s).")
     print("!!! Start the known sound tone (e.g., 94 dB SPL) now !!!")
     
     samples = []
@@ -139,32 +135,47 @@ def calibrate(spl_ref=94.0):
     buzz(duration_sec=0.05, repeats=3)
 
 
-# --- Logging Mode ---
+# --- Logging Mode (Restructured) ---
 
 def main():
-    """Setup and entry point for the continuous logging mode."""
+    """Setup and entry point for the 1-minute cyclical logging mode."""
     os.makedirs(DATA_DIR, exist_ok=True)
     
     if not os.path.exists(SOUND_DATA_FILE):
         with open(SOUND_DATA_FILE, "w") as f:
-            f.write("timestamp,rms_voltage(V),sound_level(dB SPL)\n")
+            # Removed the logging of 'processing_gap' as it's no longer the focus
+            f.write("timestamp,rms_voltage(V),sound_level(dB SPL)\n") 
 
     if not FLIGHT_MODE:
-        print(f"Sound Logger active. Logging to {SOUND_DATA_FILE}.")
-        print(f"V_REF currently set to: {V_REF:.9e} V")
+        print(f"Cyclical Sound Logger active. Interval: {CYCLE_INTERVAL_SEC}s.")
     
-    buzz(duration_sec=0.2) 
+    buzz(duration_sec=0.2) # Single buzz to signal logger start
     main_loop()
 
 def main_loop():
-    """The main sampling and logging loop."""
+    """The main 60-second sampling and sleeping loop."""
     
     SAMPLE_PERIOD = 1.0 / SAMPLE_RATE
+    
+    # Initialize the time for the first capture immediately
+    next_cycle_start_time = time.monotonic()
 
     try:
         while True:
+            # 1. WAIT FOR NEXT CYCLE START
+            time_to_wait = next_cycle_start_time - time.monotonic()
+            if time_to_wait > 0:
+                 time.sleep(time_to_wait)
+                 
+            # 2. START OF CYCLE (CAPTURE PHASE)
+            cycle_start_time = time.monotonic()
+            
+            # --- SIGNAL AND START CAPTURE ---
+            buzz(duration_sec=0.05) # Short beep to signal the start of capture
+            
             samples = []
             
+            # Data Sampling for 1.0 second
             for i in range(N_SAMPLES):
                 read_start = time.monotonic()
                 samples.append(chan.voltage)
@@ -173,6 +184,7 @@ def main_loop():
                 if time_to_sleep > 0:
                     time.sleep(time_to_sleep)
             
+            # 3. PROCESSING & LOGGING (The short silent gap after capture)
             rms = compute_rms(samples)
             
             if rms > 0 and V_REF > 0:
@@ -182,9 +194,10 @@ def main_loop():
 
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+            # Logging to file
             with open(SOUND_DATA_FILE, "a") as f:
                 f.write(f"{timestamp},{rms:.9f},{db_spl:.2f}\n")
-
+                
             data_point = {
                 "timestamp": timestamp,
                 "sound_rms": round(rms, 9),
@@ -194,8 +207,12 @@ def main_loop():
             write_live_data(data_point)
             write_heartbeat("sound_logger.json")
 
+            # 4. ADVANCE NEXT CYCLE START TIME
+            next_cycle_start_time = cycle_start_time + CYCLE_INTERVAL_SEC
+            
+            # --- CONSOLE OUTPUT ---
             if not FLIGHT_MODE:
-                print(f"\rLogged RMS: {rms:.9f} V | {db_spl:.2f} dB SPL at {timestamp}", end="", flush=True)
+                print(f"\rLogged {db_spl:.2f} dB SPL at {timestamp}. Sleeping for {CYCLE_INTERVAL_SEC}s...", end="", flush=True)
 
     except KeyboardInterrupt:
         if not FLIGHT_MODE:
@@ -207,8 +224,7 @@ def main_loop():
         buzz(duration_sec=0.5) 
         buzzer.close() 
 
-# --- Entry Point ---
-
+# --- Entry Point (Unchanged) ---
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--calibrate":
         calibrate()
