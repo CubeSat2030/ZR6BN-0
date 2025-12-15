@@ -1,10 +1,9 @@
 # =========================================================================
-# Kabot-1 Mission: Sound Logger & Buzzer Signaling (I2C Channel Fix)
+# Kabot-1 Mission: Sound Logger & Buzzer Signaling (Index Fix)
 # =========================================================================
-# Purpose: Log sound amplitude (RMS + dB SPL) using ADS1115 and signal 
-#          mission status using a high-level gpiozero buzzer interface.
-# Fix: Corrects the 'no attribute P0/A0' error by importing P0 from the 
-#      ADS1015 submodule, which hosts the shared channel constants.
+# Purpose: Log sound amplitude (RMS + dB SPL) using ADS1115.
+# Fix: Replaced the problematic channel constant (ADS.P0/A0) with the 
+#      guaranteed working channel index (0) in the AnalogIn constructor.
 # =========================================================================
 
 import time
@@ -17,10 +16,8 @@ from datetime import datetime
 # --- Third-Party Libraries ---
 from gpiozero import Buzzer
 import board 
-# Import the ADS1115 class
-import adafruit_ads1x15.ads1115 as ADS
-# Import the ADS1015 module to access the shared P0 channel constant
-import adafruit_ads1x15.ads1015 as ADS_CHANNEL_CONSTANTS 
+# We only need the ADS1115 class now, the constant imports are gone.
+import adafruit_ads1x15.ads1115 as ADS 
 from adafruit_ads1x15.analog_in import AnalogIn
 
 # Assume write_heartbeat is available in current environment
@@ -64,12 +61,12 @@ try:
     ads = ADS.ADS1115(i2c)
     ads.gain = ADC_GAIN 
     
-    # CORRECT FIX: Use the P0 constant from the imported ADS_CHANNEL_CONSTANTS module
-    chan = AnalogIn(ads, ADS_CHANNEL_CONSTANTS.P0) 
+    # GUARANTEED FIX: Use channel index 0 (for A0) instead of a constant
+    chan = AnalogIn(ads, 0) 
     
 except Exception as e:
     print(f"Error initializing I2C or ADC: {e}")
-    print("Ensure I2C is enabled and that all adafruit-ads1x15 dependencies are installed.")
+    print("Ensure I2C is enabled and dependencies are installed.")
     sys.exit(1)
     
 # --- Utility Functions ---
