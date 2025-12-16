@@ -41,7 +41,7 @@ ADC_GAIN = 1
 
 # Logging Setup
 DATA_DIR = os.path.join("src", "logger", "data")
-SOUND_DATA_FILE = os.path.join(DATA_DIR, "SOUND.csv")
+SOUND_DATA_FILE = os.path.join(DATA_DIR, "SOUND.txt")
 LIVE_DATA_FILE = os.path.join(DATA_DIR, "LATEST_SENSOR_DATA.json")
 
 # Calibrated Reference Voltage 
