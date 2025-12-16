@@ -1,0 +1,2 @@
+timestamp,rms_voltage(V),sound_level(dB SPL)
+2025-12-16 14:10:48,0.097180438,79.75
