@@ -1,7 +1,3 @@
-# Bug: 
-# Fails to import Numpy.
-# Installed Python version is python3.13 from  /home/kabot-1/venv/bin/python
-# Installed Numpy version is 2.3.5
 import os, sys
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,22 +32,23 @@ def generate_sound_chart():
         print("No sound data to plot (or only header found).", file=sys.stderr)
         sys.exit(2)
 
-# Parse CSV (timestamp,rms,db)
-for line in lines[1:]:
-    parts = line.split(',')
-    if len(parts) >= 3:
-        try:
-            # Match logger format: "YYYY-MM-DD HH:MM:SS"
-            ts = datetime.strptime(parts[0], "%Y-%m-%d %H:%M:%S")
-            rms = float(parts[1])
-            db = float(parts[2]) if parts[2] not in ("", "None") else None
+    # Parse CSV (timestamp,rms,db)
+    for line in lines[1:]:
+        parts = line.split(',')
+        if len(parts) >= 3:
+            try:
+                # Match logger format: "YYYY-MM-DD HH:MM:SS"
+                ts = datetime.strptime(parts[0], "%Y-%m-%d %H:%M:%S")
+                rms = float(parts[1])
+                db = float(parts[2]) if parts[2] not in ("", "None") else None
 
-            times.append(ts)
-            rms_values.append(rms)
-            db_values.append(db)
-        except ValueError:
-            continue
-    
+                times.append(ts)
+                rms_values.append(rms)
+                db_values.append(db)
+            except ValueError:
+                # Skip malformed lines
+                continue
+
     if not rms_values:
         print("No valid numerical data to plot.", file=sys.stderr)
         sys.exit(2)
@@ -81,7 +78,7 @@ for line in lines[1:]:
     duration_str = f"{total_minutes:02d}m {total_seconds:02d}s"
 
     ax1.set_title(f"Sound RMS & dB SPL Timeline | Duration: {duration_str}")
-    ax1.set_xlabel("Time (HH:MM:SS)")
+    ax1.set_xlabel("Time (YYYY-MM-DD HH:MM:SS)")
 
     fig.autofmt_xdate()  # rotate timestamps for readability
     fig.tight_layout()
