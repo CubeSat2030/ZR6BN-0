@@ -7,10 +7,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
 
-# --- Paths ---
-DATA_DIR = os.path.join("src", "logger", "data")
-DATA_FILE = os.path.join(DATA_DIR, "SOUND.txt")  # matches sound_logger.py output
-CHARTS_DIR = "src/plotter/charts"
+# --- Paths (absolute, based on script location) ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DATA_DIR = os.path.join(BASE_DIR, "..", "logger", "data")
+DATA_FILE = os.path.join(DATA_DIR, "SOUND.txt")
+
+CHARTS_DIR = os.path.join(BASE_DIR, "..", "plotter", "charts")
 CHART_FILE = os.path.join(CHARTS_DIR, "sound_chart.svg")
 
 def generate_sound_chart():
