@@ -4,7 +4,7 @@
 # Installed Numpy version is 2.3.5
 import os, sys
 import matplotlib.pyplot as plt
-import Numpy as np
+import numpy as np
 from datetime import datetime
 
 # --- Paths ---
