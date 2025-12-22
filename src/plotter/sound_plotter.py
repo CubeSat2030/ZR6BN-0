@@ -1,6 +1,6 @@
 import os, sys
 import matplotlib.pyplot as plt
-import numpy as np
+import Numpy as np
 from datetime import datetime
 
 # --- Paths ---
