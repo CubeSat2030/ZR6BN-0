@@ -36,13 +36,35 @@ kabot-1(our root folder)
 # Project tree
 
 ~~~
-
 ├── .gitattributes
+├── HotspotHost/
+│   └── start_hotspot.py
 ├── README.md
+├── SystemClone/
+│   ├── .gitkeep
+│   ├── RunSystemClone.py
+│   └── src/
+│       └── clone.py
+├── kabot_launchpad/
+│   ├── configs/
+│   │   ├── dnsmasq.conf
+│   │   └── hostapd.conf
+│   ├── logs/
+│   │   ├── ap_startup.log
+│   │   └── dhcp_leases.log
+│   ├── scripts/
+│   │   ├── kabot1_hotspot.py
+│   │   └── kabot1_stop_ap.py
+│   └── tests/
+│       └── connecivity_check.py
+├── local
 ├── main.py
 ├── mission_master.log
+├── output/
+│   └── payload_simulation.mp4
 ├── requirements.txt
 ├── simulation_gouverner.log
+├── simulation_master.log
 ├── src/
 │   ├── .gitkeeep
 │   ├── logger/
@@ -55,12 +77,14 @@ kabot-1(our root folder)
 │   │   │   ├── LATEST_SENSOR_DATA.json
 │   │   │   ├── LATEST_SYSTEM_STATUS.json
 │   │   │   ├── MPU6050.txt
+│   │   │   ├── SOUND.txt
 │   │   │   ├── sound_data_D0.txt
 │   │   │   └── sound_data_D0_backup.txt
 │   │   ├── heartbeat.py
 │   │   ├── heartbeats/
 │   │   │   ├── cpu_logger.json
-│   │   │   └── mpu_logger.json
+│   │   │   ├── mpu_logger.json
+│   │   │   └── sound_logger.json
 │   │   ├── mpu6050_logger.py
 │   │   └── sound_logger.py
 │   ├── media/
@@ -77,23 +101,38 @@ kabot-1(our root folder)
 │   │   │   ├── cpu_chart_backup.svg
 │   │   │   ├── mpu_chart.svg
 │   │   │   ├── mpu_chart_backup.svg
-│   │   │   └── mpu_phases.svg
+│   │   │   ├── mpu_phases.svg
+│   │   │   └── sound_chart.svg
 │   │   ├── cpu_plotter.py
 │   │   ├── mpu6050_plotter.py
 │   │   └── sound_plotter.py
-│   └── simulation/
-│       ├── .gitkeep
-│       └── scripts/
-│           ├── simulation_gouverner.py
-│           └── simulation_pipeline/
-│               ├── preprocess.py
-│               ├── render.py
-│               ├── sensor_fusion.py
-│               └── trajectory.py
+│   ├── presentation/
+│   │   ├── activate_presentation_mode.py
+│   │   ├── presentation_handler.py
+│   │   └── presentation_runtime.py
+│   ├── simulation/
+│   │   ├── .gitkeep
+│   │   ├── output/
+│   │   │   └── data/
+│   │   │       └── preprocessed.csv
+│   │   └── scripts/
+│   │       ├── simulation.py
+│   │       ├── simulation_master.py
+│   │       └── simulation_pipeline/
+│   │           ├── preprocess.py
+│   │           ├── render_vectors.py
+│   │           ├── sensor_fusion.py
+│   │           └── trajectory.py
+│   └── tools/
+│       └── dataplot.py
 └── web_ui/
     ├── app_server.py
+    ├── app_server_development.py
+    ├── app_server_rollback.py
     └── templates/
-        └── dashboard.html
+        ├── dashboard.html
+        ├── dashboard_development.html
+        └── dashboard_rollback.html
 ~~~
 
 
