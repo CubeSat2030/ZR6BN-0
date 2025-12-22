@@ -1,3 +1,7 @@
+# Bug: 
+# Fails to import Numpy.
+# Installed Python version is python3.13 from  /home/kabot-1/venv/bin/python
+# Installed Numpy version is 2.3.5
 import os, sys
 import matplotlib.pyplot as plt
 import Numpy as np
