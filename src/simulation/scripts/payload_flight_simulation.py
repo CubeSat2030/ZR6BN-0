@@ -29,7 +29,6 @@ TRAIL_LENGTH = 80
 START_TIME = None  # e.g. "2025-10-11 08:00:00.000" or None to use whole file
 END_TIME = None
 MAX_ALTITUDE_CLIP = 32000.0
-
 # ------------------------------------------------------------------
 # LOAD & PREP DATA (robust)
 # ------------------------------------------------------------------
@@ -42,12 +41,25 @@ if "timestamp" not in df.columns:
 df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 df = df.dropna(subset=["timestamp"]).reset_index(drop=True)
 
+# optionally trim to START_TIME / END_TIME
 if START_TIME:
     df = df[df["timestamp"] >= pd.to_datetime(START_TIME)]
 if END_TIME:
     df = df[df["timestamp"] <= pd.to_datetime(END_TIME)]
 
-df = df.interpolate().fillna(0).sort_values(by="timestamp").reset_index(drop=True)
+# Map logger column names to simulation's expected names
+COLUMN_MAP = {
+    "accel_x": "accel_x_m_s2",
+    "accel_y": "accel_y_m_s2",
+    "accel_z": "accel_z_m_s2",
+    "gyro_x": "gyro_x_rads",
+    "gyro_y": "gyro_y_rads",
+    "gyro_z": "gyro_z_rads",
+}
+df = df.rename(columns=COLUMN_MAP)
+
+# Clean numeric columns (avoid FutureWarning)
+df = df.infer_objects(copy=False).interpolate().fillna(0).sort_values(by="timestamp").reset_index(drop=True)
 
 # ensure essential columns exist
 for c in ("gyro_x_rads", "gyro_y_rads", "gyro_z_rads",
@@ -55,15 +67,18 @@ for c in ("gyro_x_rads", "gyro_y_rads", "gyro_z_rads",
     if c not in df.columns:
         raise ValueError(f"Required column '{c}' missing from MPU6050.txt")
 
+# add velocity if missing
 if "velocity_m_s" not in df.columns:
     df["velocity_m_s"] = 0.0
 
+# derive arrays
 times = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds().values
 dt = np.diff(times, prepend=times[0])
 gyro = df[["gyro_x_rads", "gyro_y_rads", "gyro_z_rads"]].to_numpy()
 accel = df[["accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2"]].to_numpy()
 vel = df["velocity_m_s"].to_numpy()
 
+# integrate altitude from velocity
 alt = np.zeros(len(df))
 for i in range(1, len(df)):
     alt[i] = alt[i-1] + vel[i] * dt[i]
