@@ -25,7 +25,7 @@ DATA_DIR_RELATIVE = "src/logger/data/2_inflight"
 CHARTS_DIR_RELATIVE = "src/plotter/charts"
 
 # Construct ABSOLUTE paths
-DATA_FILE = os.path.join(PROJECT_ROOT, DATA_DIR_RELATIVE, "CPU_TEMP.txt")
+DATA_FILE = os.path.join(PROJECT_ROOT, DATA_DIR_RELATIVE, "cpu_temp.txt")
 CHARTS_DIR = os.path.join(PROJECT_ROOT, CHARTS_DIR_RELATIVE)
 CHART_FILE = os.path.join(CHARTS_DIR, "cpu_chart.svg")
 CHART_BACKUP_FILE = os.path.join(CHARTS_DIR, "cpu_chart_backup.svg")
