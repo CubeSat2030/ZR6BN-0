@@ -21,7 +21,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR)) 
 
 # Paths (relative to project root)
-DATA_DIR_RELATIVE = "src/logger/data"
+DATA_DIR_RELATIVE = "src/logger/data/2_inflight"
 CHARTS_DIR_RELATIVE = "src/plotter/charts"
 
 # Construct ABSOLUTE paths
