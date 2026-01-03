@@ -3,7 +3,7 @@
 BACAR-13 Cinematic Payload Flight Simulation
 - Left: 3D cinematic payload visualization (past/future trajectory, atmosphere transitions)
 - Right: Telemetry chart stack driven from the actual logger/data/MPU6050.txt file
-Author:  Nathan Graham Busse
+Author: Nathan Graham Busse
 """
 
 import os
@@ -19,9 +19,9 @@ import warnings
 # ------------------------------------------------------------------
 # CONFIGURATION — Edit these paths as required
 # ------------------------------------------------------------------
-DATA_FILE = os.path.join(
-    os.path.dirname(__file__), "..", "logger", "data", "2_inflight", "MPU6050.txt"
-)  # path to your flight log
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DATA_FILE = os.path.join(PROJECT_ROOT, "logger", "data", "2_inflight", "MPU6050.txt")
+
 REALTIME_SPEED = 1.0
 CUBE_SIZE = 0.12
 ACC_SCALE = 0.015
@@ -36,42 +36,34 @@ MAX_ALTITUDE_CLIP = 32000.0
 if not os.path.exists(DATA_FILE):
     raise FileNotFoundError(f"MPU6050 file not found at: {DATA_FILE}")
 
-# read with flexible parsing; skip comments starting '#'
 df = pd.read_csv(DATA_FILE, comment="#")
 if "timestamp" not in df.columns:
     raise ValueError("MPU6050.txt must contain 'timestamp' column")
 df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 df = df.dropna(subset=["timestamp"]).reset_index(drop=True)
 
-# optionally trim to START_TIME / END_TIME
 if START_TIME:
     df = df[df["timestamp"] >= pd.to_datetime(START_TIME)]
 if END_TIME:
     df = df[df["timestamp"] <= pd.to_datetime(END_TIME)]
 
-# Fill / interpolate missing numeric columns
 df = df.interpolate().fillna(0).sort_values(by="timestamp").reset_index(drop=True)
 
-# ensure essential columns exist (UPDATED COLUMN NAMES)
+# ensure essential columns exist
 for c in ("gyro_x_rads", "gyro_y_rads", "gyro_z_rads",
           "accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2"):
     if c not in df.columns:
         raise ValueError(f"Required column '{c}' missing from MPU6050.txt")
 
-# optional velocity column
 if "velocity_m_s" not in df.columns:
-    # try to integrate accel z (rough): not ideal, but fallback to zero if absent
     df["velocity_m_s"] = 0.0
 
-# times in seconds since start
 times = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds().values
 dt = np.diff(times, prepend=times[0])
-# Gyro is now in rad/s, so we remove the pi/180 conversion.
 gyro = df[["gyro_x_rads", "gyro_y_rads", "gyro_z_rads"]].to_numpy()
 accel = df[["accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2"]].to_numpy()
 vel = df["velocity_m_s"].to_numpy()
 
-# integrate altitude from velocity (fallback if you have explicit altitude)
 alt = np.zeros(len(df))
 for i in range(1, len(df)):
     alt[i] = alt[i-1] + vel[i] * dt[i]
