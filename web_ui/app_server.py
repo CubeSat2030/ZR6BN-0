@@ -46,6 +46,8 @@ TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
 # --- NEW PATHS FOR DATA WIPE ---
 DATA_DIR = LOG_DIR / "data" / "2_inflight"
+POSTFLIGHT_DATA_DIR = LOG_DIR / "data" / "2_inflight"
+
 HEARTBEATS_DIR = LOG_DIR / "heartbeats"
 FOOTAGE_DIR = SRC_DIR / "photography" / "footage"
 
