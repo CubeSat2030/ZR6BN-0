@@ -10,11 +10,11 @@ import json
 
 FLIGHT_MODE = True
 
-DATA_DIR = os.path.join("src", "logger", "data")
+DATA_DIR = os.path.join("src", "logger", "data", "2_inflight")
 DATA_FILE = os.path.join(DATA_DIR, "MPU6050.txt")
 LIVE_DATA_FILE = os.path.join(DATA_DIR, "LATEST_SENSOR_DATA.json")
 
-HEARTBEAT_DIR = os.path.join("src", "logger", "heartbeats")
+HEARTBEAT_DIR = os.path.join("src", "logger", "data", "heartbeats")
 HEARTBEAT_FILE = os.path.join(HEARTBEAT_DIR, "mpu_logger.json")
 
 SCRIPT_START_TIME = datetime.now()
