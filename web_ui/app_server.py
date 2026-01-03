@@ -40,7 +40,7 @@ MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger"
 PLOT_DIR = SRC_DIR / "plotter"
-SIM_DIR = SRC_DIR / "simulation"
+SIM_DIR = SRC_DIR / "simulation" / "scripts"
 CHARTS_DIR = PLOT_DIR / "charts" 
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
