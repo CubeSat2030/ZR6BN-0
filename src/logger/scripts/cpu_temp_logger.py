@@ -10,8 +10,8 @@ from heartbeat import write_heartbeat
 
 FLIGHT_MODE = True
 
-DATA_DIR = os.path.join("src", "logger", "data")
-DATA_FILE = os.path.join(DATA_DIR, "CPU_TEMP.txt")
+DATA_DIR = os.path.join("src", "logger", "data", "2_inflight")
+DATA_FILE = os.path.join(DATA_DIR, "cpu_temp.txt")
 LIVE_DATA_FILE = os.path.join(DATA_DIR, "LATEST_SENSOR_DATA.json")
 
 SCRIPT_START_TIME = datetime.now()
