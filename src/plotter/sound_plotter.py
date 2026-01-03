@@ -6,11 +6,11 @@ from datetime import datetime
 # --- Paths (absolute, based on script location) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-DATA_DIR = os.path.join(BASE_DIR, "..", "logger", "data")
-DATA_FILE = os.path.join(DATA_DIR, "SOUND.txt")
+DATA_DIR = os.path.join(BASE_DIR, "..", "logger", "data", "3_postflight")
+DATA_FILE = os.path.join(DATA_DIR, "sound_logger.txt")
 
 CHARTS_DIR = os.path.join(BASE_DIR, "..", "plotter", "charts")
-CHART_FILE = os.path.join(CHARTS_DIR, "sound_chart.svg")
+CHART_FILE = os.path.join(CHARTS_DIR, "sound_logger_chart.svg")
 
 def generate_sound_chart():
     if not os.path.exists(DATA_FILE):
