@@ -1,38 +1,3 @@
-~~~
-create a 3D fly-through simulation based on motion data, stored in the .txt file called MPU6050.
-
-
-Here is the file structure:
-
-
-kabot-1(our root folder)
-
- |
-
- |
-
- |-->   src--> logger--> data-|
-
-           |                                        |_MPU6050.txt
-
-           |
-
-           |--> simulation--> scripts--> simulation.cpp 
-
-                                                      |-->  simulation_pipeline_scripts--> cube.cpp
-
-                                                                                                               |--> physics.cpp
-
-                                                                                                               |--> graphics.cpp
-
-                                                                                                                |--> render.cpp
-
-
-
-
-~~~
-
-
 # Project tree
 
 ~~~
