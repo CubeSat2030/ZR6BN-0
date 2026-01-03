@@ -2,8 +2,6 @@
 
 ~~~
 ├── .gitattributes
-├── HotspotHost/
-│   └── start_hotspot.py
 ├── README.md
 ├── SystemClone/
 │   ├── .gitkeep
@@ -18,48 +16,44 @@
 │   │   ├── ap_startup.log
 │   │   └── dhcp_leases.log
 │   ├── scripts/
+│   │   ├── dnsmasq.conf
+│   │   ├── install_hotspot_deps.sh
 │   │   ├── kabot1_hotspot.py
 │   │   └── kabot1_stop_ap.py
 │   └── tests/
 │       └── connecivity_check.py
-├── local
 ├── main.py
-├── mission_master.log
-├── output/
-│   └── payload_simulation.mp4
 ├── requirements.txt
-├── simulation_gouverner.log
-├── simulation_master.log
 ├── src/
 │   ├── .gitkeeep
 │   ├── logger/
 │   │   ├── __pycache__/
 │   │   │   └── heartbeat.cpython-313.pyc
-│   │   ├── calibrate_sound.py
-│   │   ├── cpu_logger.py
 │   │   ├── data/
-│   │   │   ├── CPU_TEMP.txt
-│   │   │   ├── LATEST_SENSOR_DATA.json
-│   │   │   ├── LATEST_SYSTEM_STATUS.json
-│   │   │   ├── MPU6050.txt
-│   │   │   ├── SOUND.txt
-│   │   │   ├── sound_data_D0.txt
-│   │   │   └── sound_data_D0_backup.txt
-│   │   ├── heartbeat.py
+│   │   │   ├── .gitkeep
+│   │   │   ├── 1_preflight/
+│   │   │   │   └── sound_logger_config.txt
+│   │   │   ├── 2_inflight/
+│   │   │   │   ├── .gitkeep
+│   │   │   │   ├── MPU6050.txt
+│   │   │   │   ├── backup/
+│   │   │   │   │   ├── .gitkeep
+│   │   │   │   │   ├── inflight_MPU6050_backup.txt
+│   │   │   │   │   └── inflight_cpu_temp_backup.txt
+│   │   │   │   └── cpu_temp.txt
+│   │   │   └── 3_postflight/
+│   │   │       ├── .gitkeep
+│   │   │       └── sound_logger.txt
 │   │   ├── heartbeats/
 │   │   │   ├── cpu_logger.json
 │   │   │   ├── mpu_logger.json
 │   │   │   └── sound_logger.json
-│   │   ├── mpu6050_logger.py
-│   │   └── sound_logger.py
-│   ├── media/
-│   │   ├── .gitkeep
-│   │   └── output/
-│   │       ├── .gitkeep
-│   │       ├── image/
-│   │       │   └── .gitkeep
-│   │       └── video/
-│   │           └── .gitkeep
+│   │   └── scripts/
+│   │       ├── calibrate_sound.py
+│   │       ├── cpu_temp_logger.py
+│   │       ├── heartbeat.py
+│   │       ├── mpu6050_logger.py
+│   │       └── sound_logger.py
 │   ├── plotter/
 │   │   ├── charts/
 │   │   │   ├── cpu_chart.svg
@@ -81,7 +75,9 @@
 │   │   │   └── data/
 │   │   │       └── preprocessed.csv
 │   │   └── scripts/
+│   │       ├── payload_flight_simulation.py
 │   │       ├── simulation.py
+│   │       ├── simulation_master.log
 │   │       ├── simulation_master.py
 │   │       └── simulation_pipeline/
 │   │           ├── preprocess.py
