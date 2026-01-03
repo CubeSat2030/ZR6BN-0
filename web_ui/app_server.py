@@ -38,14 +38,14 @@ BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 
 SRC_DIR = BASE_DIR / "src"
-LOG_DIR = SRC_DIR / "logger" 
+LOG_DIR = SRC_DIR / "logger"
 PLOT_DIR = SRC_DIR / "plotter"
 SIM_DIR = SRC_DIR / "simulation"
 CHARTS_DIR = PLOT_DIR / "charts" 
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
 # --- NEW PATHS FOR DATA WIPE ---
-DATA_DIR = LOG_DIR / "data"
+DATA_DIR = LOG_DIR / "data" / "2_inflight"
 HEARTBEATS_DIR = LOG_DIR / "heartbeats"
 FOOTAGE_DIR = SRC_DIR / "photography" / "footage"
 
