@@ -20,7 +20,12 @@ os.makedirs(CHARTS_DIR, exist_ok=True)
 WINDOW_LENGTH = 51
 POLY_ORDER = 3
 
+# =========================================================================
+# Header mapping (updated to match your file)
+# =========================================================================
 HEADER_MAP = {
+    "accel_x": "accel_x", "accel_y": "accel_y", "accel_z": "accel_z",
+    "gyro_x": "gyro_x", "gyro_y": "gyro_y", "gyro_z": "gyro_z",
     "accel_x_g": "accel_x", "accel_y_g": "accel_y", "accel_z_g": "accel_z",
     "gyro_x_dps": "gyro_x", "gyro_y_dps": "gyro_y", "gyro_z_dps": "gyro_z",
     "ax": "accel_x", "ay": "accel_y", "az": "accel_z",
@@ -106,7 +111,6 @@ date_formatter = mdates.DateFormatter("%H:%M:%S")
 # Draw each phase
 # =========================================================================
 for idx, (label, t_start, t_end) in enumerate(PHASES):
-    # slice indices
     mask = (dates >= t_start) & (dates <= t_end)
     if not np.any(mask): continue
 
@@ -115,11 +119,16 @@ for idx, (label, t_start, t_end) in enumerate(PHASES):
     ax_a.set_title(f"{label} – Acceleration (Linear G-Forces)", fontsize=13)
     ax_a.set_ylabel("g")
     ax_a.axhline(0, color=ZERO_LINE, linestyle="--", linewidth=1.0)
-    accel_data = np.concatenate([data[f"accel_{a}"][mask] for a in "xyz"])
+
+    accel_arrays = [data[f"accel_{a}"][mask] for a in "xyz" if data[f"accel_{a}"].size > 0]
+    if not accel_arrays: continue
+    accel_data = np.concatenate(accel_arrays)
     if np.all(np.isnan(accel_data)): continue
+
     y_lim = np.nanmax(np.abs(accel_data)) * 1.2
     ax_a.set_ylim(-y_lim, y_lim)
     for axis in "xyz":
+        if data[f"accel_{axis}"].size == 0: continue
         raw = data[f"accel_{axis}"][mask]
         ax_a.plot(dates[mask], raw, color=colors[axis], linewidth=0.6, alpha=0.1)
         ax_a.plot(dates[mask], smooth(raw), color=colors[axis], linewidth=1.8, label=f"A{axis.upper()}")
@@ -134,10 +143,14 @@ for idx, (label, t_start, t_end) in enumerate(PHASES):
     ax_g = axes[idx*2+1]
     ax_g.set_title(f"{label} – Gyroscope (Rotational Velocity)", fontsize=13)
     ax_g.set_ylabel("°/s")
-    gyro_data = np.concatenate([data[f"gyro_{a}"][mask] for a in "xyz"])
+
+    gyro_arrays = [data[f"gyro_{a}"][mask] for a in "xyz" if data[f"gyro_{a}"].size > 0]
+    if not gyro_arrays: continue
+    gyro_data = np.concatenate(gyro_arrays)
     g_lim = np.nanmax(np.abs(gyro_data)) * 1.2
     ax_g.set_ylim(-g_lim, g_lim)
     for axis in "xyz":
+        if data[f"gyro_{axis}"].size == 0: continue
         raw = data[f"gyro_{axis}"][mask]
         ax_g.plot(dates[mask], raw, color=colors[axis], linewidth=0.6, alpha=0.1)
         ax_g.plot(dates[mask], smooth(raw), color=colors[axis], linewidth=1.8, label=f"G{axis.upper()}")
