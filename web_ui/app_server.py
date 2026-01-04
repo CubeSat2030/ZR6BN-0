@@ -282,7 +282,7 @@ def run_simulation(name):
             capture_output=True,
             text=True,
             check=False,
-            timeout=1200, 
+            timeout=7200, # Time interrupt in seconds.
             cwd=str(BASE_DIR) 
         )
         
@@ -293,7 +293,7 @@ def run_simulation(name):
             return False, f"Simulation failed: {error_msg}"
 
     except subprocess.TimeoutExpired:
-        return False, f"Simulation timed out after 20 minutes."
+        return False, f"Simulation timed out after 120 minutes."
     except Exception as e:
         return False, f"Failed to run simulation: {str(e)}"
 # --- END NEW FUNCTION ---
