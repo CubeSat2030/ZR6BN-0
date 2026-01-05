@@ -275,14 +275,14 @@ def run_simulation(name):
     video_path = SIM_DIR / video_file
     
     try:
-        # Increased timeout to 1200 seconds (20 minutes) for rendering
+        # Increased timeout to 28800 seconds (480 minutes) for rendering
         print(f"[SIMULATION] Starting video generation for {video_file}...")
         result = subprocess.run(
             [sys.executable, script_path],
             capture_output=True,
             text=True,
             check=False,
-            timeout=7200, # Time interrupt in seconds.
+            timeout=28800, # Time interrupt in seconds.
             cwd=str(BASE_DIR) 
         )
         
