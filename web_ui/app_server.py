@@ -42,7 +42,8 @@ LOG_DIR = SRC_DIR / "logger"
 PLOT_DIR = SRC_DIR / "plotter"
 SIM_DIR = SRC_DIR / "simulation" / "scripts"
 CHARTS_DIR = PLOT_DIR / "charts"
-SIMULATION_EXPORT_DIR = PLOT_DIR / "videos" 
+EXPORT_DIR = SRC_DIR / "plotter"
+SIMULATION_EXPORT_DIR = EXPORT_DIR / "videos" 
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
 # --- NEW PATHS FOR DATA WIPE ---
@@ -90,7 +91,7 @@ SCRIPTS_CONFIG = {
     "simulation": {
         "title": "Payload Flight Simulation",
         "sim_script": SIM_DIR / "payload_flight_simulation.py",
-        "video_file": "BACAR13_stable_replay.mp4"
+        "video_file": SIMULATION_EXPORT_DIR / "BACAR13_stable_replay.mp4"
     },
     "sound": {
         "title": "Sound Logger",
