@@ -74,13 +74,19 @@
             transition: color 0.5s ease-in-out;
             transform-origin: center;
         }
-        .heartbeat-standby { animation: double-beat 10s infinite; }
+
+        .heartbeat-standby {
+            animation: double-beat 10s infinite;
+        }
         @keyframes double-beat {
             0%, 20%, 100% { transform: scale(1); }
             5%, 15% { transform: scale(1.25); }
             10% { transform: scale(1); }
         }
-        .heartbeat-warning { animation: pulse-beat 1.5s infinite; }
+
+        .heartbeat-warning {
+            animation: pulse-beat 1.5s infinite;
+        }
         @keyframes pulse-beat {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.2); }
@@ -92,6 +98,7 @@
     <div id="alert-container" class="fixed top-5 right-5 z-50 w-full max-w-sm space-y-3"></div>
     
     <div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+
         <header class="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
             <div class="text-center">
                 <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control</h1>
@@ -128,7 +135,6 @@
                     </div>
                     <p id="controller_warning" class="hidden text-yellow-400 text-sm mt-4">⚠️ Manual controls are disabled while the flight controller is active.</p>
                 </section>
-
                 <section id="logger-section" class="card p-5">
                     <h2 class="text-xl font-bold text-white mb-4">Manual Loggers</h2>
                     <div id="scripts-container" class="space-y-4">
@@ -150,7 +156,6 @@
                     </div>
                 </section>
             </div>
-
             <div id="chart-section" class="lg:col-span-2 flex flex-col gap-6">
                  <section class="card p-5">
                     <h2 class="text-xl font-bold text-white mb-4">Post-Flight Analysis</h2>
@@ -166,9 +171,8 @@
                     </div>
                     <div class="status-box text-sm text-gray-400" id="chart-status-output">Chart/Simulation generation status will appear here...</div>
                 </section>
-
                 <section class="card p-5">
-                    <div class="grid grid-cols-1 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-1 gap-6">
                         {% for name, config in scripts_config.items() %}
                         <div class="chart-container">
                             <div class="flex justify-between items-center mb-2">
@@ -180,6 +184,7 @@
 
                             {% if config.chart_file %}
                             <img id="{{ name }}_chart" src="https://placehold.co/600x400/0d1117/30363d?text=No+Chart+Generated" alt="{{ config.title }} Chart">
+                            
                             {% elif name == 'simulation' %}
                             <div class="video-container" id="video-{{ name }}">
                                 <video id="{{ name }}_video" controls loop preload="none" style="display:none;"></video>
@@ -207,6 +212,7 @@
         </div>
     </div>
 
+
 <script>
     const SCRIPTS_CONFIG = {{ scripts_config|tojson }};
     const statusOutput = document.getElementById('chart-status-output');
@@ -214,7 +220,7 @@
     let monitorIntervalId;
     let lastSuccessfulHeartbeat = Date.now();
     const CONNECTION_TIMEOUT_MS = 60000;
-    const POLLING_INTERVAL_MS = 5000; // Increased to 5s to protect 500MB RAM
+    const POLLING_INTERVAL_MS = 5000; // Safer for 500MB RAM hardware
 
     function showAlert(message, type = 'success') {
         const colors = { success: 'bg-green-600/90 border-green-700 text-white', error: 'bg-red-600/90 border-red-700 text-white', info: 'bg-blue-600/90 border-blue-700 text-white' };
@@ -239,7 +245,8 @@
     }
 
     function updateScriptStatus(status) {
-        const mainActive = status.main_controller?.running || false;
+        // Safe access for status fields
+        const mainActive = (status.main && status.main.running) || false;
         const mainCard = document.getElementById('main-controller-card');
         const warning = document.getElementById('controller_warning');
         const mainCircle = document.getElementById('main_controller_status_circle');
@@ -271,8 +278,8 @@
                 }
             }
             
-            // THE PATCH: Only auto-refresh dynamic SVG charts, NEVER request "null" or "None"
-            if (item.running && config.chart_file && config.chart_file !== "None" && config.chart_file !== "null") {
+            // PATCH: Refresh SVG charts automatically if running, skip videos and skip nulls
+            if (item.running && config.chart_file && config.chart_file !== "None") {
                 refreshChartImage(key, `/chart/${config.chart_file}`);
             }
         }
@@ -284,7 +291,7 @@
             if (response.ok) {
                 lastSuccessfulHeartbeat = Date.now();
                 const heartIcon = document.getElementById('heartbeat-icon');
-                heartIcon.classList.remove('text-red-500'); heartIcon.classList.add('text-green-500');
+                heartIcon.classList.remove('text-red-500'); heartIcon.classList.add('text-green-500', 'heartbeat-standby');
                 const status = await response.json();
                 updateScriptStatus(status);
             }
@@ -315,19 +322,18 @@
         try {
             const res = await fetch(`/api/simulation/${name}`, { method: 'POST' });
             const data = await res.json();
+            // PATCH: Call video refresh specifically for simulation mp4
             if (data.success) refreshVideo(name, `/video/${config.video_file}`);
             statusOutput.textContent = data.message;
         } catch (e) { statusOutput.textContent = "Error starting simulation"; }
     }
 
     function refreshChartImage(sensor, url) {
-        if (!url || url.includes('null')) return;
         const img = document.getElementById(`${sensor}_chart`);
         if (img) img.src = `${url}?t=${new Date().getTime()}`;
     }
 
     function refreshVideo(name, url) {
-        if (!url || url.includes('null')) return;
         const video = document.getElementById(`${name}_video`);
         const placeholder = document.getElementById(`${name}_placeholder`);
         if (video) {
@@ -354,6 +360,7 @@
     function monitorConnection() {
         if (Date.now() - lastSuccessfulHeartbeat > CONNECTION_TIMEOUT_MS) {
             document.getElementById('heartbeat-icon').classList.add('text-red-500');
+            document.getElementById('heartbeat-icon').classList.remove('heartbeat-standby');
         }
     }
 
