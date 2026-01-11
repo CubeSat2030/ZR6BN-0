@@ -42,7 +42,7 @@ LOG_DIR = SRC_DIR / "logger"
 PLOT_DIR = SRC_DIR / "plotter"
 SIM_DIR = SRC_DIR / "simulation" / "scripts"
 CHARTS_DIR = PLOT_DIR / "charts"
-SIMULATION_EXPORT_DIR = PLOT_DIR / "video" 
+SIMULATION_EXPORT_DIR = PLOT_DIR / "videos" 
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
 # --- NEW PATHS FOR DATA WIPE ---
