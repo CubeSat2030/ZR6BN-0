@@ -229,7 +229,7 @@ def run_plotter(name):
             capture_output=True,
             text=True,
             check=False,
-            timeout=120,
+            timeout=False,
             cwd=str(BASE_DIR)
         )
         
