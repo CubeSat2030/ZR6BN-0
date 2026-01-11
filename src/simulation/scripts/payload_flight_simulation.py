@@ -11,7 +11,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import matplotlib.gridspec as gridspec
 
 # --- LEAN CONFIG ---
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "src", "plotter", "video"))
 DATA_FILE = os.path.join(PROJECT_ROOT, "logger", "data", "2_inflight", "MPU6050.txt")
 SUBSAMPLE_RATE = 5 
 RENDER_DPI = 50

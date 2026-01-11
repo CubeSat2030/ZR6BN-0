@@ -41,12 +41,13 @@ SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger"
 PLOT_DIR = SRC_DIR / "plotter"
 SIM_DIR = SRC_DIR / "simulation" / "scripts"
-CHARTS_DIR = PLOT_DIR / "charts" 
+CHARTS_DIR = PLOT_DIR / "charts"
+SIMULATION_EXPORT_DIR = PLOT_DIR / "video" 
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
 # --- NEW PATHS FOR DATA WIPE ---
-DATA_DIR = LOG_DIR / "data" / "2_inflight"
-POSTFLIGHT_DATA_DIR = LOG_DIR / "data" / "2_inflight"
+DATA_DIR = LOG_DIR / "data" / "1_preflight"
+POSTFLIGHT_DATA_DIR = LOG_DIR / "data" / "1_preflight"
 
 HEARTBEATS_DIR = LOG_DIR / "heartbeats"
 FOOTAGE_DIR = SRC_DIR / "photography" / "footage"
