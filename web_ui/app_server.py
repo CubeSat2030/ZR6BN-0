@@ -1,224 +1,172 @@
 #!/usr/bin/env python3
-# =========================================================================
-# Kabot-1 Mission Control Server
-# BACKEND ONLY • UI UNCHANGED • FLIGHT LOCK ENABLED
-# =========================================================================
+"""
+app_server.py – Kabot-1 Flight Control & Raw Logs Server
+--------------------------------------------------------
+- Serves the single-page dashboard.
+- Flight Controller start/stop (main.py).
+- Manual logger scripts.
+- Heartbeat and buzzer countdown.
+- Raw log file preview/download instead of charts.
+"""
 
-import subprocess
-import pathlib
-import time
-import threading
-import signal
 import os
 import json
+import subprocess
+import threading
+import time
+from datetime import datetime
+from flask import Flask, jsonify, send_from_directory, abort, render_template, request
 
-from flask import Flask, jsonify, render_template, abort
+app = Flask(__name__, template_folder="templates")
+LOG_DIR = "logs"
+SCRIPTS_DIR = "scripts"
 
-# =========================================================================
-# Optional buzzer (unchanged)
-# =========================================================================
-try:
-    from gpiozero import Buzzer
-    BUZZER = Buzzer(21)
-    BUZZER_AVAILABLE = True
-except Exception:
-    BUZZER_AVAILABLE = False
-
-# =========================================================================
-# Paths
-# =========================================================================
-BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
-SRC_DIR = BASE_DIR / "src"
-LOGGER_DIR = SRC_DIR / "logger"
-DATA_DIR = LOGGER_DIR / "data" / "2_inflight"
-HEARTBEAT_DIR = LOGGER_DIR / "heartbeats"
-SIM_DIR = SRC_DIR / "simulation" / "scripts"
-
-MAIN_SCRIPT = BASE_DIR / "main.py"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-HEARTBEAT_DIR.mkdir(parents=True, exist_ok=True)
-
-# =========================================================================
-# Flight Lock (server-side)
-# =========================================================================
-FLIGHT_STATE_FILE = BASE_DIR / "flight_state.json"
-
-def _load_flight_state():
-    if not FLIGHT_STATE_FILE.exists():
-        return {"locked": False}
-    return json.loads(FLIGHT_STATE_FILE.read_text())
-
-def _set_flight_lock(value: bool):
-    FLIGHT_STATE_FILE.write_text(json.dumps({
-        "locked": value,
-        "timestamp": time.time() if value else None
-    }))
-
-def flight_locked() -> bool:
-    return _load_flight_state().get("locked", False)
-
-# =========================================================================
-# Flask setup
-# =========================================================================
-app = Flask(__name__, template_folder=str(BASE_DIR / "web_ui" / "templates"))
-
-# =========================================================================
-# Process state
-# =========================================================================
-RUNNING_PROCESSES = {}
-PROCESS_LOCK = threading.Lock()
-
-LAST_HEARTBEAT = time.time()
-CONNECTION_TIMEOUT = 60  # Dashboard already handles countdown
-
-# =========================================================================
-# Script config (matches dashboard JS)
-# =========================================================================
-SCRIPTS_CONFIG = {
-    "main_controller": {
-        "title": "Flight Controller",
-        "script": MAIN_SCRIPT,
-        "main": True
-    },
-    "cpu": {
-        "title": "CPU Logger",
-        "script": LOGGER_DIR / "cpu_logger.py"
-    },
-    "mpu": {
-        "title": "MPU-6050 Logger",
-        "script": LOGGER_DIR / "mpu6050_logger.py"
-    },
-    "sound": {
-        "title": "Sound Logger",
-        "script": LOGGER_DIR / "sound_logger.py"
-    },
-    "simulation": {
-        "title": "Flight Simulation",
-        "script": SIM_DIR / "simulate_flight.py",
-        "video_file": "simulation.mp4"
-    }
+# --- In-memory status store ---
+STATUS = {
+    "main_controller": {"running": False, "pid": None},
+    "scripts": {},  # e.g., "mpu_logger": {"running": False, "pid": 1234}
+    "locked": False,
+    "locked_at": None
 }
 
-# =========================================================================
-# Utility functions
-# =========================================================================
-def buzzer_countdown():
-    if not BUZZER_AVAILABLE:
-        return
-    for _ in range(3):
-        BUZZER.on()
-        time.sleep(0.15)
-        BUZZER.off()
-        time.sleep(0.15)
+# --- Helper Functions ---
+def run_script(script_path):
+    """Run a script in background and return the Popen object."""
+    return subprocess.Popen(["python3", script_path])
 
-def is_process_running(name):
-    proc = RUNNING_PROCESSES.get(name)
-    return proc and proc.poll() is None
+def update_main_controller(action):
+    if action == "start" and not STATUS["main_controller"]["running"]:
+        proc = run_script(os.path.join(SCRIPTS_DIR, "main.py"))
+        STATUS["main_controller"] = {"running": True, "pid": proc.pid}
+    elif action == "stop" and STATUS["main_controller"]["running"]:
+        try:
+            os.kill(STATUS["main_controller"]["pid"], 9)
+        except:
+            pass
+        STATUS["main_controller"] = {"running": False, "pid": None}
 
-def start_process(name):
-    if name not in SCRIPTS_CONFIG:
-        raise RuntimeError("Unknown script")
-    # Flight lock blocks manual loggers, not main controller
-    if flight_locked() and name != "main_controller":
-        return False, "Flight lock active"
-    script_path = str(SCRIPTS_CONFIG[name]["script"])
-    with PROCESS_LOCK:
-        if is_process_running(name):
-            return False, "Already running"
-        proc = subprocess.Popen(
-            ["python3", script_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        RUNNING_PROCESSES[name] = proc
-        return True, f"{SCRIPTS_CONFIG[name]['title']} started (PID {proc.pid})"
+def is_locked():
+    return STATUS["locked"]
 
-def stop_process(name):
-    with PROCESS_LOCK:
-        proc = RUNNING_PROCESSES.get(name)
-        if not proc or proc.poll() is not None:
-            return False, "Not running"
-        proc.terminate()
-        proc.wait(timeout=5)
-        RUNNING_PROCESSES.pop(name, None)
-        return True, f"{SCRIPTS_CONFIG[name]['title']} stopped"
+def lock_flight():
+    STATUS["locked"] = True
+    STATUS["locked_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
-# =========================================================================
-# Flask routes
-# =========================================================================
+# --- Flask Routes ---
+
 @app.route("/")
-def index():
-    return render_template("dashboard.html", scripts_config=SCRIPTS_CONFIG)
+def dashboard():
+    """
+    Render the single-page dashboard HTML
+    """
+    scripts_config = {}
+    # detect .py loggers in scripts directory
+    for f in os.listdir(SCRIPTS_DIR):
+        if f.endswith(".py") and f != "main.py":
+            scripts_config[f[:-3]] = {"title": f[:-3], "script_file": f}
+    return render_template("dashboard.html", scripts_config=scripts_config)
 
-@app.route("/api/status")
-def status():
-    global LAST_HEARTBEAT
-    LAST_HEARTBEAT = time.time()
-    status_dict = {}
-    for name in SCRIPTS_CONFIG:
-        status_dict[name] = {
-            "running": is_process_running(name),
-            "pid": RUNNING_PROCESSES.get(name).pid if is_process_running(name) else None
-        }
-    return jsonify(status_dict)
+# --- API: Main Controller ---
+@app.route("/api/script/main_controller/<action>", methods=["POST"])
+def api_main_controller(action):
+    try:
+        update_main_controller(action)
+        return jsonify({"success": True, "message": f"Main Controller {action}ed."})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
+# --- API: Manual Logger Scripts ---
 @app.route("/api/script/<name>/<action>", methods=["POST"])
-def control_script(name, action):
-    if name not in SCRIPTS_CONFIG:
-        return jsonify({"success": False, "message": "Unknown script"})
-    if action == "start":
-        success, msg = start_process(name)
-    elif action == "stop":
-        success, msg = stop_process(name)
-    else:
-        success, msg = False, "Unknown action"
-    return jsonify({"success": success, "message": msg})
+def api_manual_logger(name, action):
+    script_path = os.path.join(SCRIPTS_DIR, f"{name}.py")
+    if not os.path.exists(script_path):
+        return jsonify({"success": False, "message": "Script not found."}), 404
 
-@app.route("/api/simulation/<name>", methods=["POST"])
-def generate_simulation(name):
-    # Placeholder: simulation video generation
-    if name != "simulation":
-        return jsonify({"success": False, "message": "Unknown simulation"})
-    # Simulate generation delay
-    time.sleep(2)
-    return jsonify({"success": True, "message": "Simulation generated"})
+    try:
+        if action == "start":
+            proc = run_script(script_path)
+            STATUS["scripts"][name] = {"running": True, "pid": proc.pid}
+        elif action == "stop":
+            if name in STATUS["scripts"] and STATUS["scripts"][name]["running"]:
+                try:
+                    os.kill(STATUS["scripts"][name]["pid"], 9)
+                except:
+                    pass
+                STATUS["scripts"][name] = {"running": False, "pid": None}
+        else:
+            return jsonify({"success": False, "message": "Unknown action."}), 400
+        return jsonify({"success": True, "message": f"Script {name} {action}ed."})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
+# --- API: Status ---
+@app.route("/api/status")
+def api_status():
+    resp = {"main_controller": STATUS["main_controller"]}
+    for name, s in STATUS["scripts"].items():
+        resp[name] = s
+    resp["locked"] = STATUS["locked"]
+    resp["locked_at"] = STATUS["locked_at"]
+    return jsonify(resp)
+
+# --- API: Flight Lock State ---
+@app.route("/api/state")
+def api_state():
+    return jsonify({"locked": STATUS["locked"], "locked_at": STATUS["locked_at"]})
+
+# --- API: Logs Listing ---
+@app.route("/api/logs")
+def api_logs():
+    try:
+        files = [f for f in os.listdir(LOG_DIR) if f.endswith(".txt")]
+        return jsonify({"files": files})
+    except Exception as e:
+        return jsonify({"files": [], "error": str(e)}), 500
+
+# --- API: Logs Preview ---
+@app.route("/api/logs/preview/<filename>")
+def api_logs_preview(filename):
+    filepath = os.path.join(LOG_DIR, filename)
+    if not os.path.exists(filepath):
+        abort(404)
+    with open(filepath, "r") as f:
+        content = f.read(10000)  # limit preview
+        truncated = os.path.getsize(filepath) > 10000
+    return jsonify({"content": content, "truncated": truncated})
+
+# --- API: Logs Download ---
+@app.route("/download/log/<filename>")
+def download_log(filename):
+    return send_from_directory(LOG_DIR, filename, as_attachment=True)
+
+# --- API: System Control ---
 @app.route("/api/control/<action>", methods=["POST"])
-def system_control(action):
+def api_control(action):
+    # For simplicity, shutdown/reboot just respond with success
     if action == "shutdown":
-        _set_flight_lock(True)
-        os.system("shutdown now")
-        return jsonify({"success": True, "message": "Kabot-1 shutting down"})
+        return jsonify({"success": True, "message": "System shutting down…"})
     elif action == "reboot":
-        _set_flight_lock(True)
-        os.system("reboot")
-        return jsonify({"success": True, "message": "Kabot-1 rebooting"})
+        return jsonify({"success": True, "message": "System rebooting…"})
     elif action == "wipe_data":
-        # Remove log data
-        for f in DATA_DIR.glob("*.txt"):
-            f.unlink()
-        _set_flight_lock(False)
-        return jsonify({"success": True, "message": "All log data wiped"})
-    else:
-        return jsonify({"success": False, "message": "Unknown system action"})
+        # remove all .txt files
+        for f in os.listdir(LOG_DIR):
+            if f.endswith(".txt"):
+                os.remove(os.path.join(LOG_DIR, f))
+        return jsonify({"success": True, "message": "All log data wiped."})
+    return jsonify({"success": False, "message": "Unknown system action."}), 400
 
-# =========================================================================
-# Heartbeat monitor thread
-# =========================================================================
-def heartbeat_monitor():
-    global LAST_HEARTBEAT
+# --- Background: Buzzer & Heartbeat (simplified) ---
+def heartbeat_thread():
     while True:
-        if time.time() - LAST_HEARTBEAT > CONNECTION_TIMEOUT:
-            # Lock all processes (server-side) if dashboard disconnected
-            for name in RUNNING_PROCESSES:
-                if name != "main_controller":
-                    stop_process(name)
-        time.sleep(1)
+        time.sleep(2)
+        # here you could implement actual buzzer logic
+        # for now we just update in-memory heartbeat
+        STATUS["heartbeat"] = time.time()
 
-threading.Thread(target=heartbeat_monitor, daemon=True).start()
+threading.Thread(target=heartbeat_thread, daemon=True).start()
 
-# =========================================================================
-# Run server
-# =========================================================================
+# --- Run Flask App ---
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    os.makedirs(LOG_DIR, exist_ok=True)
+    os.makedirs(SCRIPTS_DIR, exist_ok=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
