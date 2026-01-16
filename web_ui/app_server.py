@@ -84,7 +84,7 @@ SCRIPTS_CONFIG = {
     "simulation": {
         "title": "Payload Flight Simulation",
         "sim_script": SIM_DIR / "payload_flight_simulation.py",
-        "video_file": "BACAR13_stable_replay.mp4",  # ← Just filename!
+        "video_file": VIDEOS_DIR /  "BACAR13_stable_replay",  # ← Just filename!
     },
     "sound": {
         "title": "Sound Logger",
