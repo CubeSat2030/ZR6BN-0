@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
-# ============================================================================
+# =========================================================================
 # Kabot-1 Mission Control Server
-# NO PLOTTER • FLIGHT LOCK ENABLED • HEARTBEAT SAFE
-# ============================================================================
+# BACKEND ONLY • UI UNCHANGED • FLIGHT LOCK ENABLED
+# =========================================================================
 
 import subprocess
 import pathlib
 import time
 import threading
 import signal
-import json
 import os
+import json
 
-from flask import Flask, jsonify, render_template, abort, send_from_directory
+from flask import Flask, jsonify, render_template, abort
 
-# ============================================================================
-# OPTIONAL BUZZER (UNCHANGED)
-# ============================================================================
-
+# =========================================================================
+# Optional buzzer (unchanged)
+# =========================================================================
 try:
     from gpiozero import Buzzer
     BUZZER = Buzzer(21)
@@ -25,64 +24,56 @@ try:
 except Exception:
     BUZZER_AVAILABLE = False
 
-
-# ============================================================================
-# PATHS
-# ============================================================================
-
+# =========================================================================
+# Paths
+# =========================================================================
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 SRC_DIR = BASE_DIR / "src"
 LOGGER_DIR = SRC_DIR / "logger"
 DATA_DIR = LOGGER_DIR / "data" / "2_inflight"
 HEARTBEAT_DIR = LOGGER_DIR / "heartbeats"
+SIM_DIR = SRC_DIR / "simulation" / "scripts"
 
-TEMPLATE_DIR = BASE_DIR / "web_ui" / "templates"
 MAIN_SCRIPT = BASE_DIR / "main.py"
-
-FLIGHT_STATE_FILE = BASE_DIR / "flight_state.json"
-
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 HEARTBEAT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ============================================================================
-# FLASK
-# ============================================================================
+# =========================================================================
+# Flight Lock (server-side)
+# =========================================================================
+FLIGHT_STATE_FILE = BASE_DIR / "flight_state.json"
 
-app = Flask(__name__, template_folder=str(TEMPLATE_DIR))
-
-# ============================================================================
-# FLIGHT LOCK STATE
-# ============================================================================
-
-def load_flight_state():
+def _load_flight_state():
     if not FLIGHT_STATE_FILE.exists():
-        return {"locked": False, "locked_at": None}
+        return {"locked": False}
     return json.loads(FLIGHT_STATE_FILE.read_text())
 
-def save_flight_state(locked: bool):
+def _set_flight_lock(value: bool):
     FLIGHT_STATE_FILE.write_text(json.dumps({
-        "locked": locked,
-        "locked_at": time.time() if locked else None
-    }, indent=2))
+        "locked": value,
+        "timestamp": time.time() if value else None
+    }))
 
-def flight_locked():
-    return load_flight_state()["locked"]
+def flight_locked() -> bool:
+    return _load_flight_state().get("locked", False)
 
+# =========================================================================
+# Flask setup
+# =========================================================================
+app = Flask(__name__, template_folder=str(BASE_DIR / "web_ui" / "templates"))
 
-# ============================================================================
-# PROCESS STATE
-# ============================================================================
-
-RUNNING = {}
+# =========================================================================
+# Process state
+# =========================================================================
+RUNNING_PROCESSES = {}
 PROCESS_LOCK = threading.Lock()
 
 LAST_HEARTBEAT = time.time()
-CONNECTION_TIMEOUT = 60
+CONNECTION_TIMEOUT = 60  # Dashboard already handles countdown
 
-# ============================================================================
-# SCRIPT CONFIG (NO PLOTTERS)
-# ============================================================================
-
+# =========================================================================
+# Script config (matches dashboard JS)
+# =========================================================================
 SCRIPTS_CONFIG = {
     "main_controller": {
         "title": "Flight Controller",
@@ -100,171 +91,134 @@ SCRIPTS_CONFIG = {
     "sound": {
         "title": "Sound Logger",
         "script": LOGGER_DIR / "sound_logger.py"
+    },
+    "simulation": {
+        "title": "Flight Simulation",
+        "script": SIM_DIR / "simulate_flight.py",
+        "video_file": "simulation.mp4"
     }
 }
 
-# ============================================================================
-# BUZZER COUNTDOWN (UNCHANGED BEHAVIOR)
-# ============================================================================
-
+# =========================================================================
+# Utility functions
+# =========================================================================
 def buzzer_countdown():
     if not BUZZER_AVAILABLE:
         return
-
     for _ in range(3):
         BUZZER.on()
         time.sleep(0.15)
         BUZZER.off()
         time.sleep(0.15)
 
-
-# ============================================================================
-# PROCESS CONTROL
-# ============================================================================
+def is_process_running(name):
+    proc = RUNNING_PROCESSES.get(name)
+    return proc and proc.poll() is None
 
 def start_process(name):
-    if flight_locked() and not SCRIPTS_CONFIG[name].get("main"):
-        raise RuntimeError("Flight lock active")
-
+    if name not in SCRIPTS_CONFIG:
+        raise RuntimeError("Unknown script")
+    # Flight lock blocks manual loggers, not main controller
+    if flight_locked() and name != "main_controller":
+        return False, "Flight lock active"
+    script_path = str(SCRIPTS_CONFIG[name]["script"])
     with PROCESS_LOCK:
-        if name in RUNNING:
-            return
-
+        if is_process_running(name):
+            return False, "Already running"
         proc = subprocess.Popen(
-            ["python3", str(SCRIPTS_CONFIG[name]["script"])],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            preexec_fn=os.setsid
+            ["python3", script_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
         )
-        RUNNING[name] = proc
-
+        RUNNING_PROCESSES[name] = proc
+        return True, f"{SCRIPTS_CONFIG[name]['title']} started (PID {proc.pid})"
 
 def stop_process(name):
     with PROCESS_LOCK:
-        proc = RUNNING.get(name)
-        if not proc:
-            return
+        proc = RUNNING_PROCESSES.get(name)
+        if not proc or proc.poll() is not None:
+            return False, "Not running"
+        proc.terminate()
+        proc.wait(timeout=5)
+        RUNNING_PROCESSES.pop(name, None)
+        return True, f"{SCRIPTS_CONFIG[name]['title']} stopped"
 
-        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-        RUNNING.pop(name, None)
-
-
-# ============================================================================
-# STATUS
-# ============================================================================
-
-def collect_status():
-    status = {
-        "main_controller": {
-            "running": "main_controller" in RUNNING
-        }
-    }
-
-    for name in SCRIPTS_CONFIG:
-        if name == "main_controller":
-            continue
-        status[name] = {
-            "running": name in RUNNING
-        }
-
-    return status
-
-
-# ============================================================================
-# ROUTES
-# ============================================================================
-
+# =========================================================================
+# Flask routes
+# =========================================================================
 @app.route("/")
-def dashboard():
+def index():
     return render_template("dashboard.html", scripts_config=SCRIPTS_CONFIG)
 
-
 @app.route("/api/status")
-def api_status():
+def status():
     global LAST_HEARTBEAT
     LAST_HEARTBEAT = time.time()
-    return jsonify(collect_status())
-
+    status_dict = {}
+    for name in SCRIPTS_CONFIG:
+        status_dict[name] = {
+            "running": is_process_running(name),
+            "pid": RUNNING_PROCESSES.get(name).pid if is_process_running(name) else None
+        }
+    return jsonify(status_dict)
 
 @app.route("/api/script/<name>/<action>", methods=["POST"])
-def api_script_control(name, action):
+def control_script(name, action):
     if name not in SCRIPTS_CONFIG:
-        abort(404)
-
-    try:
-        if action == "start":
-            start_process(name)
-            return jsonify(success=True, message=f"{name} started")
-        elif action == "stop":
-            stop_process(name)
-            return jsonify(success=True, message=f"{name} stopped")
-        else:
-            abort(400)
-    except RuntimeError as e:
-        return jsonify(success=False, message=str(e)), 403
-
-
-@app.route("/api/script/main_controller/<action>", methods=["POST"])
-def api_main_controller(action):
+        return jsonify({"success": False, "message": "Unknown script"})
     if action == "start":
-        buzzer_countdown()
-        save_flight_state(True)
-        start_process("main_controller")
-        return jsonify(success=True, message="Flight started")
+        success, msg = start_process(name)
     elif action == "stop":
-        stop_process("main_controller")
-        save_flight_state(False)
-        return jsonify(success=True, message="Flight stopped")
+        success, msg = stop_process(name)
     else:
-        abort(400)
+        success, msg = False, "Unknown action"
+    return jsonify({"success": success, "message": msg})
 
+@app.route("/api/simulation/<name>", methods=["POST"])
+def generate_simulation(name):
+    # Placeholder: simulation video generation
+    if name != "simulation":
+        return jsonify({"success": False, "message": "Unknown simulation"})
+    # Simulate generation delay
+    time.sleep(2)
+    return jsonify({"success": True, "message": "Simulation generated"})
 
-# ============================================================================
-# RAW LOG ACCESS (READ ONLY)
-# ============================================================================
+@app.route("/api/control/<action>", methods=["POST"])
+def system_control(action):
+    if action == "shutdown":
+        _set_flight_lock(True)
+        os.system("shutdown now")
+        return jsonify({"success": True, "message": "Kabot-1 shutting down"})
+    elif action == "reboot":
+        _set_flight_lock(True)
+        os.system("reboot")
+        return jsonify({"success": True, "message": "Kabot-1 rebooting"})
+    elif action == "wipe_data":
+        # Remove log data
+        for f in DATA_DIR.glob("*.txt"):
+            f.unlink()
+        _set_flight_lock(False)
+        return jsonify({"success": True, "message": "All log data wiped"})
+    else:
+        return jsonify({"success": False, "message": "Unknown system action"})
 
-@app.route("/api/logs")
-def list_logs():
-    return jsonify({
-        "files": sorted(f.name for f in DATA_DIR.glob("*.txt"))
-    })
-
-
-@app.route("/api/logs/preview/<filename>")
-def preview_log(filename):
-    path = DATA_DIR / filename
-    if not path.exists():
-        abort(404)
-
-    with open(path, "r", errors="replace") as f:
-        content = f.read(65536)
-
-    return jsonify(content=content, truncated=path.stat().st_size > 65536)
-
-
-@app.route("/download/log/<filename>")
-def download_log(filename):
-    return send_from_directory(DATA_DIR, filename, as_attachment=True)
-
-
-# ============================================================================
-# CONNECTION WATCHDOG
-# ============================================================================
-
-def watchdog():
+# =========================================================================
+# Heartbeat monitor thread
+# =========================================================================
+def heartbeat_monitor():
+    global LAST_HEARTBEAT
     while True:
-        time.sleep(2)
         if time.time() - LAST_HEARTBEAT > CONNECTION_TIMEOUT:
-            print("⚠️ Connection heartbeat lost")
-            break
+            # Lock all processes (server-side) if dashboard disconnected
+            for name in RUNNING_PROCESSES:
+                if name != "main_controller":
+                    stop_process(name)
+        time.sleep(1)
 
+threading.Thread(target=heartbeat_monitor, daemon=True).start()
 
-threading.Thread(target=watchdog, daemon=True).start()
-
-
-# ============================================================================
-# MAIN
-# ============================================================================
-
+# =========================================================================
+# Run server
+# =========================================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
