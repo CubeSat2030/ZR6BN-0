@@ -1,172 +1,80 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kabot-1 Mission Control – Raw Logs</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-    tailwind.config = {
-        darkMode: 'class',
-        theme: {
-            extend: {
-                colors: {
-                    'gray-900': '#0d1117',
-                    'gray-800': '#161b22',
-                    'gray-700': '#21262d',
-                    'gray-600': '#30363d',
-                }
-            }
-        }
-    }
-</script>
-<style>
-:root {
-    --bg-dark: #0d1117;
-    --bg-card: #161b22;
-    --border: #30363d;
-    --text: #c9d1d9;
-}
-body { background-color: var(--bg-dark); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"; }
-.card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
-.btn { transition: all 0.2s ease-in-out; border: 1px solid var(--border); cursor: pointer; }
-.btn:disabled { cursor: not-allowed; opacity: 0.5; }
-.status-box { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; background-color: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; min-height: 80px; padding: 0.5rem; }
-pre { background-color: #020409; border: 1px solid var(--border); border-radius: 6px; min-height: 200px; padding: 0.5rem; max-height: 450px; overflow: auto; white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
-
-.text-green { color: #3fb950; }
-.text-red { color: #ff7b72; }
-.text-yellow { color: #f9c74f; }
-</style>
+    <meta charset="UTF-8">
+    <title>Kabot-1 Mission Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
+<body class="bg-gray-900 text-white p-6">
+    <h1 class="text-2xl font-bold mb-6 text-blue-500">KABOT-1 DASHBOARD</h1>
+    <p id="chart-status-output" class="mb-4 text-gray-400 text-sm">System Idle</p>
 
-<body class="bg-gray-900 text-gray-300">
-<div id="alert-container" class="fixed top-5 right-5 z-50 w-full max-w-sm space-y-3"></div>
-
-<div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
-    <header class="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
-        <div class="text-center">
-            <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control</h1>
-            <p class="text-gray-400">Flight Controller Dashboard</p>
-        </div>
-        <div class="flex items-center space-x-4">
-            <div class="flex items-center" title="Connection: Stable">
-                <svg id="heartbeat-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-                    <path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"></path>
-                </svg>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for name, config in scripts_config.items() %}
+        <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+            <h3 class="font-semibold mb-3">{{ config.title }}</h3>
+            
+            <div class="aspect-video bg-black rounded flex items-center justify-center overflow-hidden mb-4">
+                {% if config.video_file %}
+                    <video id="{{ name }}_player" class="w-full h-full" controls preload="metadata">
+                        <source src="/video/{{ config.video_file }}" type="video/mp4">
+                    </video>
+                {% else %}
+                    <img id="{{ name }}_chart" src="https://placehold.co/600x400/0d1117/30363d?text=No+Data" class="w-full h-full object-contain">
+                {% endif %}
             </div>
+
+            <button onclick="generateChart('{{ name }}')" 
+                    class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded font-bold text-sm">
+                GENERATE {{ "VIDEO" if config.video_file else "CHART" }}
+            </button>
         </div>
-    </header>
+        {% endfor %}
+    </div>
 
-    <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Left Column: Flight Controller & Manual Loggers -->
-        <div class="lg:col-span-1 flex flex-col gap-6">
-            <!-- Main Controller Card -->
-            <section id="main-controller-card" class="card p-5">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold text-white">Flight Controller</h2>
-                    <div class="flex items-center text-sm font-semibold">
-                        <div id="main_controller_status_circle" class="w-4 h-4 rounded-full mr-3"></div>
-                        <span id="main_controller_status_text"></span>
-                    </div>
-                </div>
-                <p class="text-gray-400 mb-4">Activates all sensor loggers automatically.</p>
-                <div class="grid grid-cols-2 gap-3">
-                    <button id="main_start_btn" class="btn bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded-lg">Launch</button>
-                    <button id="main_stop_btn" class="btn bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded-lg">Stop Flight</button>
-                </div>
-                <p id="controller_warning" class="hidden text-yellow-400 text-sm mt-4">⚠️ Manual controls are disabled while the flight controller is active.</p>
-            </section>
+    <script>
+        const SCRIPTS_CONFIG = {{ scripts_config | tojson }};
 
-            <!-- Manual Logger Section -->
-            <section id="logger-section" class="card p-5">
-                <h2 class="text-xl font-bold text-white mb-4">Manual Loggers</h2>
-                <div id="scripts-container" class="space-y-4">
-                    <!-- JS will populate manual loggers -->
-                </div>
-            </section>
-        </div>
+        async function generateChart(name) {
+            const status = document.getElementById('chart-status-output');
+            const config = SCRIPTS_CONFIG[name];
+            const isVideo = !!config.video_file;
+            const endpoint = isVideo ? `/api/simulation/${name}` : `/api/chart/${name}`;
 
-        <!-- Right Column: Raw Log Preview -->
-        <div class="lg:col-span-2 flex flex-col gap-6">
-            <section class="card p-5">
-                <h2 class="text-xl font-bold text-white mb-4">Raw Flight Logs</h2>
-                <p class="text-gray-400 mb-4">Select a log file to preview and download. Flight Controller must not be active.</p>
+            status.textContent = `Processing ${name}...`;
+            try {
+                const res = await fetch(endpoint, { method: 'POST' });
+                const data = await res.json();
+                status.textContent = data.message;
+                if (!isVideo) refreshMedia(name, `/chart/${config.chart_file}`);
+            } catch (e) { status.textContent = "Server overloaded. Wait 5s."; }
+        }
 
-                <div id="log-controls" class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-                    <!-- JS will populate log file buttons -->
-                </div>
+        function refreshMedia(name, url) {
+            // Prevent the 404/null requests
+            if (!url || url.includes('null') || url.includes('None')) return;
+            
+            const el = document.getElementById(`${name}_chart`);
+            if (el) el.src = url + '?t=' + new Date().getTime();
+        }
 
-                <div class="status-box text-sm text-gray-400" id="log-status-output">
-                    Log preview and download status will appear here...
-                </div>
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                Object.keys(data).forEach(key => {
+                    const info = data[key];
+                    // Only refresh if the logger is running and it's a CHART, not a video
+                    if (info.running && info.chart_file && info.chart_file !== "None") {
+                        refreshMedia(key, `/chart/${info.chart_file}`);
+                    }
+                });
+            } catch (e) { console.log("Throttled..."); }
+        }
 
-                <pre id="log-preview-box">Select a log file above to preview its contents.</pre>
-            </section>
-        </div>
-    </main>
-</div>
-
-<script>
-const LOG_STATUS_OUTPUT = document.getElementById('log-status-output');
-const LOG_PREVIEW_BOX = document.getElementById('log-preview-box');
-const LOG_CONTROLS = document.getElementById('log-controls');
-
-// Load available log files
-async function loadLogFiles() {
-    try {
-        const res = await fetch('/api/logs');
-        const data = await res.json(); // { files: ['cpu.txt', 'mpu.txt', ...] }
-
-        LOG_CONTROLS.innerHTML = '';
-        data.files.forEach(filename => {
-            const btn = document.createElement('button');
-            btn.className = 'btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 rounded-lg';
-            btn.textContent = filename;
-            btn.onclick = () => fetchLogFile(filename);
-            LOG_CONTROLS.appendChild(btn);
-        });
-    } catch (err) {
-        LOG_STATUS_OUTPUT.textContent = 'Error: Failed to fetch log files.';
-        console.error(err);
-    }
-}
-
-// Fetch and preview a log file
-async function fetchLogFile(filename) {
-    LOG_STATUS_OUTPUT.textContent = `Fetching ${filename}…`;
-    LOG_PREVIEW_BOX.textContent = 'Loading…';
-
-    try {
-        const res = await fetch(`/api/logs/preview/${filename}`);
-        const data = await res.json(); // { content: '...', truncated: true/false }
-
-        LOG_PREVIEW_BOX.textContent = data.content + (data.truncated ? '\n\n[... truncated ...]' : '');
-        LOG_STATUS_OUTPUT.textContent = `Preview loaded for ${filename}.`;
-
-        // Add download button
-        const downloadBtn = document.createElement('button');
-        downloadBtn.className = 'btn bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-3 rounded-lg mt-2 download-btn';
-        downloadBtn.textContent = `Download ${filename}`;
-        downloadBtn.onclick = () => { window.location.href = `/download/log/${filename}`; };
-
-        // Remove previous download buttons
-        const oldBtns = LOG_CONTROLS.querySelectorAll('.download-btn');
-        oldBtns.forEach(b => b.remove());
-
-        LOG_CONTROLS.appendChild(downloadBtn);
-    } catch (err) {
-        LOG_STATUS_OUTPUT.textContent = `Error: Could not fetch ${filename}.`;
-        LOG_PREVIEW_BOX.textContent = '';
-        console.error(err);
-    }
-}
-
-// Initialize log buttons
-loadLogFiles();
-</script>
-
+        // 5 second interval is safer for 500MB RAM hardware
+        setInterval(fetchStatus, 5000);
+        window.onload = fetchStatus;
+    </script>
 </body>
 </html>
-
