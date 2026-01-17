@@ -7,22 +7,21 @@ import threading
 from flask import Flask, render_template, jsonify, send_from_directory, request
 
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server - REAL PROJECT STRUCTURE VERSION
+# Kabot-1 Mission Control Dashboard Server - PERSISTENT EXECUTION VERSION
 # =========================================================================
 
 app = Flask(__name__)
 
-# Base Directory is web_ui/, we need to go up one level to project root
+# Base Directory Setup
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Define Project-Specific Paths based on provided structure
+# Define Project-Specific Paths
 LOGS_INFLIGHT = os.path.join(BASE_DIR, "src", "logger", "data", "2_inflight")
 LOGS_BACKUP = os.path.join(BASE_DIR, "src", "logger", "data", "2_inflight", "backup")
 SCRIPTS_DIR = os.path.join(BASE_DIR, "src", "logger", "scripts")
 SIM_DIR = os.path.join(BASE_DIR, "src", "simulation", "scripts")
-VIDEO_PATH = os.path.join(BASE_DIR, "src", "simulation", "output") # Assuming video lands here
+VIDEO_PATH = os.path.join(BASE_DIR, "src", "simulation", "output") 
 
-# Configuration updated with correct paths to scripts
 scripts_config = {
     'main_controller': {
         'title': 'Main Flight Controller', 
@@ -59,7 +58,7 @@ BUZZER_THREAD_STOP = threading.Event()
 # Buzzer Hardware Logic
 try:
     from gpiozero import Buzzer
-    BUZZER = Buzzer(4)
+    BUZZER = Buzzer(4) # Check if this should be 4 or 21 based on your structure
     BUZZER_AVAILABLE = True
 except (ImportError, Exception):
     class MockBuzzer:
@@ -91,24 +90,65 @@ def start_buzzer_countdown():
 def index():
     return render_template('dashboard.html', scripts_config=scripts_config)
 
+@app.route('/api/status')
+def get_status():
+    with PROCESS_LOCK:
+        status = {}
+        for key in scripts_config:
+            p = RUNNING_PROCESSES.get(key)
+            if p:
+                if p.poll() is None:
+                    status[key] = {"running": True, "pid": p.pid}
+                else:
+                    status[key] = {"running": False, "pid": None}
+                    del RUNNING_PROCESSES[key] # Cleanup finished process memory
+            else:
+                status[key] = {"running": False, "pid": None}
+        return jsonify(status)
+
+@app.route('/api/script/<name>/<action>', methods=['POST'])
+def control_script(name, action):
+    with PROCESS_LOCK:
+        if action == 'start':
+            # Prevent double-starting
+            if name in RUNNING_PROCESSES and RUNNING_PROCESSES[name].poll() is None:
+                return jsonify({"success": True, "message": "Already running."})
+
+            script_path = scripts_config[name]['script']
+            
+            # CRITICAL: start_new_session=True detaches the process from the server's session.
+            # This prevents the process from being killed if the parent thread is interrupted.
+            p = subprocess.Popen(
+                ["python3", script_path],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL, # Free up RAM by not buffering output
+                stderr=subprocess.DEVNULL
+            )
+            RUNNING_PROCESSES[name] = p
+            return jsonify({"success": True, "message": f"{name} started in background."})
+            
+        elif action == 'stop':
+            p = RUNNING_PROCESSES.get(name)
+            if p:
+                # Kill the entire process group started by the detached session
+                try:
+                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+                except:
+                    p.terminate()
+                del RUNNING_PROCESSES[name]
+            return jsonify({"success": True, "message": f"{name} stopped."})
+    return jsonify({"success": False})
+
 @app.route('/api/list_logs')
 def list_logs():
-    """Aggregates logs from inflight and backup directories."""
     try:
         all_files = []
-        # Search both active and backup inflight folders
         for folder in [LOGS_INFLIGHT, LOGS_BACKUP]:
             if os.path.exists(folder):
                 files = [f for f in os.listdir(folder) if f.endswith('.txt')]
                 for f in files:
                     full_path = os.path.join(folder, f)
-                    all_files.append({
-                        "name": f,
-                        "folder": "backup" if "backup" in folder else "active",
-                        "mtime": os.path.getmtime(full_path)
-                    })
-        
-        # Sort by newest first
+                    all_files.append({"name": f, "mtime": os.path.getmtime(full_path)})
         all_files.sort(key=lambda x: x['mtime'], reverse=True)
         return jsonify({"success": True, "files": [f['name'] for f in all_files]})
     except Exception as e:
@@ -116,53 +156,29 @@ def list_logs():
 
 @app.route('/api/download/log/<filename>')
 def download_log(filename):
-    """Checks active then backup folders to serve the file."""
     if os.path.exists(os.path.join(LOGS_INFLIGHT, filename)):
         return send_from_directory(LOGS_INFLIGHT, filename, as_attachment=True)
     elif os.path.exists(os.path.join(LOGS_BACKUP, filename)):
         return send_from_directory(LOGS_BACKUP, filename, as_attachment=True)
     return "File not found", 404
 
-@app.route('/api/script/<name>/<action>', methods=['POST'])
-def control_script(name, action):
-    with PROCESS_LOCK:
-        if action == 'start':
-            script_path = scripts_config[name]['script']
-            # Using python3 to execute absolute paths
-            p = subprocess.Popen(["python3", script_path])
-            RUNNING_PROCESSES[name] = p
-            return jsonify({"success": True, "message": f"{name} started."})
-        elif action == 'stop':
-            p = RUNNING_PROCESSES.get(name)
-            if p:
-                p.terminate()
-                del RUNNING_PROCESSES[name]
-            return jsonify({"success": True, "message": f"{name} stopped."})
-    return jsonify({"success": False, "message": "Action failed."})
+# Route to serve the generated video
+@app.route('/video/<filename>')
+def serve_video(filename):
+    return send_from_directory(VIDEO_PATH, filename)
 
 @app.route('/api/control/wipe_data', methods=['POST'])
 def wipe_data():
-    """Wipes logs from both active and backup inflight directories."""
     try:
         count = 0
         for folder in [LOGS_INFLIGHT, LOGS_BACKUP]:
             if os.path.exists(folder):
                 for f in os.listdir(folder):
                     if f.endswith('.txt'):
-                        os.remove(os.path.join(folder, f))
-                        count += 1
-        return jsonify({"success": True, "message": f"Wiped {count} log files."})
+                        os.remove(os.path.join(folder, f)); count += 1
+        return jsonify({"success": True, "message": f"Wiped {count} files."})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
-
-@app.route('/api/status')
-def get_status():
-    with PROCESS_LOCK:
-        status = {}
-        for key in scripts_config:
-            p = RUNNING_PROCESSES.get(key)
-            status[key] = {"running": p.poll() is None if p else False, "pid": p.pid if p else None}
-        return jsonify(status)
 
 if __name__ == "__main__":
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
