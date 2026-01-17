@@ -9,7 +9,14 @@
 # FIX: Enhanced wipe_data_and_charts() to delete data, heartbeats, and media footage.
 # FIX: Added dedicated run_simulation function and API route to handle the 
 #      non-plotter "simulation" script which generates a video.
-
+# 
+# FAZE OUT NOTICE:
+#  As of Saturday 17 Janary 2026 @ 12:54PM SAST the chart generation feaure is being fazed out entirely due to impracticallity towards:
+#    - performance, 
+#    - effficiancly,
+#    - reliability. 
+#   However we decided to replace it with txt file retrieval instead. 
+#   with that said the retrieved and downloaded txt filess will be proccessed into svg chart file when the payload is connected  via its client app, the KabotDockApp that is in the development pipeline
 # =========================================================================
 
 import subprocess
