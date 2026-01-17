@@ -45,7 +45,7 @@ scripts_config = {
     },
     'simulation': {
         'title': 'Flight Simulation', 
-        'script': os.path.join(SIM_DIR, 'simulation_master.py'), 
+        'script': os.path.join(SIM_DIR, 'payload_flight_simulation.py'), 
         'video_file': 'mission_sim.mp4'
     }
 }
@@ -59,7 +59,7 @@ BUZZER_THREAD_STOP = threading.Event()
 # Buzzer Hardware Logic
 try:
     from gpiozero import Buzzer
-    BUZZER = Buzzer(21)
+    BUZZER = Buzzer(4)
     BUZZER_AVAILABLE = True
 except (ImportError, Exception):
     class MockBuzzer:
