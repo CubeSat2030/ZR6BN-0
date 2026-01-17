@@ -9,6 +9,7 @@
 # FIX: Enhanced wipe_data_and_charts() to delete data, heartbeats, and media footage.
 # FIX: Added dedicated run_simulation function and API route to handle the 
 #      non-plotter "simulation" script which generates a video.
+
 # =========================================================================
 
 import subprocess
@@ -40,9 +41,9 @@ MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 # path management
 SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger"
-PLOT_DIR = SRC_DIR / "plotter"
+# PLOT_DIR = SRC_DIR / "plotter"
 SIM_DIR = SRC_DIR / "simulation" / "scripts"
-CHARTS_DIR = PLOT_DIR / "charts" 
+# CHARTS_DIR = PLOT_DIR / "charts" 
 TXT_DATA_DIR = LOG_DIR / "data" / "2_inflight" 
 FETCH_TXT_FILE_DIR = SRC_DIR / "fetch_data_files" / "scripts"
 
@@ -95,11 +96,11 @@ SCRIPTS_CONFIG = {
         # "chart_file": "mpu_chart.svg"
 	"fetched_txt_file": "mpu6050.txt"
     },
-   # "simulation": {
-   #     "title": "Payload Flight Simulation",
-   #     "sim_script": SIM_DIR / "payload_flight_simulation.py",
-   #     "video_file": "payload_flight_simulation.mp4"
-   # },
+    "simulation": {
+        "title": "Payload Flight Simulation",
+        "sim_script": SIM_DIR / "payload_flight_simulation.py",
+        "video_file": "payload_flight_simulation.mp4"
+   },
     "sound": {
         "title": "Sound Logger",
         "log_script": LOG_DIR / "sound_logger.py",
