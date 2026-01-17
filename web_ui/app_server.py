@@ -19,7 +19,8 @@
 #   with that said the retrieved and downloaded txt files via Kabot-1's web_ui in your web browser. 
 # 
 #
-# Later this year when Kabot-2's mission plan is green lit data will be proccessed into svg chart file via its client app, the KabotDockApp that is in the development pipeline
+# Later this year when Kabot-2's mission is green lit we will be fazing out the web_ui used in our kabot-1 HAB payload entirely. 
+# Kabot-2 however will use its client app, the KabotDockApp that is still in the drawing board phase.
 # =========================================================================
 
 import subprocess
