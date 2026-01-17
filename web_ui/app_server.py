@@ -11,7 +11,7 @@
 #      non-plotter "simulation" script which generates a video.
 # 
 # FAZE OUT IN AFFECT NOTICE:
-#  As of Saturday 17 Janary 2026 @ 12:54PM SAST the chart generation feaure is being fazed out entirely due to impracticallity towards:
+#  As of Saturday 17 January 2026 @ 12:54PM SAST the chart generation feaure is being fazed out entirely due to impracticallity towards:
 #    - performance, 
 #    - effficiancly,
 #    - reliability. 
