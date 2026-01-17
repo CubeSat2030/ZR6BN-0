@@ -37,7 +37,7 @@ CAPTURE_DURATION_SEC = 3.0 # CAPTURE NOW LASTS 3.0 SECONDS
 BUZZER_DURATION_SEC = CAPTURE_DURATION_SEC # Buzzer is ON for the entire capture duration
 
 # Hardware Pinouts
-BUZZER_PIN = 21     
+BUZZER_PIN = 4     
 ADC_GAIN = 1        
 
 # Logging Setup

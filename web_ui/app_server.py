@@ -23,7 +23,7 @@ from flask import Flask, render_template, jsonify, send_from_directory, abort
 
 try:
     from gpiozero import Buzzer
-    BUZZER = Buzzer(21) 
+    BUZZER = Buzzer(4) 
     BUZZER_AVAILABLE = True
 except ImportError:
     print("[WARNING] gpiozero or RPi.GPIO not available. Buzzer feature disabled.")
@@ -37,16 +37,21 @@ except Exception as e:
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent 
 MAIN_CONTROLLER_SCRIPT = BASE_DIR / "main.py"
 
+# path management
 SRC_DIR = BASE_DIR / "src"
 LOG_DIR = SRC_DIR / "logger"
 PLOT_DIR = SRC_DIR / "plotter"
 SIM_DIR = SRC_DIR / "simulation" / "scripts"
 CHARTS_DIR = PLOT_DIR / "charts" 
+TXT_DATA_DIR = LOG_DIR / "data" / "2_inflight" 
+FETCH_TXT_FILE_DIR = SRC_DIR / "fetch_data_files" / "scripts"
+
+# Web User INterface dashboard path management.
 TEMPLATES_DIR = BASE_DIR / "web_ui" / "templates"
 
 # --- NEW PATHS FOR DATA WIPE ---
-DATA_DIR = LOG_DIR / "data" / "2_inflight"
-POSTFLIGHT_DATA_DIR = LOG_DIR / "data" / "2_inflight"
+DATA_DIR = LOG_DIR / "data" / "3_postflight"
+POSTFLIGHT_DATA_DIR = LOG_DIR / "data" / "3_postflight"
 
 HEARTBEATS_DIR = LOG_DIR / "heartbeats"
 FOOTAGE_DIR = SRC_DIR / "photography" / "footage"
@@ -77,25 +82,31 @@ SCRIPTS_CONFIG = {
     "dht": {
         "title": "CPU temp Logger",
         "log_script": LOG_DIR / "cpu_logger.py",
-        "plot_script": PLOT_DIR / "cpu_plotter.py",
-        "chart_file": "cpu_chart.svg"
+        # "plot_script": PLOT_DIR / "cpu_plotter.py",
+	"fetch_txt_data_script": FETCH_TXT_FILE_DIR / "fetch_cpu_temp_txt.py"
+        # "chart_file": "cpu_chart.svg"
+	"fetched_txt_file": "cpu_temp.txt"
     },
     "mpu": {
         "title": "MPU-6050 Logger",
         "log_script": LOG_DIR / "mpu6050_logger.py",
-        "plot_script": PLOT_DIR / "mpu6050_plotter.py",
-        "chart_file": "mpu_chart.svg"
+        # "plot_script": PLOT_DIR / "mpu6050_plotter.py",
+	"fetch_txt_data_script": FETCH_TXT_FILE_DIR / "fetch_mpu6050_txt.py"
+        # "chart_file": "mpu_chart.svg"
+	"fetched_txt_file": "mpu6050.txt"
     },
-    "simulation": {
-        "title": "Payload Flight Simulation",
-        "sim_script": SIM_DIR / "payload_flight_simulation.py",
-        "video_file": "payload_flight_simulation.mp4"
-    },
+   # "simulation": {
+   #     "title": "Payload Flight Simulation",
+   #     "sim_script": SIM_DIR / "payload_flight_simulation.py",
+   #     "video_file": "payload_flight_simulation.mp4"
+   # },
     "sound": {
         "title": "Sound Logger",
         "log_script": LOG_DIR / "sound_logger.py",
-        "plot_script": PLOT_DIR / "sound_plotter.py",
-        "chart_file": "sound_chart.svg"
+       # "plot_script": PLOT_DIR / "sound_plotter.py",
+	"fetch_txt_data_script": FETCH_TXT_FILE_DIR / "fetch_sound_txt.py"
+       # "chart_file": "sound_chart.svg"
+	"feched_txt_file": "sound.txt" 
     }
 }
 
@@ -145,7 +156,7 @@ def get_status():
                 "title": config['title'],
                 "running": state['running'],
                 "pid": state['pid'],
-                "chart_file": config.get('chart_file')
+                "fetched_txt_file": config.get('fetched_txt_file')
             }
             
     if 'main_controller' not in status:
@@ -227,14 +238,14 @@ def stop_script(name):
 def run_plotter(name):
     """Runs a Python plotter script synchronously."""
     if is_main_controller_active():
-        return False, "Flight Controller (main.py) is running. Chart generation is disabled."
+        return False, "Flight Controller (main.py) is running. Fetching of txt logger files is disabled."
         
-    if name not in SCRIPTS_CONFIG or 'plot_script' not in SCRIPTS_CONFIG[name]:
+    if name not in SCRIPTS_CONFIG or 'fetch_txt_data_script' not in SCRIPTS_CONFIG[name]:
         return False, "Unknown or non-plotter script name."
     
     config = SCRIPTS_CONFIG[name]
-    script_path = str(config['plot_script']) 
-    chart_file = config['chart_file']
+    script_path = str(config['fetch_txt_data_script']) 
+    chart_file = config['fetched_txt_file']
     
     try:
         result = subprocess.run(
@@ -247,15 +258,15 @@ def run_plotter(name):
         )
         
         if result.returncode == 0 and os.path.exists(CHARTS_DIR / chart_file):
-            return True, f"Chart generated successfully: {chart_file}"
+            return True, f".txt file fetched successfully: {fetched_txt_file}"
         else:
-            error_msg = result.stderr.strip() or f"Plotter failed with exit code {result.returncode}."
-            return False, f"Plotting failed: {error_msg}"
+            error_msg = result.stderr.strip() or f"Fetching failed with exit code {result.returncode}."
+            return False, f"Fetching failed: {error_msg}"
 
     except subprocess.TimeoutExpired:
-        return False, f"Plotter {name} timed out after 45 seconds."
+        return False, f"Fetchiing script {name} timed out after 45 seconds."
     except Exception as e:
-        return False, f"Failed to run plotter {name}: {str(e)}"
+        return False, f"Failed to run Fetching script {name}: {str(e)}"
 
 # --- NEW FUNCTION FOR SIMULATION VIDEO GENERATION ---
 def run_simulation(name):
@@ -330,7 +341,7 @@ def wipe_data_and_charts():
 
     # 2. Delete and recreate directories for charts and footage (more robust wipe)
     folders_to_recreate = [
-        (CHARTS_DIR, "charts"),
+        (CHARTS_DIR, "fetched_data"),
         (FOOTAGE_DIR / "images", "images"),
         (FOOTAGE_DIR / "videos", "videos"),
     ]
@@ -521,7 +532,7 @@ def index():
     for key, config in SCRIPTS_CONFIG.items():
         if not config.get('is_main_controller'):
             # PATCH: Safely retrieve 'chart_file' to avoid KeyError for the 'simulation' script
-            chart_file = config.get("chart_file")
+            chart_file = config.get("fetched_txt_file")
             serializable_config[key] = {
                 "title": config["title"],
                 "chart_file": chart_file
@@ -568,7 +579,7 @@ def api_simulation_generate(name):
     return jsonify({"success": success, "message": message})
 # --- END NEW API ROUTE ---
 
-@app.route("/chart/<path:filename>")
+@app.route("/fetched_txt_file/<path:filename>")
 def get_chart_display(filename):
     if ".." in filename or "/" in filename: abort(400)
     return send_from_directory(CHARTS_DIR, filename, as_attachment=False)
