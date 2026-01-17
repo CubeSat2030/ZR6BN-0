@@ -7,28 +7,48 @@ import threading
 from flask import Flask, render_template, jsonify, send_from_directory, request
 
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server - LOG DOWNLOAD VERSION
-# =========================================================================
-# FAZE OUT NOTICE: Chart generation removed due to RAM constraints (500MB).
-# REPLACEMENT: Added .txt file retrieval and local web_ui download system.
+# Kabot-1 Mission Control Dashboard Server - REAL PROJECT STRUCTURE VERSION
 # =========================================================================
 
 app = Flask(__name__)
 
-# Configuration (Preserved structure, removed chart generation logic)
-scripts_config = {
-    'main_controller': {'title': 'Main Flight Controller', 'script': 'main_controller.py'},
-    'gps_logger': {'title': 'GPS Logger', 'script': 'gps_logger.py', 'chart_file': 'gps_data.txt'},
-    'altimeter': {'title': 'Altimeter', 'script': 'altimeter_logger.py', 'chart_file': 'altitude_data.txt'},
-    'temp_sensor': {'title': 'Temperature Sensor', 'script': 'temp_logger.py', 'chart_file': 'temp_data.txt'},
-    'simulation': {'title': 'Flight Simulation', 'script': 'simulation_script.py', 'video_file': 'mission_sim.mp4'}
-}
+# Base Directory is web_ui/, we need to go up one level to project root
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Constants and Paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOGS_DIR = os.path.join(BASE_DIR, "logs")
-if not os.path.exists(LOGS_DIR):
-    os.makedirs(LOGS_DIR)
+# Define Project-Specific Paths based on provided structure
+LOGS_INFLIGHT = os.path.join(BASE_DIR, "src", "logger", "data", "2_inflight")
+LOGS_BACKUP = os.path.join(BASE_DIR, "src", "logger", "data", "2_inflight", "backup")
+SCRIPTS_DIR = os.path.join(BASE_DIR, "src", "logger", "scripts")
+SIM_DIR = os.path.join(BASE_DIR, "src", "simulation", "scripts")
+VIDEO_PATH = os.path.join(BASE_DIR, "src", "simulation", "output") # Assuming video lands here
+
+# Configuration updated with correct paths to scripts
+scripts_config = {
+    'main_controller': {
+        'title': 'Main Flight Controller', 
+        'script': os.path.join(BASE_DIR, 'main.py')
+    },
+    'cpu_logger': {
+        'title': 'CPU Temp Logger', 
+        'script': os.path.join(SCRIPTS_DIR, 'cpu_temp_logger.py'), 
+        'chart_file': 'cpu_temp.txt'
+    },
+    'mpu_logger': {
+        'title': 'MPU6050 Logger', 
+        'script': os.path.join(SCRIPTS_DIR, 'mpu6050_logger.py'), 
+        'chart_file': 'MPU6050.txt'
+    },
+    'sound_logger': {
+        'title': 'Sound Logger', 
+        'script': os.path.join(SCRIPTS_DIR, 'sound_logger.py'), 
+        'chart_file': 'sound_logger.txt'
+    },
+    'simulation': {
+        'title': 'Flight Simulation', 
+        'script': os.path.join(SIM_DIR, 'simulation_master.py'), 
+        'video_file': 'mission_sim.mp4'
+    }
+}
 
 # Global State
 RUNNING_PROCESSES = {}
@@ -36,17 +56,15 @@ PROCESS_LOCK = threading.Lock()
 AUTO_START_TIMEOUT = 10
 BUZZER_THREAD_STOP = threading.Event()
 
-# Buzzer Logic (Strictly Preserved)
-class MockBuzzer:
-    def on(self): pass
-    def off(self): pass
-    def beep(self, *args, **kwargs): pass
-
+# Buzzer Hardware Logic
 try:
     from gpiozero import Buzzer
     BUZZER = Buzzer(21)
     BUZZER_AVAILABLE = True
 except (ImportError, Exception):
+    class MockBuzzer:
+        def on(self): pass
+        def off(self): pass
     BUZZER = MockBuzzer()
     BUZZER_AVAILABLE = False
 
@@ -63,8 +81,7 @@ def start_buzzer_countdown():
             buzzer_double_beep()
             time.sleep(10)
         elif elapsed < AUTO_START_TIMEOUT:
-            if BUZZER_AVAILABLE:
-                BUZZER.on(); time.sleep(3); BUZZER.off()
+            if BUZZER_AVAILABLE: BUZZER.on(); time.sleep(3); BUZZER.off()
             break
         else: break
 
@@ -76,25 +93,43 @@ def index():
 
 @app.route('/api/list_logs')
 def list_logs():
-    """Returns list of .txt files for retrieval."""
+    """Aggregates logs from inflight and backup directories."""
     try:
-        files = [f for f in os.listdir(LOGS_DIR) if f.endswith('.txt')]
-        files.sort(key=lambda x: os.path.getmtime(os.path.join(LOGS_DIR, x)), reverse=True)
-        return jsonify({"success": True, "files": files})
+        all_files = []
+        # Search both active and backup inflight folders
+        for folder in [LOGS_INFLIGHT, LOGS_BACKUP]:
+            if os.path.exists(folder):
+                files = [f for f in os.listdir(folder) if f.endswith('.txt')]
+                for f in files:
+                    full_path = os.path.join(folder, f)
+                    all_files.append({
+                        "name": f,
+                        "folder": "backup" if "backup" in folder else "active",
+                        "mtime": os.path.getmtime(full_path)
+                    })
+        
+        # Sort by newest first
+        all_files.sort(key=lambda x: x['mtime'], reverse=True)
+        return jsonify({"success": True, "files": [f['name'] for f in all_files]})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 
 @app.route('/api/download/log/<filename>')
 def download_log(filename):
-    """Serves the .txt file as a download (replaces chart download)."""
-    return send_from_directory(LOGS_DIR, filename, as_attachment=True)
+    """Checks active then backup folders to serve the file."""
+    if os.path.exists(os.path.join(LOGS_INFLIGHT, filename)):
+        return send_from_directory(LOGS_INFLIGHT, filename, as_attachment=True)
+    elif os.path.exists(os.path.join(LOGS_BACKUP, filename)):
+        return send_from_directory(LOGS_BACKUP, filename, as_attachment=True)
+    return "File not found", 404
 
 @app.route('/api/script/<name>/<action>', methods=['POST'])
 def control_script(name, action):
     with PROCESS_LOCK:
         if action == 'start':
-            script_file = scripts_config[name]['script']
-            p = subprocess.Popen(["python3", script_file])
+            script_path = scripts_config[name]['script']
+            # Using python3 to execute absolute paths
+            p = subprocess.Popen(["python3", script_path])
             RUNNING_PROCESSES[name] = p
             return jsonify({"success": True, "message": f"{name} started."})
         elif action == 'stop':
@@ -105,23 +140,18 @@ def control_script(name, action):
             return jsonify({"success": True, "message": f"{name} stopped."})
     return jsonify({"success": False, "message": "Action failed."})
 
-@app.route('/api/simulation/<name>', methods=['POST'])
-def run_simulation(name):
-    with PROCESS_LOCK:
-        p = subprocess.Popen(["python3", scripts_config[name]['script']])
-        RUNNING_PROCESSES[name] = p
-        return jsonify({"success": True, "message": "Simulation sequence initiated."})
-
 @app.route('/api/control/wipe_data', methods=['POST'])
 def wipe_data():
+    """Wipes logs from both active and backup inflight directories."""
     try:
-        for f in os.listdir(LOGS_DIR):
-            if f.endswith('.txt'):
-                os.remove(os.path.join(LOGS_DIR, f))
-        # Remove video if exists
-        video_path = os.path.join(BASE_DIR, "mission_sim.mp4")
-        if os.path.exists(video_path): os.remove(video_path)
-        return jsonify({"success": True, "message": "All mission logs and media wiped."})
+        count = 0
+        for folder in [LOGS_INFLIGHT, LOGS_BACKUP]:
+            if os.path.exists(folder):
+                for f in os.listdir(folder):
+                    if f.endswith('.txt'):
+                        os.remove(os.path.join(folder, f))
+                        count += 1
+        return jsonify({"success": True, "message": f"Wiped {count} log files."})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 
@@ -134,12 +164,17 @@ def get_status():
             status[key] = {"running": p.poll() is None if p else False, "pid": p.pid if p else None}
         return jsonify(status)
 
-@app.route('/video/<filename>')
-def serve_video(filename):
-    return send_from_directory(BASE_DIR, filename)
-
 if __name__ == "__main__":
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
     countdown_thread.start()
+    
+    def exit_handler(signum, frame):
+        if BUZZER_AVAILABLE: BUZZER.off()
+        BUZZER_THREAD_STOP.set()
+        sys.exit(0)
+        
+    signal.signal(signal.SIGINT, exit_handler)
+    signal.signal(signal.SIGTERM, exit_handler)
+    
     app.run(host='0.0.0.0', port=5000, threaded=True)
 
