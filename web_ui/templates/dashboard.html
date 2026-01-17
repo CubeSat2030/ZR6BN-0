@@ -30,7 +30,14 @@
         body { background-color: var(--bg-dark); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"; }
         .card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
         .btn { transition: all 0.2s ease-in-out; border: 1px solid var(--border); }
-        .btn:disabled { cursor: not-allowed; opacity: 0.5; }
+        
+        /* Specific state for disabled buttons */
+        .btn:disabled { 
+            cursor: not-allowed; 
+            opacity: 0.4; 
+            filter: grayscale(0.5);
+        }
+
         .status-box { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; background-color: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; min-height: 80px; padding: 0.5rem; }
         
         .video-container { 
@@ -54,8 +61,6 @@
         #power-icon-btn:hover { background-color: rgba(201, 209, 217, 0.1); }
         
         #heartbeat-icon { transition: color 0.5s ease-in-out; transform-origin: center; }
-        .heartbeat-standby { animation: double-beat 10s infinite; }
-        @keyframes double-beat { 0%, 20%, 100% { transform: scale(1); } 5%, 15% { transform: scale(1.25); } 10% { transform: scale(1); } }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-300">
@@ -66,13 +71,13 @@
 
         <header class="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
             <div class="text-center">
-                <h1 class="text-3xl font-bold text-white">Kabot-1 Mission Control</h1>
-                <p class="text-gray-400">Flight Computer Dashboard</p>
+                <h1 class="text-3xl font-bold text-white uppercase tracking-tighter">Kabot-1 Mission Control</h1>
+                <p class="text-gray-400 text-sm">Real-time Flight Telemetry & Control</p>
             </div>
             
             <div class="flex items-center space-x-4">
                 <div class="flex items-center" title="Connection: Stable">
-                    <svg id="heartbeat-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="currentColor"><path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"></path></svg>
+                    <svg id="heartbeat-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="currentColor" class="text-green-500"><path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"></path></svg>
                 </div>
                 <button id="power-icon-btn" onclick="openSystemControlModal()" title="System Control">
                     <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M7 12l5 5l5 -5"></path><path d="M12 3v14"></path></svg>
@@ -81,36 +86,36 @@
         </header>
 
         <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Sidebar -->
             <div class="lg:col-span-1 flex flex-col gap-6">
+                <!-- Flight Controller with Logic Fix -->
                 <section id="main-controller-card" class="card p-5">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold text-white">Flight Controller</h2>
-                        <div class="flex items-center text-sm font-semibold">
-                            <div id="main_controller_status_circle" class="w-4 h-4 rounded-full mr-3"></div>
-                            <span id="main_controller_status_text"></span>
+                        <h2 class="text-xl font-bold text-white uppercase tracking-tight">Flight Controller</h2>
+                        <div class="flex items-center text-xs font-bold uppercase">
+                            <div id="main_controller_status_circle" class="w-3 h-3 rounded-full mr-2"></div>
+                            <span id="main_controller_status_text">SCANNING...</span>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
-                        <button id="main_start_btn" onclick="controlMainController('start')" class="btn bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded-lg">Launch</button>
-                        <button id="main_stop_btn" onclick="controlMainController('stop')" class="btn bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded-lg">Stop Flight</button>
+                        <button id="main_start_btn" onclick="controlMainController('start')" class="btn bg-green-700 hover:bg-green-800 text-white font-black py-2.5 rounded-lg text-xs uppercase">Launch</button>
+                        <button id="main_stop_btn" onclick="controlMainController('stop')" class="btn bg-red-800 hover:bg-red-900 text-white font-black py-2.5 rounded-lg text-xs uppercase" disabled>Stop Flight</button>
                     </div>
                 </section>
 
                 <section id="logger-section" class="card p-5">
-                    <h2 class="text-xl font-bold text-white mb-4">Manual Loggers</h2>
+                    <h2 class="text-xl font-bold text-white mb-4 uppercase tracking-tight">Manual Loggers</h2>
                     <div id="scripts-container" class="space-y-4">
                         {% for name, config in scripts_config.items() %}
                         {% if config.chart_file %}
                         <div id="script-{{ name }}" class="card p-3 border border-gray-700/50">
-                            <h3 class="font-semibold text-white">{{ config.title }}</h3>
-                            <div class="flex items-center text-sm my-2">
-                                <div class="status-circle w-3 h-3 rounded-full mr-2"></div>
-                                <span class="status-text"></span>
+                            <h3 class="font-bold text-white text-sm uppercase">{{ config.title }}</h3>
+                            <div class="flex items-center text-[10px] font-bold my-2">
+                                <div class="status-circle w-2.5 h-2.5 rounded-full mr-2"></div>
+                                <span class="status-text uppercase text-gray-500">INIT...</span>
                             </div>
                             <div class="grid grid-cols-2 gap-2 mt-2">
-                                <button onclick="controlScript('{{ name }}', 'start')" class="start-btn btn text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded">Start</button>
-                                <button onclick="controlScript('{{ name }}', 'stop')" class="stop-btn btn text-xs bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded">Stop</button>
+                                <button onclick="controlScript('{{ name }}', 'start')" class="start-btn btn text-[10px] bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded uppercase font-bold">Start</button>
+                                <button onclick="controlScript('{{ name }}', 'stop')" class="stop-btn btn text-[10px] bg-gray-600 hover:bg-gray-700 text-white py-1.5 rounded uppercase font-bold">Stop</button>
                             </div>
                         </div>
                         {% endif %}
@@ -119,31 +124,29 @@
                 </section>
             </div>
 
-            <!-- Main Content Area -->
             <div id="data-section" class="lg:col-span-2 flex flex-col gap-6">
                  <section class="card p-5">
-                    <h2 class="text-xl font-bold text-white mb-4">Mission Data Retrieval</h2>
-                    <p class="text-gray-400 mb-4 text-sm">Download raw log files from <code>2_inflight</code> and <code>backup</code> folders.</p>
+                    <h2 class="text-xl font-bold text-white mb-4 uppercase tracking-tight">Mission Data Retrieval</h2>
+                    <p class="text-gray-400 mb-4 text-xs">Download raw text logs from 2_inflight and backup storage directories.</p>
                     <div id="chart-controls" class="flex gap-3 mb-4">
-                        <button id="refresh-logs-btn" onclick="fetchLogs()" class="btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg">Scan for Latest Logs</button>
+                        <button id="refresh-logs-btn" onclick="fetchLogs()" class="btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg text-xs uppercase">Scan for Latest Logs</button>
                     </div>
-                    <div class="status-box text-sm text-gray-400 mb-4" id="chart-status-output">System ready for data retrieval scan...</div>
+                    <div class="status-box text-xs text-gray-400 mb-4" id="chart-status-output">System idle...</div>
                     
-                    <!-- Fixed Log List with Truncation -->
                     <div id="log-list-container" class="space-y-2">
-                        <div class="text-gray-600 italic text-center py-10 border border-dashed border-gray-700 rounded">No logs retrieved. Click scan above.</div>
+                        <div class="text-gray-600 italic text-center py-10 border border-dashed border-gray-700 rounded text-xs uppercase tracking-widest">No logs retrieved.</div>
                     </div>
                 </section>
                 
                 <section class="card p-5">
-                    <h2 class="text-xl font-bold text-white mb-4">Flight Simulation</h2>
+                    <h2 class="text-xl font-bold text-white mb-4 uppercase tracking-tight text-center">Flight Simulation</h2>
                     {% for name, config in scripts_config.items() %}
                     {% if name == 'simulation' %}
                     <div class="video-container mb-4">
                         <video id="{{ name }}_video" controls loop style="display:none;"></video>
-                        <img id="{{ name }}_placeholder" src="https://placehold.co/600x400/0d1117/30363d?text=No+Simulation+Generated">
+                        <img id="{{ name }}_placeholder" src="https://placehold.co/600x400/0d1117/30363d?text=Simulation+Engine+Standby">
                     </div>
-                    <button id="gen-simulation" onclick="generateSimulation('simulation')" class="btn bg-pink-600 hover:bg-pink-700 text-white font-semibold py-3 px-4 rounded-lg w-full">Generate Video Simulation</button>
+                    <button id="gen-simulation" onclick="generateSimulation('simulation')" class="btn bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 px-4 rounded-lg w-full text-xs uppercase">Render Video Simulation</button>
                     {% endif %}
                     {% endfor %}
                 </section>
@@ -153,11 +156,11 @@
 
     <!-- System Modal -->
     <div id="system-control-modal" class="hidden fixed inset-0 bg-gray-900/90 z-40 flex items-center justify-center p-4">
-        <div class="card w-full max-w-2xl bg-gray-800 p-8">
-            <h2 class="text-3xl font-bold text-white mb-6 border-b border-gray-700 pb-3 text-center">System Actions</h2>
+        <div class="card w-full max-w-md bg-gray-800 p-8">
+            <h2 class="text-2xl font-bold text-white mb-6 border-b border-gray-700 pb-3 text-center uppercase tracking-tighter">System Actions</h2>
             <div class="flex flex-col space-y-4">
-                <button onclick="handleModalSystemControl('wipe_data')" class="btn w-full bg-red-800 hover:bg-red-900 text-white font-extrabold py-4 text-xl rounded-lg uppercase tracking-widest">Wipe All Mission Data</button>
-                <button onclick="closeSystemControlModal()" class="btn w-full bg-gray-700 py-3 rounded-lg text-gray-300">Cancel</button>
+                <button onclick="handleModalSystemControl('wipe_data')" class="btn w-full bg-red-800 hover:bg-red-900 text-white font-black py-4 text-sm rounded-lg uppercase">Wipe All Mission Data</button>
+                <button onclick="closeSystemControlModal()" class="btn w-full bg-gray-700 py-3 rounded-lg text-gray-300 text-xs font-bold uppercase">Cancel</button>
             </div>
         </div>
     </div>
@@ -167,68 +170,34 @@
     const statusOutput = document.getElementById('chart-status-output');
     const POLLING_INTERVAL_MS = 2000;
 
-    function showAlert(message, type = 'success') {
-        const colors = { success: 'bg-green-600/90', error: 'bg-red-600/90', info: 'bg-blue-600/90' };
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `p-3 rounded-lg text-white shadow-lg ${colors[type]} transition-opacity duration-300`;
-        alertDiv.innerHTML = `<p>${message}</p>`;
-        document.getElementById('alert-container').appendChild(alertDiv);
-        setTimeout(() => { alertDiv.remove(); }, 5000);
-    }
-
     async function fetchLogs() {
         const btn = document.getElementById('refresh-logs-btn');
         const container = document.getElementById('log-list-container');
         btn.disabled = true;
-        statusOutput.textContent = "Scanning flight storage directories...";
+        statusOutput.textContent = "QUERYING STORAGE...";
         
         try {
             const res = await fetch('/api/list_logs');
             const data = await res.json();
             if (data.success && data.files.length > 0) {
-                statusOutput.textContent = `Found ${data.files.length} log files across active/backup storage.`;
-                // Updated template with flex-shrink-0 for button and truncate for filename
+                statusOutput.textContent = `RETRIEVED ${data.files.length} LOGS.`;
                 container.innerHTML = data.files.map(file => `
-                    <div class="flex items-center justify-between gap-4 p-3 bg-gray-800/50 border border-gray-700 rounded-lg hover:border-gray-500 transition-colors">
+                    <div class="flex items-center justify-between gap-4 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
                         <div class="flex-1 min-w-0">
-                            <span class="text-white font-mono text-sm block truncate" title="${file}">${file}</span>
-                            <span class="text-gray-500 text-[10px] uppercase font-bold tracking-widest">TXT LOG</span>
+                            <span class="text-white font-mono text-[11px] block truncate" title="${file}">${file}</span>
                         </div>
                         <div class="flex-shrink-0">
-                            <a href="/api/download/log/${file}" download 
-                               class="inline-block bg-gray-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-tighter transition-all">
-                               DOWNLOAD
-                            </a>
+                            <a href="/api/download/log/${file}" download class="inline-block bg-gray-700 hover:bg-blue-600 text-white px-3 py-1 rounded text-[9px] font-black uppercase tracking-tighter">DOWNLOAD</a>
                         </div>
                     </div>
                 `).join('');
             } else {
-                statusOutput.textContent = "No log files found in mission directories.";
-                container.innerHTML = `<div class="text-gray-600 italic text-center py-10 border border-dashed border-gray-700 rounded text-sm">No mission logs found on disk.</div>`;
+                statusOutput.textContent = "NO LOGS DETECTED.";
+                container.innerHTML = `<div class="text-gray-600 italic text-center py-10 border border-dashed border-gray-700 rounded text-xs">EMPTY DIRECTORY</div>`;
             }
         } catch (e) {
-            statusOutput.textContent = "Connection error: Failed to reach HAB server.";
+            statusOutput.textContent = "STORAGE ERROR.";
         } finally { btn.disabled = false; }
-    }
-
-    async function generateSimulation(name) {
-        const genBtn = document.getElementById(`gen-${name}`);
-        statusOutput.textContent = `Processing simulation pipeline...`;
-        genBtn.disabled = true;
-        try {
-            const response = await fetch(`/api/simulation/${name}`, { method: 'POST' });
-            const result = await response.json();
-            if (result.success) {
-                statusOutput.textContent = "Simulation render complete.";
-                const videoElement = document.getElementById(`${name}_video`);
-                const placeholder = document.getElementById(`${name}_placeholder`);
-                videoElement.src = `/video/${SCRIPTS_CONFIG[name].video_file}?t=${Date.now()}`;
-                videoElement.style.display = 'block';
-                placeholder.style.display = 'none';
-                videoElement.load();
-            }
-        } catch (error) { statusOutput.textContent = "Simulation engine error."; }
-        finally { genBtn.disabled = false; }
     }
 
     async function fetchStatus() {
@@ -242,10 +211,19 @@
     }
 
     function updateUI(status) {
+        // --- FLIGHT CONTROLLER LOGIC FIX ---
         const mainRunning = status.main_controller.running;
-        document.getElementById('main_controller_status_text').textContent = mainRunning ? "MISSION ACTIVE" : "STANDBY";
-        document.getElementById('main_controller_status_circle').className = `w-4 h-4 rounded-full mr-3 ${mainRunning ? 'bg-red-500 pulse-active-red' : 'bg-green-500'}`;
+        const mainStartBtn = document.getElementById('main_start_btn');
+        const mainStopBtn = document.getElementById('main_stop_btn');
         
+        document.getElementById('main_controller_status_text').textContent = mainRunning ? "MISSION ACTIVE" : "STANDBY";
+        document.getElementById('main_controller_status_circle').className = `w-3 h-3 rounded-full mr-2 ${mainRunning ? 'bg-red-500 pulse-active-red' : 'bg-green-500'}`;
+        
+        // Button Shading/Disabling Logic
+        mainStartBtn.disabled = mainRunning;
+        mainStopBtn.disabled = !mainRunning;
+
+        // General Global UI Lock (Prevents modifications while flying)
         document.getElementById('refresh-logs-btn').disabled = mainRunning;
         document.getElementById('gen-simulation').disabled = mainRunning;
         
@@ -253,24 +231,26 @@
             const card = document.getElementById(`script-${key}`);
             if (card) {
                 const circle = card.querySelector('.status-circle');
-                circle.className = `status-circle w-3 h-3 rounded-full mr-2 ${status[key].running ? 'bg-green-500 pulse-active-green' : 'bg-gray-600'}`;
-                card.querySelector('.status-text').textContent = status[key].running ? `PID: ${status[key].pid}` : "OFF";
+                const startBtn = card.querySelector('.start-btn');
+                const stopBtn = card.querySelector('.stop-btn');
+                const isRunning = status[key].running;
+
+                circle.className = `status-circle w-2.5 h-2.5 rounded-full mr-2 ${isRunning ? 'bg-green-500 pulse-active-green' : 'bg-gray-600'}`;
+                card.querySelector('.status-text').textContent = isRunning ? `RUNNING (PID: ${status[key].pid})` : "READY";
+                
+                // Toggle sub-logger buttons
+                startBtn.disabled = isRunning;
+                stopBtn.disabled = !isRunning;
             }
         }
     }
 
     async function controlScript(name, action) {
-        try {
-            await fetch(`/api/script/${name}/${action}`, { method: 'POST' });
-            fetchStatus();
-        } catch (e) {}
+        try { await fetch(`/api/script/${name}/${action}`, { method: 'POST' }); fetchStatus(); } catch (e) {}
     }
 
     async function controlMainController(action) {
-        try {
-            await fetch(`/api/script/main_controller/${action}`, { method: 'POST' });
-            fetchStatus();
-        } catch (e) {}
+        try { await fetch(`/api/script/main_controller/${action}`, { method: 'POST' }); fetchStatus(); } catch (e) {}
     }
 
     function openSystemControlModal() { document.getElementById('system-control-modal').classList.remove('hidden'); }
@@ -279,7 +259,6 @@
         if (action === 'wipe_data') {
             const res = await fetch('/api/control/wipe_data', { method: 'POST' });
             const data = await res.json();
-            showAlert(data.message);
             fetchLogs();
         }
         closeSystemControlModal();
