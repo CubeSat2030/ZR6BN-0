@@ -7,7 +7,7 @@ import threading
 from flask import Flask, render_template, jsonify, send_from_directory, request
 
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server - LOG RETRIEVAL VERSION
+# Kabot-1 Mission Control Dashboard Server - THREAD-SAFE VERSION
 # =========================================================================
 # FAZE OUT NOTICE: Chart generation removed due to RAM constraints (500MB).
 # REPLACEMENT: Added .txt file retrieval and local web_ui download system.
@@ -74,6 +74,7 @@ def start_buzzer_countdown():
 
 @app.route('/')
 def index():
+    # Retaining existing structure, removing chart_file dependency
     return render_template('dashboard.html')
 
 @app.route('/api/list_logs')
@@ -98,7 +99,6 @@ def system_control():
     
     with PROCESS_LOCK:
         if action == 'start_mission':
-            # Example mission script
             p = subprocess.Popen(["python3", "mission_logic.py"], stdout=None, stderr=None)
             RUNNING_PROCESSES['mission'] = p
             return jsonify({"status": "success", "message": "Mission started."})
@@ -110,11 +110,19 @@ def system_control():
                 del RUNNING_PROCESSES['mission']
             return jsonify({"status": "success", "message": "Mission stopped."})
             
+        elif action == 'run_simulation':
+            # Existing simulation feature preserved
+            p = subprocess.Popen(["python3", "simulation_script.py"], stdout=None, stderr=None)
+            RUNNING_PROCESSES['simulation'] = p
+            return jsonify({"status": "success", "message": "Simulation started."})
+
         elif action == 'wipe_data':
-            # Phasing out charts means we focus on clearing logs
+            # Modified to wipe logs only, charts are phased out
             for f in os.listdir(LOGS_DIR):
-                os.remove(os.path.join(LOGS_DIR, f))
-            return jsonify({"status": "success", "message": "Logs and cache wiped."})
+                if f.endswith('.txt'):
+                    os.remove(os.path.join(LOGS_DIR, f))
+            # Preserve cleanup for other media if existing in original logic
+            return jsonify({"status": "success", "message": "Mission logs wiped."})
 
     return jsonify({"status": "error", "message": "Unknown action."})
 
@@ -123,6 +131,7 @@ def get_status():
     with PROCESS_LOCK:
         return jsonify({
             "mission_running": 'mission' in RUNNING_PROCESSES,
+            "simulation_running": 'simulation' in RUNNING_PROCESSES,
             "buzzer_active": BUZZER_AVAILABLE,
             "timestamp": time.strftime("%H:%M:%S")
         })
@@ -131,10 +140,20 @@ if __name__ == "__main__":
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
     countdown_thread.start()
     
+    def exit_handler(signum, frame):
+        if BUZZER_AVAILABLE:
+            BUZZER.off()
+        BUZZER_THREAD_STOP.set()
+        print("\n[CLEANUP] Buzzer and countdown thread stopped.")
+        sys.exit(0)
+        
+    signal.signal(signal.SIGINT, exit_handler)
+    signal.signal(signal.SIGTERM, exit_handler)
+    
     print("------------------------------------------------------------------")
-    print("Kabot-1 Mission Control - TEXT RETRIEVAL MODE ACTIVE")
-    print("Chart generation phased out (Impracticality/RAM Efficiency)")
-    print("Access locally at: http://0.0.0.0:5000/")
+    print("Kabot-1 Mission Control Dashboard is starting...")
+    print(f"Access the dashboard at: http://0.0.0.0:5000/")
+    print("LOG RETRIEVAL MODE: ACTIVE | CHART GENERATION: PHASED OUT")
     print("------------------------------------------------------------------")
     
     app.run(host='0.0.0.0', port=5000, threaded=True)
