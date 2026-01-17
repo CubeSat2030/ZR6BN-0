@@ -31,7 +31,6 @@
         .card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
         .btn { transition: all 0.2s ease-in-out; border: 1px solid var(--border); }
         
-        /* Specific state for disabled buttons */
         .btn:disabled { 
             cursor: not-allowed; 
             opacity: 0.4; 
@@ -45,22 +44,24 @@
             padding-bottom: 56.25%; 
             height: 0; 
             overflow: hidden;
+            background: #000;
+            border-radius: 6px;
         }
         .video-container video {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            border-radius: 6px; border: 1px solid var(--border); background-color: var(--bg-dark);
+        }
+        .video-container img {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover;
         }
 
-        .pulse-active-green { animation: pulse-shadow-green 1.5s infinite; }
-        @keyframes pulse-shadow-green { 0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 0, 0.4); } 50% { box-shadow: 0 0 10px rgba(0, 255, 0, 0.7); } }
         .pulse-active-red { animation: pulse-shadow-red 1.5s infinite; }
         @keyframes pulse-shadow-red { 0%, 100% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.4); } 50% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); } }
         
-        #power-icon-btn { cursor: pointer; padding: 0.5rem; border-radius: 50%; transition: background-color 0.2s, box-shadow 0.3s; fill: var(--text); border: none; background-color: transparent; }
+        #power-icon-btn { cursor: pointer; padding: 0.5rem; border-radius: 50%; transition: background-color 0.2s; fill: var(--text); border: none; background-color: transparent; }
         #power-icon-btn:hover { background-color: rgba(201, 209, 217, 0.1); }
-        
-        #heartbeat-icon { transition: color 0.5s ease-in-out; transform-origin: center; }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-300">
@@ -68,32 +69,24 @@
     <div id="alert-container" class="fixed top-5 right-5 z-50 w-full max-w-sm space-y-3"></div>
     
     <div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
-
         <header class="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
             <div class="text-center">
                 <h1 class="text-3xl font-bold text-white uppercase tracking-tighter">Kabot-1 Mission Control</h1>
                 <p class="text-gray-400 text-sm">Real-time Flight Telemetry & Control</p>
             </div>
-            
-            <div class="flex items-center space-x-4">
-                <div class="flex items-center" title="Connection: Stable">
-                    <svg id="heartbeat-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="currentColor" class="text-green-500"><path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"></path></svg>
-                </div>
-                <button id="power-icon-btn" onclick="openSystemControlModal()" title="System Control">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M7 12l5 5l5 -5"></path><path d="M12 3v14"></path></svg>
-                </button>
-            </div>
+            <button id="power-icon-btn" onclick="openSystemControlModal()" title="System Control">
+                <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M7 12l5 5l5 -5"></path><path d="M12 3v14"></path></svg>
+            </button>
         </header>
 
         <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="lg:col-span-1 flex flex-col gap-6">
-                <!-- Flight Controller with Logic Fix -->
-                <section id="main-controller-card" class="card p-5">
+                <section class="card p-5">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-white uppercase tracking-tight">Flight Controller</h2>
                         <div class="flex items-center text-xs font-bold uppercase">
-                            <div id="main_controller_status_circle" class="w-3 h-3 rounded-full mr-2"></div>
-                            <span id="main_controller_status_text">SCANNING...</span>
+                            <div id="main_controller_status_circle" class="w-3 h-3 rounded-full mr-2 bg-gray-600"></div>
+                            <span id="main_controller_status_text">IDLE</span>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
@@ -102,7 +95,7 @@
                     </div>
                 </section>
 
-                <section id="logger-section" class="card p-5">
+                <section class="card p-5">
                     <h2 class="text-xl font-bold text-white mb-4 uppercase tracking-tight">Manual Loggers</h2>
                     <div id="scripts-container" class="space-y-4">
                         {% for name, config in scripts_config.items() %}
@@ -110,12 +103,12 @@
                         <div id="script-{{ name }}" class="card p-3 border border-gray-700/50">
                             <h3 class="font-bold text-white text-sm uppercase">{{ config.title }}</h3>
                             <div class="flex items-center text-[10px] font-bold my-2">
-                                <div class="status-circle w-2.5 h-2.5 rounded-full mr-2"></div>
-                                <span class="status-text uppercase text-gray-500">INIT...</span>
+                                <div class="status-circle w-2.5 h-2.5 rounded-full mr-2 bg-gray-600"></div>
+                                <span class="status-text uppercase text-gray-500">OFF</span>
                             </div>
                             <div class="grid grid-cols-2 gap-2 mt-2">
                                 <button onclick="controlScript('{{ name }}', 'start')" class="start-btn btn text-[10px] bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded uppercase font-bold">Start</button>
-                                <button onclick="controlScript('{{ name }}', 'stop')" class="stop-btn btn text-[10px] bg-gray-600 hover:bg-gray-700 text-white py-1.5 rounded uppercase font-bold">Stop</button>
+                                <button onclick="controlScript('{{ name }}', 'stop')" class="stop-btn btn text-[10px] bg-gray-600 hover:bg-gray-700 text-white py-1.5 rounded uppercase font-bold" disabled>Stop</button>
                             </div>
                         </div>
                         {% endif %}
@@ -124,37 +117,27 @@
                 </section>
             </div>
 
-            <div id="data-section" class="lg:col-span-2 flex flex-col gap-6">
+            <div class="lg:col-span-2 flex flex-col gap-6">
                  <section class="card p-5">
                     <h2 class="text-xl font-bold text-white mb-4 uppercase tracking-tight">Mission Data Retrieval</h2>
-                    <p class="text-gray-400 mb-4 text-xs">Download raw text logs from 2_inflight and backup storage directories.</p>
-                    <div id="chart-controls" class="flex gap-3 mb-4">
-                        <button id="refresh-logs-btn" onclick="fetchLogs()" class="btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg text-xs uppercase">Scan for Latest Logs</button>
-                    </div>
+                    <button id="refresh-logs-btn" onclick="fetchLogs()" class="btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg text-xs uppercase mb-4 w-full">Scan for Latest Logs</button>
                     <div class="status-box text-xs text-gray-400 mb-4" id="chart-status-output">System idle...</div>
-                    
-                    <div id="log-list-container" class="space-y-2">
-                        <div class="text-gray-600 italic text-center py-10 border border-dashed border-gray-700 rounded text-xs uppercase tracking-widest">No logs retrieved.</div>
-                    </div>
+                    <div id="log-list-container" class="space-y-2"></div>
                 </section>
                 
                 <section class="card p-5">
                     <h2 class="text-xl font-bold text-white mb-4 uppercase tracking-tight text-center">Flight Simulation</h2>
-                    {% for name, config in scripts_config.items() %}
-                    {% if name == 'simulation' %}
                     <div class="video-container mb-4">
-                        <video id="{{ name }}_video" controls loop style="display:none;"></video>
-                        <img id="{{ name }}_placeholder" src="https://placehold.co/600x400/0d1117/30363d?text=Simulation+Engine+Standby">
+                        <video id="simulation_video" controls loop style="display:none;"></video>
+                        <img id="simulation_placeholder" src="https://placehold.co/600x400/0d1117/30363d?text=Simulation+Ready">
                     </div>
+                    <!-- Fixed Call: Matches script name 'simulation' -->
                     <button id="gen-simulation" onclick="generateSimulation('simulation')" class="btn bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 px-4 rounded-lg w-full text-xs uppercase">Render Video Simulation</button>
-                    {% endif %}
-                    {% endfor %}
                 </section>
             </div>
         </main>
     </div>
 
-    <!-- System Modal -->
     <div id="system-control-modal" class="hidden fixed inset-0 bg-gray-900/90 z-40 flex items-center justify-center p-4">
         <div class="card w-full max-w-md bg-gray-800 p-8">
             <h2 class="text-2xl font-bold text-white mb-6 border-b border-gray-700 pb-3 text-center uppercase tracking-tighter">System Actions</h2>
@@ -168,14 +151,55 @@
 <script>
     const SCRIPTS_CONFIG = {{ scripts_config|tojson }};
     const statusOutput = document.getElementById('chart-status-output');
-    const POLLING_INTERVAL_MS = 2000;
+
+    async function generateSimulation(name) {
+        const btn = document.getElementById('gen-simulation');
+        const video = document.getElementById('simulation_video');
+        const placeholder = document.getElementById('simulation_placeholder');
+        
+        btn.disabled = true;
+        statusOutput.textContent = "RUNNING SIMULATION ENGINE (VECTORS & TRAJECTORY)...";
+        
+        try {
+            // Trigger the script start
+            const response = await fetch(`/api/script/${name}/start`, { method: 'POST' });
+            const data = await response.json();
+            
+            if (data.success) {
+                statusOutput.textContent = "SIMULATION PROCESS STARTED. PLEASE WAIT...";
+                
+                // We wait for the process to exit or complete.
+                // For simplicity, we poll until status is 'running: false' again or just wait a reasonable time
+                let attempts = 0;
+                const checkCompletion = setInterval(async () => {
+                    const statusRes = await fetch('/api/status');
+                    const statusData = await statusRes.json();
+                    attempts++;
+
+                    if (!statusData[name].running || attempts > 60) {
+                        clearInterval(checkCompletion);
+                        statusOutput.textContent = "RENDERING COMPLETE. LOADING VIDEO...";
+                        
+                        // Force refresh video
+                        video.src = `/video/${SCRIPTS_CONFIG[name].video_file}?t=${Date.now()}`;
+                        video.style.display = 'block';
+                        placeholder.style.display = 'none';
+                        video.load();
+                        btn.disabled = false;
+                    }
+                }, 2000);
+            }
+        } catch (e) {
+            statusOutput.textContent = "SIMULATION FAILED TO START.";
+            btn.disabled = false;
+        }
+    }
 
     async function fetchLogs() {
         const btn = document.getElementById('refresh-logs-btn');
         const container = document.getElementById('log-list-container');
         btn.disabled = true;
         statusOutput.textContent = "QUERYING STORAGE...";
-        
         try {
             const res = await fetch('/api/list_logs');
             const data = await res.json();
@@ -183,90 +207,60 @@
                 statusOutput.textContent = `RETRIEVED ${data.files.length} LOGS.`;
                 container.innerHTML = data.files.map(file => `
                     <div class="flex items-center justify-between gap-4 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
-                        <div class="flex-1 min-w-0">
-                            <span class="text-white font-mono text-[11px] block truncate" title="${file}">${file}</span>
-                        </div>
-                        <div class="flex-shrink-0">
-                            <a href="/api/download/log/${file}" download class="inline-block bg-gray-700 hover:bg-blue-600 text-white px-3 py-1 rounded text-[9px] font-black uppercase tracking-tighter">DOWNLOAD</a>
-                        </div>
+                        <div class="flex-1 min-w-0"><span class="text-white font-mono text-[11px] block truncate" title="${file}">${file}</span></div>
+                        <div class="flex-shrink-0"><a href="/api/download/log/${file}" download class="inline-block bg-gray-700 hover:bg-blue-600 text-white px-3 py-1 rounded text-[9px] font-black uppercase tracking-tighter">DOWNLOAD</a></div>
                     </div>
                 `).join('');
             } else {
                 statusOutput.textContent = "NO LOGS DETECTED.";
-                container.innerHTML = `<div class="text-gray-600 italic text-center py-10 border border-dashed border-gray-700 rounded text-xs">EMPTY DIRECTORY</div>`;
+                container.innerHTML = `<div class="text-gray-600 italic text-center py-10 border border-dashed border-gray-700 rounded text-xs uppercase">EMPTY</div>`;
             }
-        } catch (e) {
-            statusOutput.textContent = "STORAGE ERROR.";
-        } finally { btn.disabled = false; }
+        } catch (e) { statusOutput.textContent = "STORAGE ERROR."; }
+        finally { btn.disabled = false; }
     }
 
     async function fetchStatus() {
         try {
             const response = await fetch('/api/status');
-            if (response.ok) {
-                const status = await response.json();
-                updateUI(status);
+            const status = await response.json();
+            
+            // Flight Controller Logic
+            const mainRunning = status.main_controller.running;
+            document.getElementById('main_start_btn').disabled = mainRunning;
+            document.getElementById('main_stop_btn').disabled = !mainRunning;
+            document.getElementById('main_controller_status_text').textContent = mainRunning ? "MISSION ACTIVE" : "STANDBY";
+            document.getElementById('main_controller_status_circle').className = `w-3 h-3 rounded-full mr-2 ${mainRunning ? 'bg-red-500 pulse-active-red' : 'bg-green-500'}`;
+
+            // Global Locks
+            document.getElementById('refresh-logs-btn').disabled = mainRunning;
+            if(!status.simulation.running) document.getElementById('gen-simulation').disabled = mainRunning;
+
+            // Loggers Logic
+            for (const key in status) {
+                const card = document.getElementById(`script-${key}`);
+                if (card) {
+                    const isRunning = status[key].running;
+                    card.querySelector('.status-circle').className = `status-circle w-2.5 h-2.5 rounded-full mr-2 ${isRunning ? 'bg-green-500' : 'bg-gray-600'}`;
+                    card.querySelector('.status-text').textContent = isRunning ? "RUNNING" : "READY";
+                    card.querySelector('.start-btn').disabled = isRunning;
+                    card.querySelector('.stop-btn').disabled = !isRunning;
+                }
             }
         } catch (e) {}
     }
 
-    function updateUI(status) {
-        // --- FLIGHT CONTROLLER LOGIC FIX ---
-        const mainRunning = status.main_controller.running;
-        const mainStartBtn = document.getElementById('main_start_btn');
-        const mainStopBtn = document.getElementById('main_stop_btn');
-        
-        document.getElementById('main_controller_status_text').textContent = mainRunning ? "MISSION ACTIVE" : "STANDBY";
-        document.getElementById('main_controller_status_circle').className = `w-3 h-3 rounded-full mr-2 ${mainRunning ? 'bg-red-500 pulse-active-red' : 'bg-green-500'}`;
-        
-        // Button Shading/Disabling Logic
-        mainStartBtn.disabled = mainRunning;
-        mainStopBtn.disabled = !mainRunning;
-
-        // General Global UI Lock (Prevents modifications while flying)
-        document.getElementById('refresh-logs-btn').disabled = mainRunning;
-        document.getElementById('gen-simulation').disabled = mainRunning;
-        
-        for (const key in status) {
-            const card = document.getElementById(`script-${key}`);
-            if (card) {
-                const circle = card.querySelector('.status-circle');
-                const startBtn = card.querySelector('.start-btn');
-                const stopBtn = card.querySelector('.stop-btn');
-                const isRunning = status[key].running;
-
-                circle.className = `status-circle w-2.5 h-2.5 rounded-full mr-2 ${isRunning ? 'bg-green-500 pulse-active-green' : 'bg-gray-600'}`;
-                card.querySelector('.status-text').textContent = isRunning ? `RUNNING (PID: ${status[key].pid})` : "READY";
-                
-                // Toggle sub-logger buttons
-                startBtn.disabled = isRunning;
-                stopBtn.disabled = !isRunning;
-            }
-        }
-    }
-
-    async function controlScript(name, action) {
-        try { await fetch(`/api/script/${name}/${action}`, { method: 'POST' }); fetchStatus(); } catch (e) {}
-    }
-
-    async function controlMainController(action) {
-        try { await fetch(`/api/script/main_controller/${action}`, { method: 'POST' }); fetchStatus(); } catch (e) {}
-    }
-
+    async function controlScript(name, action) { await fetch(`/api/script/${name}/${action}`, { method: 'POST' }); fetchStatus(); }
+    async function controlMainController(action) { await fetch(`/api/script/main_controller/${action}`, { method: 'POST' }); fetchStatus(); }
     function openSystemControlModal() { document.getElementById('system-control-modal').classList.remove('hidden'); }
     function closeSystemControlModal() { document.getElementById('system-control-modal').classList.add('hidden'); }
     async function handleModalSystemControl(action) {
-        if (action === 'wipe_data') {
-            const res = await fetch('/api/control/wipe_data', { method: 'POST' });
-            const data = await res.json();
-            fetchLogs();
-        }
+        if (action === 'wipe_data') { await fetch('/api/control/wipe_data', { method: 'POST' }); fetchLogs(); }
         closeSystemControlModal();
     }
 
     document.addEventListener('DOMContentLoaded', () => { 
         fetchStatus(); 
-        setInterval(fetchStatus, POLLING_INTERVAL_MS); 
+        setInterval(fetchStatus, 2000); 
     });
 </script>
 </body>
