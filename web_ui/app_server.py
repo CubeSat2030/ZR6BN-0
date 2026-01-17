@@ -7,7 +7,7 @@ import threading
 from flask import Flask, render_template, jsonify, send_from_directory, request
 
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server - LOG RETRIEVAL VERSION
+# Kabot-1 Mission Control Dashboard Server - LOG DOWNLOAD VERSION
 # =========================================================================
 # FAZE OUT NOTICE: Chart generation removed due to RAM constraints (500MB).
 # REPLACEMENT: Added .txt file retrieval and local web_ui download system.
@@ -15,7 +15,7 @@ from flask import Flask, render_template, jsonify, send_from_directory, request
 
 app = Flask(__name__)
 
-# Configuration for loggers and scripts (Preserved structure)
+# Configuration (Preserved structure, removed chart generation logic)
 scripts_config = {
     'main_controller': {'title': 'Main Flight Controller', 'script': 'main_controller.py'},
     'gps_logger': {'title': 'GPS Logger', 'script': 'gps_logger.py', 'chart_file': 'gps_data.txt'},
@@ -36,7 +36,7 @@ PROCESS_LOCK = threading.Lock()
 AUTO_START_TIMEOUT = 10
 BUZZER_THREAD_STOP = threading.Event()
 
-# Buzzer Logic (Preserved)
+# Buzzer Logic (Strictly Preserved)
 class MockBuzzer:
     def on(self): pass
     def off(self): pass
@@ -76,17 +76,17 @@ def index():
 
 @app.route('/api/list_logs')
 def list_logs():
-    """PHASE OUT REPLACEMENT: List available mission text files."""
+    """Returns list of .txt files for retrieval."""
     try:
         files = [f for f in os.listdir(LOGS_DIR) if f.endswith('.txt')]
         files.sort(key=lambda x: os.path.getmtime(os.path.join(LOGS_DIR, x)), reverse=True)
-        return jsonify({"status": "success", "files": files})
+        return jsonify({"success": True, "files": files})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({"success": False, "message": str(e)})
 
-@app.route('/api/download_log/<filename>')
+@app.route('/api/download/log/<filename>')
 def download_log(filename):
-    """PHASE OUT REPLACEMENT: Download retrieved txt files."""
+    """Serves the .txt file as a download (replaces chart download)."""
     return send_from_directory(LOGS_DIR, filename, as_attachment=True)
 
 @app.route('/api/script/<name>/<action>', methods=['POST'])
@@ -107,7 +107,6 @@ def control_script(name, action):
 
 @app.route('/api/simulation/<name>', methods=['POST'])
 def run_simulation(name):
-    # Simulation logic preserved as it is not a "chart"
     with PROCESS_LOCK:
         p = subprocess.Popen(["python3", scripts_config[name]['script']])
         RUNNING_PROCESSES[name] = p
@@ -115,12 +114,14 @@ def run_simulation(name):
 
 @app.route('/api/control/wipe_data', methods=['POST'])
 def wipe_data():
-    """Modified to clear logs. Chart cleanup removed."""
     try:
         for f in os.listdir(LOGS_DIR):
             if f.endswith('.txt'):
                 os.remove(os.path.join(LOGS_DIR, f))
-        return jsonify({"success": True, "message": "Mission logs cleared from HAB payload."})
+        # Remove video if exists
+        video_path = os.path.join(BASE_DIR, "mission_sim.mp4")
+        if os.path.exists(video_path): os.remove(video_path)
+        return jsonify({"success": True, "message": "All mission logs and media wiped."})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 
@@ -132,6 +133,10 @@ def get_status():
             p = RUNNING_PROCESSES.get(key)
             status[key] = {"running": p.poll() is None if p else False, "pid": p.pid if p else None}
         return jsonify(status)
+
+@app.route('/video/<filename>')
+def serve_video(filename):
+    return send_from_directory(BASE_DIR, filename)
 
 if __name__ == "__main__":
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
