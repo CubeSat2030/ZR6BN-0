@@ -1,7 +1,19 @@
+
+
+
+
 IMPORTANT NOTE:
 ---------------
 ~~~
-As of Saturday 17 Janary 2026 @ 12:54PM SAST the chart generation feaure is being fazed out entirely due to impracticallity regarding performance, effficiancly and reliability. However we dcided to replace it with txt_file_retrieval. with that said the retrieved and downloaded txt filess will be provvesed into svg chart file when the payload is connected  via its client app, the KabotHabApp that is in the development pipeline
+
+FAZE OUT IN AFFECT NOTICE:
+​As of Saturday 17 January 2026 @ 12:54PM SAST the chart generation feaure is being fazed out entirely due to impracticallity towards:
+​performance,
+​effficiancly,
+​reliability.
+​However we decided to replace it with txt file retrieval instead. with that said the retrieval and downloading of txt files are still performed via Kabot-1's web_ui accessed locally on your web browser app.
+​Later this year when Kabot-2's mission is green lit we will be fazing out the web_ui used in our kabot-1 HAB payload entirely. Kabot-2 however will use its client app, the KabotDockApp that is still in the drawing board phase.
+
 ~~~
 
 
