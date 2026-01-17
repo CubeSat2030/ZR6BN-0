@@ -16,7 +16,7 @@
 #    - effficiancly,
 #    - reliability. 
 #   However we decided to replace it with txt file retrieval instead. 
-#   with that said the retrieved and downloaded txt files via Kabot-1's web_ui in your web browser. 
+#   with that said the retrieval and downloading of txt files are still performed via Kabot-1's web_ui  accessed locally on your web browser app. 
 # 
 #
 # Later this year when Kabot-2's mission is green lit we will be fazing out the web_ui used in our kabot-1 HAB payload entirely. 
