@@ -1,3 +1,10 @@
+IMPORTANT NOTE:
+---------------
+~~~
+As of Saturday 17 Janary 2026 @ 12:54PM SAST the chart generation feaure is being fazed out entirely due to impracticallity regarding performance, effficiancly and reliability. However we dcided to replace it with txt_file_retrieval. with that said the retrieved and downloaded txt filess will be provvesed into svg chart file when the payload is connected  via its client app, the KabotHabApp that is in the development pipeline
+~~~
+
+
 # Project tree
 
 ~~~
