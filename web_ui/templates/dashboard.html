@@ -8,118 +8,56 @@
     <script>
         tailwind.config = {
             darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        'gray-900': '#0d1117',
-                        'gray-800': '#161b22',
-                        'gray-700': '#21262d',
-                        'gray-600': '#30363d',
-                    }
-                }
-            }
+            theme: { extend: { colors: { 'gray-900': '#0d1117', 'gray-800': '#161b22', 'gray-700': '#21262d' } } }
         }
     </script>
     <style>
-        :root {
-            --bg-dark: #0d1117;
-            --bg-card: #161b22;
-            --border: #30363d;
-            --text: #c9d1d9;
-        }
-        body { 
-            background-color: var(--bg-dark); 
-            color: var(--text); 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-        }
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --border: #30363d; --text: #c9d1d9; }
+        body { background-color: var(--bg-dark); color: var(--text); font-family: sans-serif; }
         .card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
-        .btn { transition: all 0.2s ease-in-out; border: 1px solid var(--border); }
-        .btn:disabled { cursor: not-allowed; opacity: 0.4; filter: grayscale(0.5); }
-
-        .status-box { 
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; 
-            background-color: var(--bg-dark); 
-            border: 1px solid var(--border); 
-            border-radius: 6px; 
-            padding: 0.75rem; 
-        }
-
-        .video-container { 
-            position: relative; 
-            padding-bottom: 56.25%; 
-            height: 0; 
-            overflow: hidden; 
-            background: #000;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-        }
-        .video-container video, .video-container img {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: contain;
-        }
-
+        .btn { transition: all 0.2s; border: 1px solid var(--border); }
+        .btn:disabled { cursor: not-allowed; opacity: 0.4; }
+        .video-container { position: relative; padding-bottom: 56.25%; height: 0; background: #000; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+        .video-container video, .video-container img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
         .pulse-red { animation: pulse-shadow-red 1.5s infinite; }
         @keyframes pulse-shadow-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-dark); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-300">
+<body class="p-4 md:p-8">
 
-    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+    <div class="max-w-6xl mx-auto space-y-6">
         <!-- Header -->
-        <header class="flex justify-between items-center mb-8 pb-4 border-b border-gray-700">
+        <header class="flex justify-between items-center border-b border-gray-700 pb-4">
             <div>
-                <h1 class="text-3xl font-black text-white uppercase tracking-tighter">Kabot-1 Terminal</h1>
-                <p class="text-gray-500 text-xs font-bold uppercase tracking-widest">Mission Control & Telemetry</p>
+                <h1 class="text-2xl font-black text-white uppercase tracking-tighter">Kabot-1 Control</h1>
+                <p id="connection-status" class="text-[10px] text-green-500 font-bold uppercase tracking-widest">Link Active</p>
             </div>
-            <div class="flex items-center space-x-4">
-                <div id="connection-status" class="flex items-center text-[10px] font-bold text-green-500 uppercase">
-                    <span class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-                    Link Stable
-                </div>
-                <button onclick="openSystemControlModal()" class="p-2 hover:bg-gray-800 rounded-full transition-colors text-gray-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10m0 0l-3-3m3 3l3-3M5 12a7 7 0 1 0 14 0"/></svg>
-                </button>
-            </div>
+            <button onclick="document.getElementById('wipe_modal').classList.remove('hidden')" class="p-2 text-red-500 hover:bg-red-900/20 rounded-full">
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+            </button>
         </header>
 
-        <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            <!-- Sidebar: Controls -->
-            <div class="flex flex-col gap-6">
-                <!-- Flight Controller -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Col: Flight & Loggers -->
+            <div class="space-y-6">
                 <section class="card p-5">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xs font-black text-white uppercase tracking-widest">Flight Controller</h2>
-                        <div id="fc_status_container" class="flex items-center text-[10px] font-bold uppercase">
-                            <span id="fc_status_dot" class="w-2 h-2 rounded-full mr-2 bg-gray-600"></span>
-                            <span id="fc_status_text">Scanning...</span>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <button id="main_start_btn" onclick="apiCall('main_controller', 'start')" class="btn bg-green-700 hover:bg-green-800 text-white font-bold py-3 rounded-lg text-[10px] uppercase">Launch</button>
-                        <button id="main_stop_btn" onclick="apiCall('main_controller', 'stop')" class="btn bg-red-900 hover:bg-red-950 text-white font-bold py-3 rounded-lg text-[10px] uppercase" disabled>Abort</button>
+                    <h2 class="text-[10px] font-black uppercase text-gray-500 mb-4 tracking-widest">Flight Status</h2>
+                    <div id="fc_status_text" class="text-xl font-bold mb-4">Scanning...</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="main_start_btn" onclick="apiCall('main_controller', 'start')" class="btn bg-green-700 text-white py-3 rounded text-[10px] font-bold uppercase">Launch</button>
+                        <button id="main_stop_btn" onclick="apiCall('main_controller', 'stop')" class="btn bg-red-900 text-white py-3 rounded text-[10px] font-bold uppercase" disabled>Abort</button>
                     </div>
                 </section>
 
-                <!-- Script Loggers -->
                 <section class="card p-5">
-                    <h2 class="text-xs font-black text-white uppercase tracking-widest mb-4">Manual Loggers</h2>
+                    <h2 class="text-[10px] font-black uppercase text-gray-500 mb-4 tracking-widest">Manual Loggers</h2>
                     <div class="space-y-4">
                         {% for name, config in scripts_config.items() if config.chart_file %}
-                        <div id="script-{{ name }}" class="border-t border-gray-700/50 pt-4 first:border-0 first:pt-0">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-[11px] font-bold text-gray-300 uppercase">{{ config.title }}</span>
-                                <span class="status-text text-[9px] font-bold text-gray-500 uppercase">Off</span>
-                            </div>
+                        <div id="script-{{ name }}" class="flex flex-col gap-2">
+                            <span class="text-[10px] font-bold uppercase text-gray-400">{{ config.title }}</span>
                             <div class="grid grid-cols-2 gap-2">
-                                <button onclick="apiCall('{{ name }}', 'start')" class="start-btn btn bg-gray-800 hover:bg-blue-900 text-white py-2 rounded text-[9px] uppercase font-bold">Start</button>
-                                <button onclick="apiCall('{{ name }}', 'stop')" class="stop-btn btn bg-gray-800 hover:bg-red-900 text-white py-2 rounded text-[9px] uppercase font-bold" disabled>Stop</button>
+                                <button onclick="apiCall('{{ name }}', 'start')" class="start-btn btn bg-gray-800 text-[9px] py-1 rounded font-bold uppercase">Start</button>
+                                <button onclick="apiCall('{{ name }}', 'stop')" class="stop-btn btn bg-gray-800 text-[9px] py-1 rounded font-bold uppercase" disabled>Stop</button>
                             </div>
                         </div>
                         {% endfor %}
@@ -127,51 +65,46 @@
                 </section>
             </div>
 
-            <!-- Main Panel: Data & Simulation -->
-            <div class="lg:col-span-2 flex flex-col gap-6">
-                <!-- Data Retrieval -->
+            <!-- Right Col: Simulation & Logs -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Simulation Area -->
                 <section class="card p-5">
-                    <h2 class="text-xs font-black text-white uppercase tracking-widest mb-4">Mission Storage</h2>
-                    <div class="flex gap-2 mb-4">
-                        <button onclick="fetchLogs()" id="refresh-logs-btn" class="btn flex-1 bg-indigo-700 hover:bg-indigo-800 text-white py-2 rounded-lg text-[10px] uppercase font-black">Scan Latest Logs</button>
-                    </div>
-                    <div id="log-status" class="status-box text-[10px] text-gray-500 mb-4 lowercase italic">Ready for storage query...</div>
-                    <div id="log-list" class="space-y-2 max-h-60 overflow-y-auto pr-2">
-                        <!-- Logs will populate here -->
-                        <div class="text-center py-8 text-gray-600 text-[10px] uppercase tracking-widest">No logs scanned</div>
-                    </div>
-                </section>
-
-                <!-- Simulation Rendering -->
-                <section class="card p-5">
-                    <h2 class="text-xs font-black text-white uppercase tracking-widest mb-4 text-center">Simulation Engine</h2>
+                    <h2 class="text-[10px] font-black uppercase text-gray-500 mb-4 tracking-widest text-center">3D Mission Simulation</h2>
                     <div class="video-container mb-4">
                         <div id="sim_loading" class="hidden absolute inset-0 z-10 bg-black/90 flex flex-col items-center justify-center">
-                            <div class="w-10 h-10 border-4 border-pink-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                            <p class="text-pink-500 text-[10px] font-black uppercase tracking-[0.2em] pulse-red">Rendering Mission Data...</p>
-                            <p class="text-gray-500 text-[9px] mt-2 uppercase">Do not power off system</p>
+                            <div class="w-8 h-8 border-4 border-pink-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                            <p class="text-pink-500 text-[10px] font-bold uppercase tracking-widest pulse-red">Background Render Active</p>
                         </div>
                         <video id="sim_video" controls class="hidden w-full h-full bg-black"></video>
-                        <img id="sim_placeholder" src="https://placehold.co/600x337/0d1117/30363d?text=Engine+Ready" alt="Simulation Standby">
+                        <img id="sim_placeholder" src="https://placehold.co/600x337/0d1117/30363d?text=Standby" alt="Standby">
                     </div>
-                    <button id="gen-sim-btn" onclick="apiCall('simulation', 'start')" class="btn w-full bg-pink-700 hover:bg-pink-800 text-white py-4 rounded-xl text-xs uppercase font-black tracking-widest">
-                        Start Background Render
-                    </button>
+                    <div class="flex flex-col gap-2">
+                        <button id="gen-sim-btn" onclick="apiCall('simulation', 'start')" class="btn w-full bg-pink-700 text-white py-4 rounded-lg text-xs font-black uppercase">Render Simulation</button>
+                        <a id="download-sim-btn" href="/api/download/simulation" class="hidden btn w-full bg-indigo-700 text-white py-2 rounded-lg text-[10px] font-bold uppercase text-center">Download .mp4</a>
+                    </div>
+                </section>
+
+                <!-- Storage Area -->
+                <section class="card p-5">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-[10px] font-black uppercase text-gray-500 tracking-widest">Internal Storage</h2>
+                        <button onclick="fetchLogs()" class="text-[10px] text-blue-400 font-bold uppercase">Refresh List</button>
+                    </div>
+                    <div id="log-list" class="space-y-2 max-h-48 overflow-y-auto">
+                        <p class="text-[10px] text-gray-600 italic">No logs scanned yet.</p>
+                    </div>
                 </section>
             </div>
-        </main>
+        </div>
     </div>
 
-    <!-- System Control Modal -->
-    <div id="sys_modal" class="hidden fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="card w-full max-w-sm p-8 text-center border-red-900/50">
-            <h2 class="text-xl font-black text-white mb-2 uppercase italic tracking-tighter">Critical Actions</h2>
-            <p class="text-gray-500 text-[10px] uppercase mb-8">This will irreversibly modify mission parameters</p>
-            
-            <div class="space-y-3">
-                <button onclick="handleWipeData()" class="btn w-full bg-red-950 hover:bg-red-800 text-red-200 py-4 rounded-xl text-[10px] font-black uppercase border-red-800">Wipe All Mission Data</button>
-                <button onclick="closeSystemControlModal()" class="w-full py-4 text-gray-500 text-[10px] font-black uppercase hover:text-white transition-colors">Close Menu</button>
-            </div>
+    <!-- Wipe Modal -->
+    <div id="wipe_modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div class="card p-8 max-w-sm text-center">
+            <h3 class="font-black uppercase text-red-500 mb-2">Wipe Storage?</h3>
+            <p class="text-[10px] text-gray-500 uppercase mb-6">This deletes all telemetry logs and simulation video files.</p>
+            <button onclick="handleWipe()" class="btn bg-red-700 text-white w-full py-3 rounded mb-2 font-bold uppercase">Confirm Wipe</button>
+            <button onclick="document.getElementById('wipe_modal').classList.add('hidden')" class="text-[10px] uppercase font-bold text-gray-400">Cancel</button>
         </div>
     </div>
 
@@ -180,67 +113,33 @@
         let isCurrentlyRendering = false;
 
         async function apiCall(name, action) {
-            // If starting simulation, lock UI immediately
             if (name === 'simulation' && action === 'start') {
                 isCurrentlyRendering = true;
-                setSimulationUIState(true);
+                updateUIVisuals(true);
             }
-            try {
-                const response = await fetch(`/api/script/${name}/${action}`, { method: 'POST' });
-                const data = await response.json();
-                if (!data.success) {
-                    console.error("API Error:", data.message);
-                }
-            } catch (e) {
-                console.error("Network error during API call");
-            }
+            try { await fetch(`/api/script/${name}/${action}`, { method: 'POST' }); } catch (e) {}
             updateStatus();
         }
 
-        function setSimulationUIState(rendering) {
-            const loading = document.getElementById('sim_loading');
-            const btn = document.getElementById('gen-sim-btn');
-            if (rendering) {
-                loading.classList.remove('hidden');
-                btn.disabled = true;
-                btn.textContent = "Processing Background Tasks...";
-            } else {
-                loading.classList.add('hidden');
-                btn.textContent = "Start Background Render";
-            }
+        function updateUIVisuals(rendering) {
+            document.getElementById('sim_loading').classList.toggle('hidden', !rendering);
+            document.getElementById('gen-sim-btn').disabled = rendering;
         }
 
         async function fetchLogs() {
             const list = document.getElementById('log-list');
-            const statusEl = document.getElementById('log-status');
-            const btn = document.getElementById('refresh-logs-btn');
-            
-            btn.disabled = true;
-            statusEl.textContent = "Querying internal storage nodes...";
-            
             try {
                 const res = await fetch('/api/list_logs');
                 const data = await res.json();
                 if (data.success && data.files.length > 0) {
-                    statusEl.textContent = `Scanning complete. Found ${data.files.length} data blocks.`;
                     list.innerHTML = data.files.map(f => `
-                        <div class="flex justify-between items-center p-3 bg-gray-800/40 rounded-lg border border-gray-700/50 hover:border-indigo-500/50 transition-all">
-                            <div class="flex flex-col">
-                                <span class="text-[10px] font-mono text-white truncate w-40 md:w-64" title="${f}">${f}</span>
-                                <span class="text-[8px] text-gray-600 uppercase font-bold mt-1">Telemetry Log File</span>
-                            </div>
-                            <a href="/api/download/log/${f}" download class="text-[9px] bg-gray-700 text-white px-4 py-2 rounded-md font-black hover:bg-indigo-600 transition-colors uppercase">Download</a>
+                        <div class="flex justify-between items-center bg-gray-800/40 p-2 rounded border border-gray-700/50">
+                            <span class="text-[10px] font-mono truncate w-48">${f}</span>
+                            <a href="/api/download/log/${f}" download class="text-[9px] text-blue-400 font-bold uppercase">Get File</a>
                         </div>
                     `).join('');
-                } else {
-                    statusEl.textContent = "Storage scan returned 0 files.";
-                    list.innerHTML = `<div class="text-center py-10 text-gray-600 italic text-[10px] uppercase">No Logs Detected</div>`;
                 }
-            } catch (e) {
-                statusEl.textContent = "Hardware error reading storage.";
-            } finally {
-                btn.disabled = false;
-            }
+            } catch (e) {}
         }
 
         async function updateStatus() {
@@ -248,80 +147,74 @@
                 const res = await fetch('/api/status');
                 const status = await res.json();
 
-                // 1. Flight Controller State
-                const main = status.main_controller;
-                const fcRunning = main.running;
-                document.getElementById('fc_status_dot').className = `w-2 h-2 rounded-full mr-2 ${fcRunning ? 'bg-red-500 pulse-red' : 'bg-green-500'}`;
-                document.getElementById('fc_status_text').textContent = fcRunning ? "Mission Active" : "Standby";
-                document.getElementById('main_start_btn').disabled = fcRunning;
-                document.getElementById('main_stop_btn').disabled = !fcRunning;
+                // Flight Controller
+                const fc = status.main_controller.running;
+                document.getElementById('fc_status_text').textContent = fc ? "MISSION ACTIVE" : "STANDBY";
+                document.getElementById('fc_status_text').className = `text-xl font-bold mb-4 ${fc ? 'text-red-500 pulse-red' : 'text-green-500'}`;
+                document.getElementById('main_start_btn').disabled = fc;
+                document.getElementById('main_stop_btn').disabled = !fc;
 
-                // 2. Simulation State (The Background Persistence Logic)
+                // Simulation Logic
                 const sim = status.simulation;
                 const simBtn = document.getElementById('gen-sim-btn');
+                const downloadBtn = document.getElementById('download-sim-btn');
                 const video = document.getElementById('sim_video');
                 const placeholder = document.getElementById('sim_placeholder');
 
                 if (sim.running) {
                     isCurrentlyRendering = true;
-                    setSimulationUIState(true);
+                    updateUIVisuals(true);
+                    downloadBtn.classList.add('hidden');
                 } else {
-                    // It's not running. Was it rendering just a moment ago?
                     if (isCurrentlyRendering) {
                         isCurrentlyRendering = false;
-                        setSimulationUIState(false);
-                        
-                        // Transition: Verify if video file exists before swapping
-                        const videoName = SCRIPTS_CONFIG.simulation.video_file;
-                        const videoUrl = `/video/${videoName}?t=${Date.now()}`;
-                        
-                        try {
-                            const headCheck = await fetch(videoUrl, { method: 'HEAD' });
-                            if (headCheck.ok) {
-                                video.src = videoUrl;
-                                video.classList.remove('hidden');
-                                placeholder.classList.add('hidden');
-                                video.load();
-                            }
-                        } catch (err) {
-                            console.log("Video not ready or render failed.");
-                        }
+                        updateUIVisuals(false);
+                        // Trigger file check
+                        checkVideoFile();
                     }
-                    simBtn.disabled = fcRunning; // Only allow simulation if flight isn't active
+                    simBtn.disabled = fc;
                 }
 
-                // 3. Other Loggers
+                // Others
                 for (const key in status) {
                     const el = document.getElementById(`script-${key}`);
-                    if (el && key !== 'simulation' && key !== 'main_controller') {
-                        const running = status[key].running;
-                        el.querySelector('.status-text').textContent = running ? "Active" : "Ready";
-                        el.querySelector('.start-btn').disabled = running;
-                        el.querySelector('.stop-btn').disabled = !running;
+                    if (el && !['simulation','main_controller'].includes(key)) {
+                        const r = status[key].running;
+                        el.querySelector('.start-btn').disabled = r;
+                        el.querySelector('.stop-btn').disabled = !r;
                     }
                 }
-            } catch (e) {
-                document.getElementById('connection-status').textContent = "Link Lost";
-                document.getElementById('connection-status').classList.replace('text-green-500', 'text-red-500');
-            }
-        }
-
-        function openSystemControlModal() { document.getElementById('sys_modal').classList.remove('hidden'); }
-        function closeSystemControlModal() { document.getElementById('sys_modal').classList.add('hidden'); }
-        
-        async function handleWipeData() {
-            try {
-                await fetch('/api/control/wipe_data', { method: 'POST' });
-                fetchLogs();
             } catch (e) {}
-            closeSystemControlModal();
         }
 
-        // Initialization
+        async function checkVideoFile() {
+            const video = document.getElementById('sim_video');
+            const placeholder = document.getElementById('sim_placeholder');
+            const downloadBtn = document.getElementById('download-sim-btn');
+            const url = `/video/${SCRIPTS_CONFIG.simulation.video_file}?t=${Date.now()}`;
+            
+            try {
+                const res = await fetch(url, { method: 'HEAD' });
+                if (res.ok) {
+                    video.src = url;
+                    video.classList.remove('hidden');
+                    placeholder.classList.add('hidden');
+                    downloadBtn.classList.remove('hidden');
+                    video.load();
+                }
+            } catch (e) {}
+        }
+
+        async function handleWipe() {
+            try { await fetch('/api/control/wipe_data', { method: 'POST' }); fetchLogs(); } catch (e) {}
+            document.getElementById('wipe_modal').classList.add('hidden');
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             updateStatus();
-            setInterval(updateStatus, 2000);
+            setInterval(updateStatus, 3000);
             fetchLogs();
+            checkVideoFile(); // Check for existing video on load
         });
     </script>
 </body>
