@@ -7,12 +7,12 @@ import threading
 from flask import Flask, render_template, jsonify, send_from_directory, request
 
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server - FINAL STABLE VERSION
+# Kabot-1 Mission Control Dashboard Server - GPIO PATCHED VERSION
 # =========================================================================
 
 app = Flask(__name__)
 
-# Base Directory Setup (Navigating from web_ui/ to project root)
+# Base Directory Setup
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Define Project-Specific Paths
@@ -22,7 +22,6 @@ SCRIPTS_DIR = os.path.join(BASE_DIR, "src", "logger", "scripts")
 SIM_DIR = os.path.join(BASE_DIR, "src", "simulation", "scripts")
 VIDEO_PATH = os.path.join(BASE_DIR, "src", "simulation", "output") 
 
-# Ensure output directory exists for the simulation video
 os.makedirs(VIDEO_PATH, exist_ok=True)
 
 scripts_config = {
@@ -52,28 +51,27 @@ scripts_config = {
     }
 }
 
-# Global State
 RUNNING_PROCESSES = {}
 PROCESS_LOCK = threading.Lock()
 AUTO_START_TIMEOUT = 10
 BUZZER_THREAD_STOP = threading.Event()
 
-# --- BUZZER LOGIC ---
-try:
-    from gpiozero import Buzzer
-    BUZZER = Buzzer(4)
-    BUZZER_AVAILABLE = True
-except (ImportError, Exception):
-    class MockBuzzer:
-        def on(self): pass
-        def off(self): pass
-    BUZZER = MockBuzzer()
-    BUZZER_AVAILABLE = False
+# --- PATCHED BUZZER LOGIC (Release GPIO after every use) ---
+def get_buzzer():
+    try:
+        from gpiozero import Buzzer
+        return Buzzer(4)
+    except:
+        return None
 
 def buzzer_double_beep():
-    if BUZZER_AVAILABLE:
-        BUZZER.on(); time.sleep(0.1); BUZZER.off(); time.sleep(0.1);
-        BUZZER.on(); time.sleep(0.1); BUZZER.off()
+    bz = get_buzzer()
+    if bz:
+        try:
+            bz.on(); time.sleep(0.1); bz.off(); time.sleep(0.1)
+            bz.on(); time.sleep(0.1); bz.off()
+        finally:
+            bz.close() # CRITICAL: Releases GPIO pin 4 immediately
 
 def start_buzzer_countdown():
     start_time = time.time()
@@ -83,7 +81,12 @@ def start_buzzer_countdown():
             buzzer_double_beep()
             time.sleep(10)
         elif elapsed < AUTO_START_TIMEOUT:
-            if BUZZER_AVAILABLE: BUZZER.on(); time.sleep(3); BUZZER.off()
+            bz = get_buzzer()
+            if bz:
+                try:
+                    bz.on(); time.sleep(3); bz.off()
+                finally:
+                    bz.close() # Release pin before breaking
             break
         else: break
 
@@ -99,12 +102,8 @@ def get_status():
         status = {}
         for key in scripts_config:
             p = RUNNING_PROCESSES.get(key)
-            if p:
-                # poll() returns None if process is still running
-                if p.poll() is None:
-                    status[key] = {"running": True, "pid": p.pid}
-                else:
-                    status[key] = {"running": False, "pid": None}
+            if p and p.poll() is None:
+                status[key] = {"running": True, "pid": p.pid}
             else:
                 status[key] = {"running": False, "pid": None}
         return jsonify(status)
@@ -113,11 +112,9 @@ def get_status():
 def control_script(name, action):
     with PROCESS_LOCK:
         if action == 'start':
-            # Stop any existing process if it's already running
             if name in RUNNING_PROCESSES and RUNNING_PROCESSES[name].poll() is None:
                 return jsonify({"success": True, "message": "Already running."})
 
-            # For simulation, delete the old file first to prevent stale video 404s
             if name == 'simulation':
                 old_video = os.path.join(VIDEO_PATH, scripts_config[name]['video_file'])
                 if os.path.exists(old_video):
@@ -125,14 +122,12 @@ def control_script(name, action):
                     except: pass
 
             script_path = scripts_config[name]['script']
-            
-            # Start process detached (Persistent background)
             p = subprocess.Popen(
                 ["python3", script_path],
                 start_new_session=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                cwd=BASE_DIR # Execute from project root
+                cwd=BASE_DIR
             )
             RUNNING_PROCESSES[name] = p
             return jsonify({"success": True})
@@ -197,7 +192,6 @@ if __name__ == "__main__":
     countdown_thread.start()
     
     def exit_handler(signum, frame):
-        if BUZZER_AVAILABLE: BUZZER.off()
         BUZZER_THREAD_STOP.set()
         sys.exit(0)
         
