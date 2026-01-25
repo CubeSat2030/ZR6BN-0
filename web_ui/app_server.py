@@ -7,53 +7,84 @@ import threading
 from flask import Flask, render_template, jsonify, send_from_directory, request
 
 # =========================================================================
-# Kabot-1 Mission Control Dashboard Server - ERROR REPORTING VERSION
+# Kabot-1 Mission Control Dashboard Server - FINAL STABLE VERSION
 # =========================================================================
 
 app = Flask(__name__)
 
-# Configuration
-scripts_config = {
-    'main_controller': {'title': 'Main Flight Controller', 'script': 'main_controller.py'},
-    'gps_logger': {'title': 'GPS Logger', 'script': 'gps_logger.py', 'chart_file': 'gps_data.txt'},
-    'altimeter': {'title': 'Altimeter', 'script': 'altimeter_logger.py', 'chart_file': 'altitude_data.txt'},
-    'temp_sensor': {'title': 'Temperature Sensor', 'script': 'temp_logger.py', 'chart_file': 'temp_data.txt'},
-    'sound_logger': {'title': 'Sound Logger', 'script': 'sound_logger.py', 'chart_file': 'sound_data.txt'},
-    'simulation': {'title': 'Flight Simulation', 'script': 'simulation_script.py', 'video_file': 'mission_sim.mp4'}
-}
+# Base Directory Setup (Navigating from web_ui/ to project root)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Constants and Paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOGS_DIR = os.path.join(BASE_DIR, "logs")
-if not os.path.exists(LOGS_DIR):
-    os.makedirs(LOGS_DIR)
+# Define Project-Specific Paths
+LOGS_INFLIGHT = os.path.join(BASE_DIR, "src", "logger", "data", "2_inflight")
+LOGS_BACKUP = os.path.join(BASE_DIR, "src", "logger", "data", "2_inflight", "backup")
+SCRIPTS_DIR = os.path.join(BASE_DIR, "src", "logger", "scripts")
+SIM_DIR = os.path.join(BASE_DIR, "src", "simulation", "scripts")
+VIDEO_PATH = os.path.join(BASE_DIR, "src", "simulation", "output") 
+
+# Ensure output directory exists for the simulation video
+os.makedirs(VIDEO_PATH, exist_ok=True)
+
+scripts_config = {
+    'main_controller': {
+        'title': 'Main Flight Controller', 
+        'script': os.path.join(BASE_DIR, 'main.py')
+    },
+    'cpu_logger': {
+        'title': 'CPU Temp Logger', 
+        'script': os.path.join(SCRIPTS_DIR, 'cpu_temp_logger.py'), 
+        'chart_file': 'cpu_temp.txt'
+    },
+    'mpu_logger': {
+        'title': 'MPU6050 Logger', 
+        'script': os.path.join(SCRIPTS_DIR, 'mpu6050_logger.py'), 
+        'chart_file': 'MPU6050.txt'
+    },
+    'sound_logger': {
+        'title': 'Sound Logger', 
+        'script': os.path.join(SCRIPTS_DIR, 'sound_logger.py'), 
+        'chart_file': 'sound_logger.txt'
+    },
+    'simulation': {
+        'title': 'Flight Simulation', 
+        'script': os.path.join(SIM_DIR, 'payload_flight_simulation.py'), 
+        'video_file': 'mission_sim.mp4'
+    }
+}
 
 # Global State
 RUNNING_PROCESSES = {}
-LAST_ERRORS = {}
 PROCESS_LOCK = threading.Lock()
+AUTO_START_TIMEOUT = 10
 BUZZER_THREAD_STOP = threading.Event()
 
-# --- STATELESS BUZZER LOGIC ---
-def quick_beep(duration=0.1):
-    """Opens, beeps, and closes GPIO 21 immediately to prevent locking other scripts."""
-    try:
-        from gpiozero import Buzzer
-        bz = Buzzer(21)
-        bz.on()
-        time.sleep(duration)
-        bz.off()
-        bz.close() 
-    except Exception:
-        pass
+# --- BUZZER LOGIC ---
+try:
+    from gpiozero import Buzzer
+    BUZZER = Buzzer(4)
+    BUZZER_AVAILABLE = True
+except (ImportError, Exception):
+    class MockBuzzer:
+        def on(self): pass
+        def off(self): pass
+    BUZZER = MockBuzzer()
+    BUZZER_AVAILABLE = False
+
+def buzzer_double_beep():
+    if BUZZER_AVAILABLE:
+        BUZZER.on(); time.sleep(0.1); BUZZER.off(); time.sleep(0.1);
+        BUZZER.on(); time.sleep(0.1); BUZZER.off()
 
 def start_buzzer_countdown():
     start_time = time.time()
     while not BUZZER_THREAD_STOP.is_set():
         elapsed = time.time() - start_time
-        if elapsed < 20: 
-            quick_beep(0.1)
+        if elapsed < AUTO_START_TIMEOUT - 3:
+            buzzer_double_beep()
             time.sleep(10)
+        elif elapsed < AUTO_START_TIMEOUT:
+            if BUZZER_AVAILABLE: BUZZER.on(); time.sleep(3); BUZZER.off()
+            break
         else: break
 
 # --- API ROUTES ---
@@ -62,91 +93,115 @@ def start_buzzer_countdown():
 def index():
     return render_template('dashboard.html', scripts_config=scripts_config)
 
-@app.route('/api/list_logs')
-def list_logs():
-    try:
-        files = [f for f in os.listdir(LOGS_DIR) if f.endswith('.txt')]
-        files.sort(key=lambda x: os.path.getmtime(os.path.join(LOGS_DIR, x)), reverse=True)
-        return jsonify({"success": True, "files": files})
-    except Exception as e:
-        return jsonify({"success": False, "message": str(e)})
-
-@app.route('/api/download/log/<filename>')
-def download_log(filename):
-    return send_from_directory(LOGS_DIR, filename, as_attachment=True)
-
-@app.route('/api/script/<name>/<action>', methods=['POST'])
-def control_script(name, action):
-    # Kill server buzzer if we are starting the mission loggers
-    if action == 'start':
-        BUZZER_THREAD_STOP.set()
-
-    with PROCESS_LOCK:
-        if action == 'start':
-            script_file = scripts_config[name]['script']
-            try:
-                # Start process with stderr piped to capture tracebacks
-                p = subprocess.Popen(
-                    ["python3", "-u", script_file],
-                    stderr=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    text=True,
-                    bufsize=1
-                )
-                RUNNING_PROCESSES[name] = p
-                LAST_ERRORS[name] = None # Clear previous errors
-                
-                # Background thread to monitor for crashes
-                def monitor(proc, n):
-                    _, stderr = proc.communicate()
-                    if stderr and proc.returncode != 0:
-                        with PROCESS_LOCK:
-                            LAST_ERRORS[n] = stderr.strip()
-                
-                threading.Thread(target=monitor, args=(p, name), daemon=True).start()
-                return jsonify({"success": True})
-            except Exception as e:
-                return jsonify({"success": False, "message": str(e)})
-
-        elif action == 'stop':
-            p = RUNNING_PROCESSES.get(name)
-            if p:
-                p.terminate()
-                del RUNNING_PROCESSES[name]
-            return jsonify({"success": True})
-    return jsonify({"success": False, "message": "Action failed."})
-
 @app.route('/api/status')
 def get_status():
     with PROCESS_LOCK:
         status = {}
         for key in scripts_config:
             p = RUNNING_PROCESSES.get(key)
-            is_running = p.poll() is None if p else False
-            status[key] = {
-                "running": is_running,
-                "pid": p.pid if p else None,
-                "error": LAST_ERRORS.get(key) if not is_running else None
-            }
+            if p:
+                # poll() returns None if process is still running
+                if p.poll() is None:
+                    status[key] = {"running": True, "pid": p.pid}
+                else:
+                    status[key] = {"running": False, "pid": None}
+            else:
+                status[key] = {"running": False, "pid": None}
         return jsonify(status)
+
+@app.route('/api/script/<name>/<action>', methods=['POST'])
+def control_script(name, action):
+    with PROCESS_LOCK:
+        if action == 'start':
+            # Stop any existing process if it's already running
+            if name in RUNNING_PROCESSES and RUNNING_PROCESSES[name].poll() is None:
+                return jsonify({"success": True, "message": "Already running."})
+
+            # For simulation, delete the old file first to prevent stale video 404s
+            if name == 'simulation':
+                old_video = os.path.join(VIDEO_PATH, scripts_config[name]['video_file'])
+                if os.path.exists(old_video):
+                    try: os.remove(old_video)
+                    except: pass
+
+            script_path = scripts_config[name]['script']
+            
+            # Start process detached (Persistent background)
+            p = subprocess.Popen(
+                ["python3", script_path],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=BASE_DIR # Execute from project root
+            )
+            RUNNING_PROCESSES[name] = p
+            return jsonify({"success": True})
+            
+        elif action == 'stop':
+            p = RUNNING_PROCESSES.get(name)
+            if p:
+                try: os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+                except: p.terminate()
+                del RUNNING_PROCESSES[name]
+            return jsonify({"success": True})
+    return jsonify({"success": False})
+
+@app.route('/api/list_logs')
+def list_logs():
+    try:
+        all_files = []
+        for folder in [LOGS_INFLIGHT, LOGS_BACKUP]:
+            if os.path.exists(folder):
+                files = [f for f in os.listdir(folder) if f.endswith('.txt')]
+                for f in files:
+                    full_path = os.path.join(folder, f)
+                    all_files.append({"name": f, "mtime": os.path.getmtime(full_path)})
+        all_files.sort(key=lambda x: x['mtime'], reverse=True)
+        return jsonify({"success": True, "files": [f['name'] for f in all_files]})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+@app.route('/api/download/log/<filename>')
+def download_log(filename):
+    for folder in [LOGS_INFLIGHT, LOGS_BACKUP]:
+        if os.path.exists(os.path.join(folder, filename)):
+            return send_from_directory(folder, filename, as_attachment=True)
+    return "Log not found", 404
+
+@app.route('/api/download/simulation')
+def download_simulation():
+    filename = scripts_config['simulation']['video_file']
+    if os.path.exists(os.path.join(VIDEO_PATH, filename)):
+        return send_from_directory(VIDEO_PATH, filename, as_attachment=True)
+    return "Simulation video not found", 404
+
+@app.route('/video/<filename>')
+def serve_video(filename):
+    return send_from_directory(VIDEO_PATH, filename)
 
 @app.route('/api/control/wipe_data', methods=['POST'])
 def wipe_data():
     try:
-        for f in os.listdir(LOGS_DIR):
-            if f.endswith('.txt'): os.remove(os.path.join(LOGS_DIR, f))
-        video_path = os.path.join(BASE_DIR, "mission_sim.mp4")
-        if os.path.exists(video_path): os.remove(video_path)
-        return jsonify({"success": True})
+        count = 0
+        for folder in [LOGS_INFLIGHT, LOGS_BACKUP]:
+            if os.path.exists(folder):
+                for f in os.listdir(folder):
+                    if f.endswith('.txt'):
+                        os.remove(os.path.join(folder, f)); count += 1
+        return jsonify({"success": True, "message": f"Wiped {count} files."})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
-
-@app.route('/video/<filename>')
-def serve_video(filename):
-    return send_from_directory(BASE_DIR, filename)
 
 if __name__ == "__main__":
     countdown_thread = threading.Thread(target=start_buzzer_countdown, daemon=True)
     countdown_thread.start()
+    
+    def exit_handler(signum, frame):
+        if BUZZER_AVAILABLE: BUZZER.off()
+        BUZZER_THREAD_STOP.set()
+        sys.exit(0)
+        
+    signal.signal(signal.SIGINT, exit_handler)
+    signal.signal(signal.SIGTERM, exit_handler)
+    
     app.run(host='0.0.0.0', port=5000, threaded=True)
-
