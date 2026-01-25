@@ -21,16 +21,32 @@
         .video-container video, .video-container img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
         .pulse-red { animation: pulse-shadow-red 1.5s infinite; }
         @keyframes pulse-shadow-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        
+        /* Error Console Styling */
+        #error-console { border-left-width: 4px; border-left-color: #ef4444; }
     </style>
 </head>
 <body class="p-4 md:p-8">
 
     <div class="max-w-6xl mx-auto space-y-6">
+        
+        <!-- NEW: Error Console Section -->
+        <div id="error-console" class="hidden bg-red-950/40 border border-red-900 rounded-lg p-4 mb-6">
+            <div class="flex justify-between items-center mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+                    <h3 class="text-red-500 text-[10px] font-black uppercase tracking-widest">Process Exception Detected</h3>
+                </div>
+                <button onclick="document.getElementById('error-console').classList.add('hidden')" class="text-red-400 text-[10px] font-black uppercase">Dismiss</button>
+            </div>
+            <pre id="error-text" class="text-[10px] text-red-200 font-mono whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto bg-black/40 p-3 rounded"></pre>
+        </div>
+
         <!-- Header -->
         <header class="flex justify-between items-center border-b border-gray-700 pb-4">
             <div>
                 <h1 class="text-2xl font-black text-white uppercase tracking-tighter">Kabot-1</h1>
-		<h5 class="text-1x1 font-black text-grey uppercase tracking-lighter">Mission Control Dashboard</h5>
+		        <h5 class="text-1xl font-black text-gray-400 uppercase tracking-lighter">Mission Control Dashboard</h5>
                 <p id="connection-status" class="text-[10px] text-green-500 font-bold uppercase tracking-widest">Link Active</p>
             </div>
             <button onclick="document.getElementById('wipe_modal').classList.remove('hidden')" class="p-2 text-red-500 hover:bg-red-900/20 rounded-full">
@@ -55,7 +71,10 @@
                     <div class="space-y-4">
                         {% for name, config in scripts_config.items() if config.chart_file %}
                         <div id="script-{{ name }}" class="flex flex-col gap-2">
-                            <span class="text-[10px] font-bold uppercase text-gray-400">{{ config.title }}</span>
+                            <div class="flex justify-between items-center">
+                                <span class="text-[10px] font-bold uppercase text-gray-400">{{ config.title }}</span>
+                                <span id="error-indicator-{{ name }}" class="hidden text-[8px] text-red-500 font-black animate-pulse">CRASHED</span>
+                            </div>
                             <div class="grid grid-cols-2 gap-2">
                                 <button onclick="apiCall('{{ name }}', 'start')" class="start-btn btn bg-gray-800 text-[9px] py-1 rounded font-bold uppercase">Start</button>
                                 <button onclick="apiCall('{{ name }}', 'stop')" class="stop-btn btn bg-gray-800 text-[9px] py-1 rounded font-bold uppercase" disabled>Stop</button>
@@ -118,8 +137,24 @@
                 isCurrentlyRendering = true;
                 updateUIVisuals(true);
             }
-            try { await fetch(`/api/script/${name}/${action}`, { method: 'POST' }); } catch (e) {}
+            try { 
+                const res = await fetch(`/api/script/${name}/${action}`, { method: 'POST' });
+                const data = await res.json();
+                if (!data.success) {
+                    displayError(name, data.message || "Failed to communicate with script.");
+                }
+            } catch (e) {
+                displayError(name, "Network Error: Pi is unreachable.");
+            }
             updateStatus();
+        }
+
+        function displayError(name, msg) {
+            const console = document.getElementById('error-console');
+            const text = document.getElementById('error-text');
+            console.classList.remove('hidden');
+            text.textContent = `[EXCEPTION IN ${name.toUpperCase()}]\n${msg}`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function updateUIVisuals(rendering) {
@@ -154,6 +189,11 @@
                 document.getElementById('fc_status_text').className = `text-xl font-bold mb-4 ${fc ? 'text-red-500 pulse-red' : 'text-green-500'}`;
                 document.getElementById('main_start_btn').disabled = fc;
                 document.getElementById('main_stop_btn').disabled = !fc;
+                
+                // FC Error Check
+                if(status.main_controller.error) {
+                    displayError('main_controller', status.main_controller.error);
+                }
 
                 // Simulation Logic
                 const sim = status.simulation;
@@ -170,19 +210,36 @@
                     if (isCurrentlyRendering) {
                         isCurrentlyRendering = false;
                         updateUIVisuals(false);
-                        // Trigger file check
-                        checkVideoFile();
+                        if (sim.error) {
+                            displayError('simulation', sim.error);
+                        } else {
+                            checkVideoFile();
+                        }
                     }
                     simBtn.disabled = fc;
                 }
 
-                // Others
+                // Logger Status & Crash Indicators
                 for (const key in status) {
                     const el = document.getElementById(`script-${key}`);
+                    const errInd = document.getElementById(`error-indicator-${key}`);
+                    
                     if (el && !['simulation','main_controller'].includes(key)) {
                         const r = status[key].running;
+                        const error = status[key].error;
+                        
                         el.querySelector('.start-btn').disabled = r;
                         el.querySelector('.stop-btn').disabled = !r;
+                        
+                        if (errInd) {
+                            errInd.classList.toggle('hidden', !error);
+                            if (error) {
+                                // If error just appeared and console is hidden, show it
+                                if (document.getElementById('error-console').classList.contains('hidden')) {
+                                    displayError(key, error);
+                                }
+                            }
+                        }
                     }
                 }
             } catch (e) {}
@@ -215,7 +272,7 @@
             updateStatus();
             setInterval(updateStatus, 3000);
             fetchLogs();
-            checkVideoFile(); // Check for existing video on load
+            checkVideoFile();
         });
     </script>
 </body>
