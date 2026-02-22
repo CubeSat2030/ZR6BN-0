@@ -15,7 +15,7 @@
 
 📡 Final Transmission: A Salute to Kabot-1
 
-PASADENA, CALIFORNIA – Mission Control, 22 February 2026
+Randburg, South Africa – Mission Control, 22 February 2026
 
 What you are about to read is the final chapter of a small explorer that dared to reach for the edge of space.
 
