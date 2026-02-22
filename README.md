@@ -7,12 +7,26 @@ IMPORTANT NOTE:
 ~~~
 
 FAZE OUT IN AFFECT NOTICE:
-​As of Saturday 17 January 2026 @ 12:54PM SAST the chart generation feaure is being fazed out entirely due to impracticallity towards:
+​As of Sunday 22 February 2026 @ 18:36PM SAST the development of Kabot-1 (ZR6BN) Benchmark payload that flew on board BACAR13  is being discontinued entirely due to impracticallity towards:
 ​performance,
 ​effficiancly,
 ​reliability.
-​However we decided to replace it with txt file retrieval instead. with that said the retrieval and downloading of txt files are still performed via Kabot-1's web_ui accessed locally on your web browser app.
-​Later this year when Kabot-2's mission is green lit we will be fazing out the web_ui used in our kabot-1 HAB payload entirely. Kabot-2 however will use its client app, the KabotDockApp that is still in the drawing board phase.
+
+​However we have learnt so much from building her and studying her remains after hitting the ground 30km up when both main and emergency shoots failed to deploy upon burst.
+
+Despite being mangled up her flight computer was intact thus her data had survived.
+
+We did alot of poking around her code to see what can be improved.
+
+Thank you Kabot-1, we salute you.
+
+​Later this year when Kabot-2's mission is green lit we will be fazing out RaspberryOS lite with a custom OS called KabotFirmware.
+
+KabotFirmware will be the heart of Kabot-2 benchtest HAB payload and future payloads as well as KabotSat Alpha cubesat, scheduled for completion by 2028 the earliest.
+
+Unfortunately this means that Kabot-1 will be the only repo that will be made public.
+
+However we are working on a website to share our development journey.
 
 ~~~
 
