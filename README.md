@@ -3,7 +3,7 @@
 
   <h1>🎈 Kabot-1 (ZR6BN) – Mission of Inquiry</h1>
 
-  <p><i>Launched: BACAR13 – Last Contact: 11 October 2025</i></p>
+  <p><i>Launched: BACAR13 – Launch date: 11 October 2025</i></p>
 
   <p>
     <img src="https://img.shields.io/badge/status-mission_complete-708090?style=for-the-badge&logo=raspberrypi" alt="Status: Mission Complete">
