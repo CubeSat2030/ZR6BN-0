@@ -79,8 +79,6 @@ To the data that survived: you are the foundation of everything that follows.
 
 And to Kabot-1 herself: we have the signal. We have the record. We have you.
 
-Farewell, Pathfinder. We have the data.
-
 ---
 
 <div align="center">
