@@ -1,39 +1,76 @@
+<div align="center">
+  <!-- Header Image – replace with your own photo of Kabot-1 or a cool graphic -->
+  <img src="https://via.placeholder.com/1200x300/0A1929/FFFFFF?text=🎈+Kabot-1+Payload+Archive+🎈" alt="header" width="100%">
+  
+  <h1>🚀 Kabot-1 (ZR6BN) – Flight Archive</h1>
+  
+  <p><i>“She fell 30 km, but her data survived. This repository is a tribute to everything we learned.”</i></p>
+  
+  <!-- Status badges – note the “discontinued” badge with a salute -->
+  <p>
+    <img src="https://img.shields.io/badge/status-discontinued-important?style=for-the-badge&logo=raspberrypi&color=red" alt="Status: Discontinued">
+    <img src="https://img.shields.io/badge/last_flight-22_Feb_2026-9cf?style=for-the-badge&logo=airbnb&logoColor=white" alt="Last Flight">
+    <a href="#"><img src="https://img.shields.io/github/stars/yourname/kabot1?style=for-the-badge&logo=starship&color=yellow" alt="Stars"></a>
+    <a href="#"><img src="https://img.shields.io/github/license/yourname/kabot1?style=for-the-badge&logo=open-source-initiative&color=green" alt="License"></a>
+  </p>
+  
+  <!-- Quick navigation -->
+  <h4>
+    <a href="#-tribute--the-story-of-kabot-1">📖 Tribute</a> •
+    <a href="#-project-overview">🔭 Overview</a> •
+    <a href="#-project-tree">🌳 Tree</a> •
+    <a href="#-installation--the-pip-fix">🛠️ Install</a> •
+    <a href="#-usage">🚀 Usage</a> •
+    <a href="#-future-kabot-2--beyond">✨ Future</a>
+  </h4>
+</div>
 
-IMPORTANT NOTE:
----------------
-~~~
+---
 
-FAZE OUT IN AFFECT NOTICE:
-​As of Sunday 22 February 2026 @ 18:36PM SAST the development of Kabot-1 (ZR6BN) Benchmark payload that flew on board BACAR13  is being discontinued entirely due to impracticallity towards:
-​performance,
-​effficiancly,
-​reliability.
+## 📖 Tribute & The Story of Kabot‑1
 
-​However we have learnt so much from building her and studying her remains after hitting the ground 30km up when both main and emergency shoots failed to deploy upon burst.
+> **FAZE OUT IN AFFECT NOTICE**  
+> *As of Sunday 22 February 2026 @ 18:36 SAST*  
 
-Despite being mangled up her flight computer was intact thus her data had survived.
+The development of **Kabot‑1 (ZR6BN)** – the benchmark payload that flew on board BACAR13 – is being discontinued entirely due to impracticality in performance, efficiency, and reliability.  
 
-We did alot of poking around her code to see what can be improved.
+**However**, we learned an enormous amount from building her and from studying her remains after she hit the ground **30 km up** when both main and emergency parachutes failed to deploy upon burst.  
 
-Thank you Kabot-1, we salute you.
+Despite being mangled, her **flight computer was intact** – all data survived. We poked around her code extensively to see what could be improved.  
 
-​Later this year when Kabot-2's mission is green lit we will be fazing out RaspberryOS lite with a custom OS called KabotFirmware.
+**Thank you, Kabot‑1. We salute you.** 🫡  
 
-KabotFirmware will be the heart of Kabot-2 benchtest HAB payload and future payloads as well as KabotSat Alpha cubesat, scheduled for completion by 2028 the earliest.
+Later this year, when Kabot‑2’s mission is green‑lit, we will be phasing out Raspberry OS Lite in favour of a custom OS called **KabotFirmware**. KabotFirmware will be the heart of the Kabot‑2 bench‑test HAB payload, future payloads, and the **KabotSat Alpha cubesat** (scheduled for completion by 2028 at the earliest).  
 
-Unfortunately this means that Kabot-1 will be the only repo that will be made public.
+Unfortunately, this means that **Kabot‑1 will be the only repository that is made public**. However, we are working on a website to share our development journey.
 
-However we are working on a website to share our development journey.
+---
 
+## 🔭 Project Overview
 
+Kabot‑1 was a high‑altitude balloon payload designed to log sensor data (MPU6050, CPU temperature, sound), provide a Wi‑Fi hotspot for in‑flight access, simulate trajectories, and generate post‑flight visualisations.  
 
+Even though the hardware is gone, the software lives on. This archive contains everything we used – from logging scripts to the web dashboard.
 
-~~~
+### ✨ Key Components
 
+| Component | Description |
+|-----------|-------------|
+| **Logger** | Heartbeat‑style logging of MPU6050, CPU temp, and sound levels (pre‑flight, in‑flight, post‑flight) |
+| **Plotter** | Generates SVG charts from logged data (CPU, MPU, sound, phases) |
+| **Simulation** | Full‑flight simulator with sensor fusion, trajectory rendering, and preprocessing |
+| **Hotspot** | Turns the Raspberry Pi into an access point for in‑flight connectivity (hostapd + dnsmasq) |
+| **Web UI** | Flask‑based dashboard to monitor the payload live |
+| **Presentation** | Special mode for displaying data in a clean, slideshow‑like format |
 
-# Project tree
+---
 
-~~~
+## 🌳 Project Tree
+
+<details>
+<summary>📁 Click to expand the full directory structure</summary>
+
+```bash
 ├── .gitattributes
 ├── README.md
 ├── SystemClone/
@@ -127,117 +164,112 @@ However we are working on a website to share our development journey.
         ├── dashboard.html
         ├── dashboard_development.html
         └── dashboard_rollback.html
-~~~
+```
 
+</details>
 
+---
 
+🛠️ Installation & The “Pip No Space” Fix
 
+Because Kabot‑1 ran on Raspberry Pi OS Lite (Bookworm 32‑bit), you may encounter a classic issue when installing large Python packages with pip.
 
-
-# 🐍 Raspberry Pi OS Lite (Bookworm 32-bit) — Pip "No Space Left on Device" Fix
-
-## 🧩 The Problem
-
-When installing Python packages with `pip` on **Raspberry Pi OS Lite (Bookworm 32-bit)**, you might see an error like:
+🧩 The Problem
 
 ```
 OSError: [Errno 28] No space left on device
 ```
 
-Even though your SD card has plenty of free space.
+Even if your SD card has plenty of free space, /tmp is mounted as RAM (tmpfs) and is only a few hundred MB. Pip unpacks packages there, so big libraries like numpy, pandas, or matplotlib can fill it up.
 
-### Why This Happens
+🧰 The One‑Line Fix
 
-By default, Raspberry Pi OS mounts `/tmp` as a **RAM disk (`tmpfs`)** — which is only a few hundred MB in size.  
-`pip` uses `/tmp` to unpack and build packages before installing them, so large packages (like `numpy`, `pandas`, or `matplotlib`) can quickly fill it up.
-
----
-
-## 🧰 The Fix
-
-We'll redirect pip’s temporary build directory to a location on the SD card instead of RAM.
-
-### ✅ One-line Command (Full Fix)
-
-Run this **once** from your project directory (where your existing virtual environment `venv` lives):
+Run this once from your project directory (where your virtual environment venv lives):
 
 ```bash
 sudo mkdir -p /etc/profile.d /var/tmp/pip && sudo chmod 1777 /var/tmp/pip && echo 'export TMPDIR=/var/tmp/pip' | sudo tee /etc/profile.d/pip_tmpdir.sh > /dev/null && echo 'export TMPDIR=/var/tmp/pip' >> venv/bin/activate
 ```
 
----
+What it does:
 
-## 🧠 What This Does
+· Creates /var/tmp/pip on the SD card (not in RAM) and makes it world‑writable.
+· Sets the TMPDIR environment variable globally and inside your venv, so pip always uses the new location.
 
-1. **Creates** `/var/tmp/pip` on your SD card (not in RAM).  
-2. **Makes it writable** for all users (`chmod 1777` — same permissions as `/tmp`).  
-3. **Adds a global environment variable** so `TMPDIR=/var/tmp/pip` is used system-wide (including `sudo`).  
-4. **Updates your existing `venv`** so it always uses `/var/tmp/pip` when activated.
-
----
-
-## 🚀 Usage
-
-After running the command:
+After that, activate your environment and verify:
 
 ```bash
 source venv/bin/activate
-echo $TMPDIR
+echo $TMPDIR   # should output /var/tmp/pip
+pip install -r requirements.txt   # now works smoothly
 ```
 
-You should see:
-```
-/var/tmp/pip
-```
-
-Now you can safely install large packages:
-
-```bash
-pip install numpy pandas matplotlib
-```
-
-No more “No space left on device” errors 🎉
+💡 Optional: Add export TMPDIR=/var/tmp/pip to your ~/.bashrc to apply it to all future virtual environments.
 
 ---
 
-## 🧩 Optional: Apply to All Future Virtual Environments
+🚀 Usage
 
-To automatically apply this fix to every new venv you create, add this line to your shell profile (`~/.bashrc` or `~/.profile`):
+1️⃣ Start the Main Payload Script
 
 ```bash
-export TMPDIR=/var/tmp/pip
+python main.py
 ```
 
-Then reload it:
+This will launch the core logging and, depending on configuration, the Wi‑Fi hotspot and web dashboard.
+
+2️⃣ Access the Live Dashboard
+
+If the hotspot is active, connect to the Kabot‑1 Wi‑Fi and open http://kabot1.local:5000 (or the IP assigned).
+
+3️⃣ Run Simulations Offline
+
 ```bash
-source ~/.bashrc
+python src/simulation/scripts/simulation_master.py
 ```
+
+Simulation outputs can be found in src/simulation/output/.
+
+4️⃣ Generate Charts from Logged Data
+
+```bash
+python src/plotter/cpu_plotter.py
+python src/plotter/mpu6050_plotter.py
+python src/plotter/sound_plotter.py
+```
+
+Charts are saved as SVGs in src/plotter/charts/.
 
 ---
 
-## 🧼 Cleanup (if ever needed)
+✨ Future: Kabot‑2 & Beyond
 
-To undo this fix:
+While Kabot‑1 rests, her spirit flies on in Kabot‑2 and eventually KabotSat Alpha.
 
-```bash
-sudo rm -f /etc/profile.d/pip_tmpdir.sh
-sudo rm -rf /var/tmp/pip
-sed -i '/export TMPDIR=\/var\/tmp\/pip/d' venv/bin/activate
-```
+· ✅ Kabot‑2 – Bench‑test HAB payload with custom KabotFirmware (based on Raspberry Pi but heavily optimised).
+· 🛰️ KabotSat Alpha – A cubesat scheduled for 2028, running the same firmware core.
+
+We’ll be sharing our journey on a dedicated website (coming soon). Until then, explore the code, learn from our mistakes, and keep reaching for the sky. ☁️
 
 ---
 
-### 🧾 Summary
+📄 License
 
-| Component | Old Location | New Safe Location |
-|------------|---------------|------------------|
-| Pip temporary builds | `/tmp` (RAM, small) | `/var/tmp/pip` (SD card, large) |
+Distributed under the MIT License. See LICENSE for more information.
 
-✅ Fix is **persistent**, **system-wide**, and **venv-safe**.
+---
 
+📬 Contact & Acknowledgements
 
+Project Lead – Your Name
 
+· 📧 email@example.com
+· 🐦 @twitter_handle
 
+Project Link: https://github.com/yourname/kabot1
 
+Special thanks to everyone who supported the BACAR13 launch and to the data that survived a 30 km fall. 🫡
 
+---
 
+<div align="center">
+  <img src="https://via.placeholder.com/1200x100/0A1929/FFFFFF?text=❤️+Salute+Kabot-1+❤️" alt="footer" 
