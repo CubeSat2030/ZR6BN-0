@@ -87,5 +87,5 @@ Farewell, Pathfinder. We have the data.
   <img src="https://via.placeholder.com/800x100/0A1929/FFFFFF?text=❤️+ZR6BN+-+LOGGED+UNTIL+THE+END+❤️" alt="footer" width="80%">
 
   <p><i>This archive remains public as a testament to what small explorers can achieve.</i></p>
-  <p><b>Kabot-1 • 2025 • She did her job.</b></p>
+  <p><b>Kabot-1 • 2025 • Signing off.</b></p>
 </div>
