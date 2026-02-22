@@ -9,7 +9,7 @@
   <!-- Status badges – note the “discontinued” badge with a salute -->
   <p>
     <img src="https://img.shields.io/badge/status-discontinued-important?style=for-the-badge&logo=raspberrypi&color=red" alt="Status: Discontinued">
-    <img src="https://img.shields.io/badge/last_flight-22_Feb_2026-9cf?style=for-the-badge&logo=airbnb&logoColor=white" alt="Last Flight">
+    <img src="https://img.shields.io/badge/last_flight-11_October_2025-9cf?style=for-the-badge&logo=airbnb&logoColor=white" alt="Last Flight">
     <a href="#"><img src="https://img.shields.io/github/stars/yourname/kabot1?style=for-the-badge&logo=starship&color=yellow" alt="Stars"></a>
     <a href="#"><img src="https://img.shields.io/github/license/yourname/kabot1?style=for-the-badge&logo=open-source-initiative&color=green" alt="License"></a>
   </p>
