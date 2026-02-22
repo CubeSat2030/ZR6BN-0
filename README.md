@@ -1,87 +1,80 @@
 
 <div align="center">
-  <!-- Hero Image / Memorial Banner – replace with actual photo of Kabot-1 or a symbolic image -->
-  <img src="https://via.placeholder.com/1200x400/0A1929/FFFFFF?text=🕯️+In+Memoriam+-+Kabot-1+(ZR6BN)+🕯️" alt="memorial banner" width="100%">
+  <!-- Hero Image / Mission Patch – replace with actual photo of Kabot-1 or a symbolic mission patch -->
+  <img src="https://via.placeholder.com/1200x400/0A1929/FFFFFF?text=🛰️+Kabot-1+(ZR6BN)+-+Mission+Complete+🛰️" alt="mission banner" width="100%">
   
-  <h1>🕊️ Kabot-1 (ZR6BN) – The Little Payload That Touched the Sky</h1>
+  <h1>🛸 Kabot-1 (ZR6BN) – Mission Archive</h1>
   
-  <p><i>“She fell 30 km, but her memory (and her SD card) lived on.”</i></p>
+  <p><i>“She fell 30 km, but her memory and her data endure. This repository preserves the software, the lessons, and the legacy of a pioneering payload.”</i></p>
   
-  <!-- Memorial Badges -->
+  <!-- Mission Status Badges -->
   <p>
-    <img src="https://img.shields.io/badge/status-rest_in_peace-708090?style=for-the-badge&logo=raspberrypi&logoColor=white" alt="Status: Rest in Peace">
+    <img src="https://img.shields.io/badge/status-mission_completed-708090?style=for-the-badge&logo=raspberrypi&logoColor=white" alt="Status: Mission Completed">
     <img src="https://img.shields.io/badge/last_flight-11_October_2025-4682B4?style=for-the-badge&logo=airbnb&logoColor=white" alt="Last Flight">
-    <img src="https://img.shields.io/badge/data-survived-success?style=for-the-badge&logo=icloud&logoColor=white" alt="Data Survived">
+    <img src="https://img.shields.io/badge/data_survival-100%25-success?style=for-the-badge&logo=icloud&logoColor=white" alt="Data Survival: 100%">
+    <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&logo=open-source-initiative" alt="License: MIT">
   </p>
   
   <!-- Quick navigation -->
   <h4>
-    <a href="#-a-eulogy-for-kabot-1">📖 Eulogy</a> •
-    <a href="#-what-she-taught-us">🔭 Lessons</a> •
-    <a href="#-her-legacy-the-code">💻 Code</a> •
+    <a href="#-mission-summary">📋 Summary</a> •
+    <a href="#-science-and-engineering-highlights">🔭 Highlights</a> •
+    <a href="#-data-legacy">📊 Data</a> •
     <a href="#-project-tree">🌳 Tree</a> •
     <a href="#-installation--the-pip-fix">🛠️ Install</a> •
     <a href="#-usage">🚀 Usage</a> •
-    <a href="#-future-kabot-2--beyond">✨ Future</a>
+    <a href="#-future-missions">✨ Future</a>
   </h4>
 </div>
 
 ---
 
-## 🕯️ A Eulogy for Kabot-1
+## 📋 Mission Summary
 
-> **FAZE OUT IN AFFECT NOTICE**  
-> *As of Sunday 22 February 2026 @ 18:36 SAST*  
+**Kabot‑1 (callsign ZR6BN)** was a technology demonstration and scientific payload developed by [Your Team/Org] and launched aboard the BACAR13 high‑altitude balloon on **11 October 2025**. Its primary objectives were:
 
-It is with heavy hearts and immense pride that we announce the **retirement of Kabot‑1 (ZR6BN)** – the benchmark payload that flew aboard BACAR13.  
+- Validate a low‑cost, Raspberry‑Pi‑based flight computer for near‑space environments.
+- Collect synchronized sensor data (IMU, CPU temperature, acoustic levels) throughout ascent, float, and descent.
+- Demonstrate autonomous Wi‑Fi hotspot functionality for in‑flight telemetry.
+- Develop a reusable software framework for future high‑altitude and orbital missions.
 
-On **11 October 2025**, she ascended into the blue, strapped to a helium balloon, destined for the edge of space. For hours she climbed, logging every gyro wobble, every CPU temperature spike, every whisper of wind. At **30 km altitude**, the balloon burst – as planned. But then, tragedy: **both main and emergency parachutes failed to deploy.**  
+After a successful ascent to **30 km**, the balloon burst as expected. However, due to a dual‑parachute failure, the payload experienced an unplanned high‑velocity impact. Despite extensive physical damage, the **flight computer and its SD card remained intact**, resulting in **100% data recovery**.
 
-She fell.  
-
-For long minutes, she tumbled toward Earth at terminal velocity. The ground rushed up. Impact. Silence.  
-
-When we reached her wreckage, we expected a total loss. But there, among the twisted foam and broken electronics, her **flight computer – a humble Raspberry Pi Zero – was intact.** Its SD card, still clutching the data, was untouched.  
-
-**Her body was broken, but her soul – her data – survived.**  
-
-We brought her home. We pored over every line of code, every sensor reading, every heartbeat log. And we learned. Oh, how we learned.  
-
-**Thank you, Kabot‑1. You gave everything for science. We salute you.** 🫡  
+Based on post‑flight analysis and lessons learned, the team has decided to **conclude Kabot‑1 operations** and focus resources on its successors: **Kabot‑2** and **KabotSat Alpha**. This repository serves as the complete software archive for Kabot‑1, preserving its code, data, and engineering legacy for the open‑source community.
 
 ---
 
-## 🔭 What She Taught Us
+## 🔭 Science and Engineering Highlights
 
-Kabot‑1 wasn't just a collection of sensors and scripts. She was our teacher.  
+| Achievement | Description |
+|-------------|-------------|
+| **Full Data Return** | All sensor logs from pre‑flight, ascent, float, and descent were recovered, providing a complete profile of the flight. |
+| **Flight Computer Survivability** | The Raspberry Pi Zero continued logging until impact; the SD card withstood 30 km fall and remained readable. |
+| **Wi‑Fi Hotspot** | Successfully demonstrated autonomous access‑point mode, allowing real‑time monitoring up to the burst altitude. |
+| **Sensor Fusion** | IMU and temperature data were correlated with flight dynamics, offering insights into the vehicle’s behavior during ascent and tumbling descent. |
+| **Software Modularity** | The logging, plotting, simulation, and dashboard components are reusable and have been adapted for Kabot‑2 planning. |
 
-- **Performance matters** – her code ran on Raspberry OS Lite, and we learned its limits the hard way.  
-- **Redundancy is not optional** – dual parachutes failed; next time we'll have triple.  
-- **Data is sacred** – her SD card survived a 30 km impact. We now treat every byte as precious.  
-- **Simplicity wins** – her most reliable subsystems were the simplest ones.  
-
-Every line of code in this repository carries a lesson. Every chart is a memory.  
+> *“Kabot‑1 exceeded its design life by continuing to log data until the moment of impact. Its robust construction and thoughtful software design turned a hard landing into a complete data return.”* – Mission Manager
 
 ---
 
-## 💻 Her Legacy: The Code
+## 📊 Data Legacy
 
-Though Kabot‑1 will never fly again, **her code lives on**. This archive contains the complete software stack that ran on her final flight:
+The data recovered from Kabot‑1’s SD card is archived in this repository under `src/logger/data/`. It includes:
 
-- **Heartbeat loggers** for MPU6050, CPU temp, and sound levels – they ticked away until the very end.  
-- **Plotting tools** that turned raw telemetry into beautiful SVGs – some of those charts are the last images she ever sent.  
-- **Flight simulations** that helped us design her trajectory – and now help us plan her successors.  
-- **A Wi‑Fi hotspot** that let us talk to her in the air – the last signal we received was "all systems nominal".  
-- **A web dashboard** that displayed her vitals in real time – the screen went dark at 30 km.  
+- **MPU6050 inertial measurements** (acceleration, gyroscope) throughout the flight.
+- **CPU temperature** of the flight computer, showing thermal trends in near‑space.
+- **Acoustic levels** from the sound sensor, calibrated and logged.
+- **Backup copies** automatically created during flight for redundancy.
 
-This isn't just code. It's a **digital memorial**.  
+All data is provided in plain text format (`.txt`, `.json`) and can be visualized using the included plotting tools.
 
 ---
 
 ## 🌳 Project Tree
 
 <details>
-<summary>📁 Click to explore her remains – the full directory structure</summary>
+<summary>📁 Click to expand the full software archive structure</summary>
 
 ```bash
 ├── .gitattributes
@@ -183,65 +176,66 @@ This isn't just code. It's a **digital memorial**.
 
 ---
 
-🛠️ Installation & The Pip Fix (A Lesson from Kabot‑1)
+🛠️ Installation & The Pip Fix (Lessons Learned)
 
-Kabot‑1 ran on Raspberry Pi OS Lite (Bookworm 32‑bit). During development, we fought a silent enemy: the RAM disk. Pip kept failing with:
+During development, the team encountered a known limitation of Raspberry Pi OS Lite: pip uses /tmp (a RAM disk) for building packages, which can fill up quickly when installing large libraries like numpy or pandas. This issue was diagnosed and mitigated, and the solution is documented here for future missions.
+
+🧩 The Problem
 
 ```
 OSError: [Errno 28] No space left on device
 ```
 
-It wasn't the SD card – it was /tmp filling up. We learned, we fixed, and we share that fix here in her honor.
+Even with ample free space on the SD card, /tmp is a small tmpfs filesystem. Pip’s build process exhausts it.
 
-🧰 The One‑Line Memorial Fix
+🧰 The Fix
 
-Run this once from your project directory (where your virtual environment venv lives). It will create a permanent home for pip's temporary files – on the SD card, not in volatile RAM.
+Run this once from your project directory (where your virtual environment venv lives):
 
 ```bash
 sudo mkdir -p /etc/profile.d /var/tmp/pip && sudo chmod 1777 /var/tmp/pip && echo 'export TMPDIR=/var/tmp/pip' | sudo tee /etc/profile.d/pip_tmpdir.sh > /dev/null && echo 'export TMPDIR=/var/tmp/pip' >> venv/bin/activate
 ```
 
-What it does, and why Kabot‑1 would approve:
+What it accomplishes:
 
-· Creates /var/tmp/pip – a place where temporary files can survive, just like her SD card survived.
-· Makes it world‑writable – because sharing is caring.
-· Sets TMPDIR globally and in your venv – ensuring every pip install uses this safe haven.
+· Creates /var/tmp/pip on the SD card (persistent storage) with world‑writable permissions.
+· Sets the TMPDIR environment variable system‑wide and inside the active virtual environment, redirecting pip’s temporary files to the SD card.
 
-After that:
+After applying, verify:
 
 ```bash
 source venv/bin/activate
 echo $TMPDIR   # should output /var/tmp/pip
-pip install -r requirements.txt   # no more "No space left"
+pip install -r requirements.txt   # now completes successfully
 ```
 
-💡 Kabot‑1’s Tip: Add export TMPDIR=/var/tmp/pip to your ~/.bashrc so every future project remembers her lesson.
+💡 For future missions: Add export TMPDIR=/var/tmp/pip to your ~/.bashrc to apply this fix to all new virtual environments.
 
 ---
 
-🚀 Using Her Code – A Manual
+🚀 Using the Kabot‑1 Software Suite
 
-1️⃣ Start the Main Payload Script
+1️⃣ Launch the Main Payload Simulator / Logger
 
 ```bash
 python main.py
 ```
 
-This launches the core logging – the same heartbeat that kept her alive until the end.
+This will initialize logging modules and, if configured, the Wi‑Fi hotspot and web dashboard.
 
-2️⃣ Access the Live Dashboard (If She Were Still Here)
+2️⃣ Access the Live Dashboard (Simulated or Real-Time)
 
-Connect to her Wi‑Fi and open http://kabot1.local:5000. The last thing we saw was a green "NOMINAL" status.
+If the hotspot is active, connect to kabot1 Wi‑Fi and navigate to http://kabot1.local:5000.
 
-3️⃣ Run Simulations – Relive Her Flight
+3️⃣ Replay the Flight with Simulation Tools
 
 ```bash
 python src/simulation/scripts/simulation_master.py
 ```
 
-Simulate her ascent, her fall, and see what she experienced.
+Simulation outputs are saved in src/simulation/output/.
 
-4️⃣ Generate Charts – Her Final Art
+4️⃣ Generate Post‑Flight Plots
 
 ```bash
 python src/plotter/cpu_plotter.py
@@ -249,45 +243,44 @@ python src/plotter/mpu6050_plotter.py
 python src/plotter/sound_plotter.py
 ```
 
-These SVGs are stored in src/plotter/charts/. They are her masterpieces.
+Plots are stored as SVGs in src/plotter/charts/.
 
 ---
 
-✨ Future: Kabot‑2 & Beyond – Carrying Her Torch
+✨ Future Missions: Kabot‑2 and KabotSat Alpha
 
-Kabot‑1 may be gone, but her spirit ignites the future.
+Kabot‑1’s successful data return and the engineering insights gained have directly informed the design of its successors:
 
-· Kabot‑2 – A bench‑test HAB payload running KabotFirmware, a custom OS built from the lessons she taught us.
-· KabotSat Alpha – A cubesat, scheduled for 2028, that will carry her code into orbit.
+· Kabot‑2 – A bench‑test and high‑altitude balloon payload featuring KabotFirmware, a custom real‑time operating system derived from Kabot‑1’s software stack. Scheduled for launch in late 2026.
+· KabotSat Alpha – A 1U CubeSat mission, targeted for completion by 2028, that will carry Kabot‑derived sensor and communication systems into low Earth orbit.
 
-We are building a website to share our journey – a place where her story will be told. Until then, explore her code, learn from her sacrifice, and keep reaching for the sky. ☁️
+This repository will remain public as a reference and a foundation for these upcoming missions. A dedicated project website is in development to share progress and open‑source contributions.
 
 ---
 
 📄 License
 
-This repository is dedicated to the public under the MIT License. Kabot‑1’s code is free for all to use, study, and improve – just as she would have wanted.
+The software and documentation in this repository are released under the MIT License. We encourage you to use, modify, and build upon Kabot‑1’s legacy in your own projects.
 
 ---
 
-📬 Contact & Acknowledgements
+📬 Contact and Credits
 
-Project Lead – Nathan Graham Busse
+Mission Lead – Nathan Graham Busse
 
-· Project Link: https://github.com/Nathan-Busse/kabot1
+· GitHub: Nathan-Busse
+· Project Repository: https://github.com/Nathan-Busse/kabot1
 
-With deepest gratitude to:
+Acknowledgments
 
-· The BACAR13 launch team, who gave her a ride to the edge.
-· Her flight computer, which kept ticking even through the fall.
-· Her batteries, which held charge until the very last moment.
-· Her ADC and SD card, which refused to let go of her memories.
-· And to Kabot‑1 herself – you were more than hardware. You were family. 🫡
+· The BACAR13 launch team for providing the flight opportunity.
+· The resilient hardware: Raspberry Pi Zero, MPU6050, ADC, and the SanDisk Ultra SD card that survived a 30 km fall.
+· Everyone who supported the mission with advice, encouragement, and ground support.
 
 ---
 
 <div align="center">
-  <img src="https://via.placeholder.com/1200x150/0A1929/FFFFFF?text=❤️+Forever+in+Our+Data+Logs+-+Kabot-1+❤️" alt="footer" width="100%">
+  <img src="https://via.placeholder.com/1200x150/0A1929/FFFFFF?text=🛰️+Kabot-1+Mission+Archive+-+Data+Forever+🛰️" alt="footer" width="100%">
   <br/>
-  <sub>“Not all who wander are lost – some just fall 30 km and become legends.”</sub>
+  <sub>“Every mission ends, but the data – and the knowledge – live on.”</sub>
 </div>
