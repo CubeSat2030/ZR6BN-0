@@ -1,7 +1,4 @@
 
-
-
-
 IMPORTANT NOTE:
 ---------------
 ~~~
@@ -27,6 +24,9 @@ KabotFirmware will be the heart of Kabot-2 benchtest HAB payload and future payl
 Unfortunately this means that Kabot-1 will be the only repo that will be made public.
 
 However we are working on a website to share our development journey.
+
+
+
 
 ~~~
 
