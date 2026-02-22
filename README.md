@@ -259,14 +259,11 @@ Distributed under the MIT License. See LICENSE for more information.
 
 📬 Contact & Acknowledgements
 
-Project Lead – Your Name
+Project Lead – Nathan Graham Busse 
 
-· 📧 email@example.com
-· 🐦 @twitter_handle
+Project Link: https://github.com/Nathan-Busse/kabot1
 
-Project Link: https://github.com/yourname/kabot1
-
-Special thanks to everyone who supported the BACAR13 launch and to the data that survived a 30 km fall. 🫡
+Special thanks to everyone who supported the BACAR13 launch and to Kabot-1's flight computer, batteries and her Analog to Digital converter and Micro Sd-card and the data she gathered that survived a 30 km fall. 🫡
 
 ---
 
