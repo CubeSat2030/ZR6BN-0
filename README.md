@@ -245,8 +245,8 @@ Charts are saved as SVGs in src/plotter/charts/.
 
 While Kabot‑1 rests, her spirit flies on in Kabot‑2 and eventually KabotSat Alpha.
 
-· ✅ Kabot‑2 – Bench‑test HAB payload with custom KabotFirmware (based on Raspberry Pi but heavily optimised).
-· 🛰️ KabotSat Alpha – A cubesat scheduled for 2028, running the same firmware core.
+· ✅ Kabot‑2 – Bench‑test HAB payload with custom firmware called KabotFirmware.
+· 🛰️ KabotSat Alpha – A cubesat scheduled to complete its construction by 2028, running the same firmware core.
 
 We’ll be sharing our journey on a dedicated website (coming soon). Until then, explore the code, learn from our mistakes, and keep reaching for the sky. ☁️
 
