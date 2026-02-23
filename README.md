@@ -8,7 +8,7 @@
   <p>
     <img src="https://img.shields.io/badge/Launch_date-11_October_2025-708090?style=for-the-badge&logo=raspberrypi" alt="Launch date:">
     <img src="https://img.shields.io/badge/Launch_Location-South_Africa-708090?style=for-the-badge&logo=raspberrypi" alt="Launch Location:">
-    <img src="https://img.shields.io/badge/Launch_vehicle_BACAR13_High_Altitude_Balloon-708090?style=for-the-badge&logo=raspberrypi" alt="Launch vehicle:">        
+    <img src="https://img.shields.io/badge/Launch_vehicle-BACAR13_High_Altitude_Balloon-708090?style=for-the-badge&logo=raspberrypi" alt="Launch vehicle:">        
     <img src="https://img.shields.io/badge/status-mission_complete-708090?style=for-the-badge&logo=raspberrypi" alt="Status: Mission Complete">
     <img src="https://img.shields.io/badge/final_altitude-30_km-9cf?style=for-the-badge&logo=airbnb&logoColor=white" alt="Final Altitude">
   </p>
