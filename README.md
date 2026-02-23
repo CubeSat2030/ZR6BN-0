@@ -3,13 +3,19 @@
 
   <h1>🎈 Kabot-1 (ZR6BN) – Mission of Inquiry</h1>
 
-  <p><i>Launched: BACAR13 – 11 October 2025</i></p>
-
   <p>
     <img src="https://img.shields.io/badge/Launch_date-11_October_2025-708090?style=for-the-badge&logo=raspberrypi" alt="Launch date:">
+  </p>
+  <p>  
     <img src="https://img.shields.io/badge/Launch_Location-South_Africa-708090?style=for-the-badge&logo=raspberrypi" alt="Launch Location:">
+  </p>  
+  <p>
     <img src="https://img.shields.io/badge/Launch_vehicle-BACAR13_High_Altitude_Balloon-708090?style=for-the-badge&logo=raspberrypi" alt="Launch vehicle:">        
+  </p>  
+  <p>  
     <img src="https://img.shields.io/badge/status-mission_complete-708090?style=for-the-badge&logo=raspberrypi" alt="Status: Mission Complete">
+  </p>
+  <p>  
     <img src="https://img.shields.io/badge/final_altitude-30_km-9cf?style=for-the-badge&logo=airbnb&logoColor=white" alt="Final Altitude">
   </p>
 </div>
