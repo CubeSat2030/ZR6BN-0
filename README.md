@@ -6,6 +6,7 @@
   <p><i>Launched: BACAR13 – 11 October 2025</i></p>
 
   <p>
+    <img src="https://img.shields.io/badge/Launch_date_11_October_2025-708090?style=for-the-badge&logo=raspberrypi" alt="Launch date:">
     <img src="https://img.shields.io/badge/status-mission_complete-708090?style=for-the-badge&logo=raspberrypi" alt="Status: Mission Complete">
     <img src="https://img.shields.io/badge/final_altitude-30_km-9cf?style=for-the-badge&logo=airbnb&logoColor=white" alt="Final Altitude">
   </p>
