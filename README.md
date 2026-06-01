@@ -56,4 +56,6 @@ She showed us that:
 
 These lessons are now enshrined in our development pipeline. They will fly again.
 
+Although Kabot-0 will never fly again due to her physical damage, we will use her as our guinnea pig to test KabotOS and payload module software during development. 
+
 ---
